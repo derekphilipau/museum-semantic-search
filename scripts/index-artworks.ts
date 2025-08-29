@@ -1,0 +1,264 @@
+#!/usr/bin/env node
+import { loadEnvConfig } from '@next/env';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+
+// Load environment variables from .env.local
+const projectDir = path.join(__dirname, '..');
+loadEnvConfig(projectDir);
+
+import { esClient, INDEX_NAME, INDEX_MAPPING } from './lib/elasticsearch';
+
+interface ArtworkMetadata {
+  objectId: number;
+  title: string;
+  artist: string;
+  artistBio: string;
+  department: string;
+  culture: string;
+  period: string;
+  dateCreated: string;
+  dateBegin: number | null;
+  dateEnd: number | null;
+  medium: string;
+  dimensions: string;
+  creditLine: string;
+  tags: string[];
+  hasImage: boolean;
+  isPublicDomain: boolean;
+}
+
+interface RawArtwork {
+  object_id: number;
+  title: string;
+  artist: string;
+  artist_bio: string;
+  department: string;
+  culture: string;
+  period: string;
+  object_date: string;
+  object_begin_date: number;
+  object_end_date: number;
+  medium: string;
+  dimensions: string;
+  credit_line: string;
+  tags?: string[];
+  filename?: string;
+  filepath?: string;
+  is_public_domain: boolean;
+  is_highlight: boolean;
+}
+
+function extractSearchableText(metadata: ArtworkMetadata): string {
+  const fields = [
+    metadata.title,
+    metadata.artist,
+    metadata.artistBio,
+    metadata.department,
+    metadata.culture,
+    metadata.period,
+    metadata.dateCreated,
+    metadata.medium,
+    ...(metadata.tags || []),
+  ];
+  
+  return fields.filter(Boolean).join(' ');
+}
+
+function extractBoostedKeywords(metadata: ArtworkMetadata): string {
+  // Boost important fields for better search relevance
+  const boosted = [
+    metadata.title,
+    metadata.title, // Double weight
+    metadata.artist,
+    metadata.artist, // Double weight
+    ...(metadata.tags || []),
+  ];
+  
+  return boosted.filter(Boolean).join(' ');
+}
+
+function isHighlightArtwork(tags: string[], dateBegin: number | null): boolean {
+  // Mark as highlight if it has 'Paintings' tag and is after 1800
+  const hasPaintingsTag = tags.some(tag => 
+    tag.toLowerCase().includes('painting')
+  );
+  const isModern = dateBegin && dateBegin >= 1800;
+  
+  return hasPaintingsTag && Boolean(isModern);
+}
+
+async function loadMetadata(): Promise<RawArtwork[]> {
+  const metadataPath = path.join(
+    process.cwd(),
+    'data',
+    'met_artworks',
+    'metadata.json'
+  );
+  
+  console.log(`Loading metadata from: ${metadataPath}`);
+  
+  try {
+    const data = await fs.readFile(metadataPath, 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error loading metadata:', error);
+    throw error;
+  }
+}
+
+async function createIndex() {
+  console.log(`Creating index: ${INDEX_NAME}`);
+  
+  try {
+    // Check if index exists
+    const exists = await esClient.indices.exists({ index: INDEX_NAME });
+    
+    if (exists) {
+      console.log('Index already exists, deleting...');
+      await esClient.indices.delete({ index: INDEX_NAME });
+    }
+    
+    // Create index with mapping
+    await esClient.indices.create({
+      index: INDEX_NAME,
+      body: INDEX_MAPPING,
+    });
+    
+    console.log('Index created successfully');
+  } catch (error) {
+    console.error('Error creating index:', error);
+    throw error;
+  }
+}
+
+async function indexArtworks(artworks: RawArtwork[], limit?: number) {
+  const toIndex = limit ? artworks.slice(0, limit) : artworks;
+  console.log(`Indexing ${toIndex.length} artworks...`);
+  
+  const BATCH_SIZE = 100;
+  let indexed = 0;
+  
+  for (let i = 0; i < toIndex.length; i += BATCH_SIZE) {
+    const batch = toIndex.slice(i, i + BATCH_SIZE);
+    const operations = [];
+    
+    for (const artwork of batch) {
+      // Transform raw artwork to our schema
+      const metadata: ArtworkMetadata = {
+        objectId: artwork.object_id,
+        title: artwork.title || 'Untitled',
+        artist: artwork.artist || 'Unknown',
+        artistBio: artwork.artist_bio || '',
+        department: artwork.department || '',
+        culture: artwork.culture || '',
+        period: artwork.period || '',
+        dateCreated: artwork.object_date || '',
+        dateBegin: artwork.object_begin_date || null,
+        dateEnd: artwork.object_end_date || null,
+        medium: artwork.medium || '',
+        dimensions: artwork.dimensions || '',
+        creditLine: artwork.credit_line || '',
+        tags: artwork.tags || [],
+        hasImage: Boolean(artwork.filename),
+        isPublicDomain: artwork.is_public_domain,
+      };
+      
+      // Determine highlight status
+      const isHighlight = isHighlightArtwork(metadata.tags, metadata.dateBegin);
+      metadata.isHighlight = isHighlight;
+      
+      // Extract searchable text
+      const searchableText = extractSearchableText(metadata);
+      const boostedKeywords = extractBoostedKeywords(metadata);
+      
+      // Use the filename from metadata
+      const imageName = artwork.filename || null;
+      
+      // Prepare document
+      const doc = {
+        id: artwork.object_id.toString(),
+        metadata,
+        image: imageName,
+        searchableText,
+        boostedKeywords,
+        embeddings: {}, // Will be populated by generate-embeddings script
+      };
+      
+      // Add to bulk operation
+      operations.push(
+        { index: { _index: INDEX_NAME, _id: doc.id } },
+        doc
+      );
+    }
+    
+    // Execute bulk operation
+    if (operations.length > 0) {
+      try {
+        const bulkResponse = await esClient.bulk({ operations });
+        
+        if (bulkResponse.errors) {
+          const erroredDocuments = bulkResponse.items.filter((item: any) => 
+            item.index?.error
+          );
+          console.error('Bulk operation errors:', erroredDocuments);
+        }
+        
+        indexed += batch.length;
+        console.log(`Indexed ${indexed}/${toIndex.length} artworks`);
+      } catch (error) {
+        console.error('Bulk indexing error:', error);
+        throw error;
+      }
+    }
+  }
+  
+  console.log('Indexing completed');
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const limitArg = args.find(arg => arg.startsWith('--limit='));
+  const limit = limitArg ? parseInt(limitArg.split('=')[1]) : undefined;
+  
+  try {
+    console.log('Met Museum Artwork Indexing Script');
+    console.log('==================================');
+    
+    // Load metadata
+    const artworks = await loadMetadata();
+    console.log(`Loaded ${artworks.length} artworks`);
+    
+    // Filter to only artworks with images
+    const artworksWithImages = artworks.filter(a => a.filename);
+    console.log(`Found ${artworksWithImages.length} artworks with images`);
+    
+    // Create index
+    await createIndex();
+    
+    // Index artworks
+    await indexArtworks(artworksWithImages, limit);
+    
+    // Refresh index
+    await esClient.indices.refresh({ index: INDEX_NAME });
+    
+    // Get count
+    const count = await esClient.count({ index: INDEX_NAME });
+    console.log(`\nTotal documents indexed: ${count.count}`);
+    
+    console.log('\nIndexing complete! Next steps:');
+    console.log('1. Run: npm run generate-embeddings');
+    console.log('2. Start the app: npm run dev');
+    
+  } catch (error) {
+    console.error('Fatal error:', error);
+    process.exit(1);
+  }
+}
+
+// Run if called directly
+if (require.main === module) {
+  main();
+}
+
+export { loadMetadata, createIndex, indexArtworks };
