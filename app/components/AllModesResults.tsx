@@ -1,10 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Search, Brain, Zap, ExternalLink } from 'lucide-react';
+import { Search, Brain, Zap } from 'lucide-react';
 import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
-import ArtworkCard from './ArtworkCard';
 import { Artwork, SearchResponse } from '@/app/types';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import SearchResultColumn from './SearchResultColumn';
 
 interface AllModesResultsProps {
   query: string;
@@ -50,17 +52,36 @@ export default function AllModesResults({
   
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+      <div className="space-y-6">
+        {/* Loading skeletons for each column */}
+        <div className="overflow-x-auto pb-4">
+          <div className="flex gap-6" style={{ minWidth: '1000px' }}>
+            {[...Array(4)].map((_, i) => (
+              <Card key={i} className="min-w-[320px] flex-shrink-0 py-0">
+                <CardHeader>
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-3 w-32 mt-1" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {[...Array(3)].map((_, j) => (
+                    <Skeleton key={j} className="h-24 w-full" />
+                  ))}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!query) {
     return (
-      <div className="text-center text-gray-500 py-8">
-        Enter a search query to explore artworks
-      </div>
+      <Card className="p-8">
+        <div className="text-center text-muted-foreground">
+          Enter a search query to explore artworks
+        </div>
+      </Card>
     );
   }
 
@@ -72,10 +93,12 @@ export default function AllModesResults({
 
   if (!hasResults) {
     return (
-      <div className="text-center text-gray-500 py-8">
-        <p>No results found for "{query}"</p>
-        <p className="text-sm mt-2">Try different search terms</p>
-      </div>
+      <Card className="p-8">
+        <div className="text-center text-muted-foreground">
+          <p>No results found for "{query}"</p>
+          <p className="text-sm mt-2">Try different search terms</p>
+        </div>
+      </Card>
     );
   }
 
@@ -91,206 +114,62 @@ export default function AllModesResults({
       {/* Scrollable container for dynamic columns */}
       <div className="overflow-x-auto pb-4">
         {/* Single row with all search types */}
-        <div className="flex gap-6" style={{ minWidth: `${(orderedModels.length + 2) * 340}px` }}>
+        <div className="flex gap-4">
           {/* Keyword Search - Single Column */}
-          <div className="bg-white rounded-lg shadow-md overflow-hidden min-w-[320px] flex-shrink-0">
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-3">
-              <div className="flex items-center gap-2">
-                <Search className="w-5 h-5" />
-                <div>
-                  <h3 className="font-bold">Keyword</h3>
-                  <p className="text-xs opacity-90">Native ES</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="p-3">
-              {!results.keyword || results.keyword.hits.length === 0 ? (
-                <div className="text-gray-400 text-sm">No results</div>
-              ) : (
-                <div className="space-y-2">
-                  {results.keyword.hits.slice(0, 5).map((hit, index) => (
-                    <div key={`keyword-${hit._id}-${index}`} className="relative">
-                      <div className="absolute -left-3 top-3 bg-gray-800 text-white text-xs px-2 py-1 rounded-r font-bold z-10">
-                        #{index + 1}
-                      </div>
-                      <ArtworkCard 
-                        artwork={hit._source} 
-                        onCompareClick={() => onSelectArtwork(hit._source)}
-                        compact
-                        showScore={false}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          {results.keyword !== null && (
+            <SearchResultColumn
+              title="Keyword"
+              description="Native Elasticsearch"
+              icon={Search}
+              hits={results.keyword.hits}
+              gradientFrom="from-blue-500"
+              gradientTo="to-blue-600"
+              badgeColor="secondary"
+              onSelectArtwork={onSelectArtwork}
+            />
+          )}
 
           {/* Visual Similarity - One column per model */}
           {orderedModels.map((modelKey) => {
             const model = EMBEDDING_MODELS[modelKey as keyof typeof EMBEDDING_MODELS];
             const semanticResults = results.semantic[modelKey];
             
+            // Skip if no results for this model
+            if (!semanticResults) return null;
+            
             return (
-              <div key={`semantic-${modelKey}`} className="bg-white rounded-lg shadow-md overflow-hidden min-w-[320px] flex-shrink-0">
-                <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-3">
-                  <div className="flex items-center gap-2">
-                    <Brain className="w-5 h-5" />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-1">
-                        <a 
-                          href={MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="font-bold text-sm hover:underline flex items-center gap-1"
-                        >
-                          {model.name}
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      </div>
-                      <p className="text-xs opacity-90">
-                        {MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.description || model.notes}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="p-3">
-                  {!semanticResults || semanticResults.hits.length === 0 ? (
-                    <div className="text-gray-400 text-sm">No results</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {semanticResults.hits.slice(0, 5).map((hit, index) => (
-                        <div key={`semantic-${modelKey}-${hit._id}-${index}`} className="relative">
-                          <div className="absolute -left-3 top-3 bg-purple-700 text-white text-xs px-2 py-1 rounded-r font-bold z-10">
-                            #{index + 1}
-                          </div>
-                          <ArtworkCard 
-                            artwork={hit._source} 
-                            onCompareClick={() => onSelectArtwork(hit._source)}
-                            compact
-                            showScore={false}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <SearchResultColumn
+                key={`semantic-${modelKey}`}
+                title={model.name}
+                description={MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.description || model.notes}
+                icon={Brain}
+                hits={semanticResults.hits}
+                gradientFrom="from-purple-500"
+                gradientTo="to-purple-600"
+                badgeColor="bg-purple-700"
+                onSelectArtwork={onSelectArtwork}
+                modelUrl={MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.url}
+                showExternalLink={true}
+              />
             );
           })}
 
           {/* Hybrid Search - Single Column */}
-          <div className="bg-white rounded-lg shadow-md overflow-hidden min-w-[320px] flex-shrink-0">
-            <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-3">
-              <div className="flex items-center gap-2">
-                <Zap className="w-5 h-5" />
-                <div>
-                  <h3 className="font-bold">Hybrid</h3>
-                  <p className="text-xs opacity-90">
-                    {results.hybrid ? EMBEDDING_MODELS[results.hybrid.model as keyof typeof EMBEDDING_MODELS]?.name : 'Not selected'}
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="p-3">
-              {!results.hybrid?.results || results.hybrid.results.hits.length === 0 ? (
-                <div className="text-gray-400 text-sm">No results</div>
-              ) : (
-                <div className="space-y-2">
-                  {results.hybrid.results.hits.slice(0, 5).map((hit, index) => (
-                    <div key={`hybrid-${hit._id}-${index}`} className="relative">
-                      <div className="absolute -left-3 top-3 bg-green-700 text-white text-xs px-2 py-1 rounded-r font-bold z-10">
-                        #{index + 1}
-                      </div>
-                      <ArtworkCard 
-                        artwork={hit._source} 
-                        onCompareClick={() => onSelectArtwork(hit._source)}
-                        compact
-                        showScore={false}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          {results.hybrid !== null && (
+            <SearchResultColumn
+              title="Hybrid"
+              description={results.hybrid ? EMBEDDING_MODELS[results.hybrid.model as keyof typeof EMBEDDING_MODELS]?.name : 'Not selected'}
+              icon={Zap}
+              hits={results.hybrid?.results?.hits || []}
+              gradientFrom="from-green-500"
+              gradientTo="to-green-600"
+              badgeColor="bg-green-700"
+              onSelectArtwork={onSelectArtwork}
+            />
+          )}
         </div>
       </div>
 
-      {/* Comparison Summary */}
-      {query && hasResults && (
-        <div className="bg-gray-100 rounded-lg p-4">
-          <h3 className="font-bold text-gray-700 mb-3 text-sm">Search Performance Summary</h3>
-          <div className="flex gap-3 text-xs overflow-x-auto">
-            {/* Keyword */}
-            <div className="bg-white rounded p-2 flex-shrink-0 min-w-[140px]">
-              <div className="flex items-center gap-1 mb-1">
-                <Search className="w-3 h-3 text-blue-600" />
-                <span className="font-medium">Keyword</span>
-              </div>
-              <div className="text-gray-600">
-                {results.keyword && (
-                  <>
-                    <div>Results: {results.keyword.hits.length}</div>
-                    {results.keyword.hits[0]?._score && (
-                      <div>Top score: {results.keyword.hits[0]._score.toFixed(3)}</div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Visual Similarity per model */}
-            {orderedModels.map((modelKey) => {
-              const model = EMBEDDING_MODELS[modelKey as keyof typeof EMBEDDING_MODELS];
-              const semanticResults = results.semantic[modelKey];
-              if (!semanticResults) return null;
-              
-              return (
-                <div key={`summary-${modelKey}`} className="bg-white rounded p-2 flex-shrink-0 min-w-[120px]">
-                  <div className="flex items-center gap-1 mb-1">
-                    <Brain className="w-3 h-3 text-purple-600" />
-                    <a 
-                      href={MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium hover:underline text-xs flex items-center gap-1"
-                    >
-                      {model.name}
-                      <ExternalLink className="w-2 h-2" />
-                    </a>
-                  </div>
-                  <div className="text-gray-600">
-                    <div>Results: {semanticResults.hits.length}</div>
-                    {semanticResults.hits[0]?._score && (
-                      <div>Top score: {semanticResults.hits[0]._score.toFixed(3)}</div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Hybrid */}
-            {results.hybrid && (
-              <div className="bg-white rounded p-2 flex-shrink-0 min-w-[140px]">
-                <div className="flex items-center gap-1 mb-1">
-                  <Zap className="w-3 h-3 text-green-600" />
-                  <span className="font-medium">Hybrid</span>
-                </div>
-                <div className="text-gray-600">
-                  <div>Results: {results.hybrid.results.hits.length}</div>
-                  {results.hybrid.results.hits[0]?._score && (
-                    <div>Top score: {results.hybrid.results.hits[0]._score.toFixed(3)}</div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

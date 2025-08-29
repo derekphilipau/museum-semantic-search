@@ -1,13 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Search } from 'lucide-react';
 import { EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings/types';
 import { SearchResponse } from '@/app/types';
 import AllModesResults from './AllModesResults';
 import { searchArtworks } from '@/app/lib/search';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
 export default function MultiModelSearch() {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState('baby');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<{
@@ -20,6 +26,17 @@ export default function MultiModelSearch() {
     hybrid: null,
   });
 
+  // Search options state
+  const [searchOptions, setSearchOptions] = useState<{
+    keyword: boolean;
+    models: Record<string, boolean>;
+    hybrid: boolean;
+  }>({
+    keyword: true,
+    models: Object.keys(EMBEDDING_MODELS).reduce((acc, key) => ({ ...acc, [key]: true }), {}),
+    hybrid: true,
+  });
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
@@ -28,29 +45,43 @@ export default function MultiModelSearch() {
     setError(null);
 
     try {
-      // Run all searches in parallel
-      const searchPromises = [
-        // Keyword search
-        searchArtworks({ query, mode: 'keyword', size: 10 }),
-        
-        // Semantic searches for all models
-        ...Object.keys(EMBEDDING_MODELS).map(modelKey =>
+      // Build search promises based on selected options
+      const searchPromises = [];
+      
+      // Keyword search
+      if (searchOptions.keyword) {
+        searchPromises.push(
+          searchArtworks({ query, mode: 'keyword', size: 10 })
+        );
+      }
+      
+      // Semantic searches for selected models
+      const selectedModels = Object.keys(EMBEDDING_MODELS).filter(
+        modelKey => searchOptions.models[modelKey]
+      );
+      
+      searchPromises.push(
+        ...selectedModels.map(modelKey =>
           searchArtworks({ 
             query, 
             model: modelKey as ModelKey, 
             mode: 'semantic', 
             size: 10 
           }).then(result => ({ model: modelKey, result }))
-        ),
-        
-        // Hybrid search with the most recent model
-        searchArtworks({ 
-          query, 
-          model: 'jina_clip_v2', 
-          mode: 'hybrid', 
-          size: 10 
-        }),
-      ];
+        )
+      );
+      
+      // Hybrid search with the first selected model
+      if (searchOptions.hybrid && selectedModels.length > 0) {
+        searchPromises.push(
+          searchArtworks({ 
+            query, 
+            model: selectedModels[0] as ModelKey, 
+            mode: 'hybrid', 
+            size: 10 
+          })
+        );
+      }
 
       const searchResults = await Promise.allSettled(searchPromises);
       
@@ -60,21 +91,26 @@ export default function MultiModelSearch() {
         hybrid: null,
       };
 
+      let keywordIndex = searchOptions.keyword ? 0 : -1;
+      let hybridIndex = searchOptions.hybrid && selectedModels.length > 0 ? searchResults.length - 1 : -1;
+      
       searchResults.forEach((result, index) => {
         if (result.status === 'fulfilled') {
-          if (index === 0) {
+          if (index === keywordIndex) {
             // Keyword result
             newResults.keyword = result.value as SearchResponse;
-          } else if (index === searchResults.length - 1) {
+          } else if (index === hybridIndex) {
             // Hybrid result
             newResults.hybrid = {
-              model: 'jina_clip_v2',
+              model: selectedModels[0],
               results: result.value as SearchResponse
             };
           } else {
             // Semantic results
-            const { model, result: searchResult } = result.value as { model: string; result: SearchResponse };
-            newResults.semantic[model] = searchResult;
+            const resultValue = result.value as { model: string; result: SearchResponse } | SearchResponse;
+            if ('model' in resultValue) {
+              newResults.semantic[resultValue.model] = resultValue.result;
+            }
           }
         } else {
           console.error('Search failed:', result.reason);
@@ -94,46 +130,112 @@ export default function MultiModelSearch() {
     // TODO: Implement model comparison view
   };
 
+  // Run initial search on component mount
+  useEffect(() => {
+    if (query) {
+      // Create a form submit event
+      const form = document.createElement('form');
+      const event = new Event('submit', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'preventDefault', { value: () => {} });
+      handleSearch(event as any);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <div className="w-full">
-      <form onSubmit={handleSearch} className="max-w-3xl mx-auto mb-8 px-6">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search artworks (try 'woman', 'landscape', 'portrait')"
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
-          >
-            {loading ? 'Searching...' : 'Search All Models'}
-          </button>
-        </div>
-        <p className="text-sm text-gray-600 mt-2 text-center">
-          Compare results across keyword search, visual similarity, and hybrid approaches
-        </p>
-      </form>
+    <div className="space-y-6">
+      <Card className="p-6">
+        <form onSubmit={handleSearch} className="space-y-4">
+          <div className="flex gap-3">
+            <Input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search artworks (try 'woman', 'landscape', 'portrait')"
+              className="flex-1"
+              disabled={loading}
+            />
+            <Button 
+              type="submit" 
+              disabled={loading || !query.trim()}
+              size="default"
+            >
+              <Search className="w-4 h-4 mr-2" />
+              {loading ? 'Searching...' : 'Search'}
+            </Button>
+          </div>
+          
+          {/* Search options */}
+          <div className="flex flex-wrap gap-4">
+            {/* Keyword search checkbox */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="keyword"
+                checked={searchOptions.keyword}
+                onCheckedChange={(checked) => 
+                  setSearchOptions(prev => ({ ...prev, keyword: checked as boolean }))
+                }
+              />
+              <Label htmlFor="keyword" className="text-sm cursor-pointer">
+                Keyword Search
+              </Label>
+            </div>
+            
+            {/* Model checkboxes */}
+            {Object.entries(EMBEDDING_MODELS).map(([key, model]) => (
+              <div key={key} className="flex items-center space-x-2">
+                <Checkbox
+                  id={key}
+                  checked={searchOptions.models[key]}
+                  onCheckedChange={(checked) => 
+                    setSearchOptions(prev => ({
+                      ...prev,
+                      models: { ...prev.models, [key]: checked as boolean }
+                    }))
+                  }
+                />
+                <Label htmlFor={key} className="text-sm cursor-pointer">
+                  {model.name}
+                </Label>
+              </div>
+            ))}
+            
+            {/* Hybrid search checkbox */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="hybrid"
+                checked={searchOptions.hybrid}
+                onCheckedChange={(checked) => 
+                  setSearchOptions(prev => ({ ...prev, hybrid: checked as boolean }))
+                }
+                disabled={!Object.values(searchOptions.models).some(v => v)}
+              />
+              <Label 
+                htmlFor="hybrid" 
+                className={`text-sm cursor-pointer ${
+                  !Object.values(searchOptions.models).some(v => v) ? 'text-muted-foreground' : ''
+                }`}
+              >
+                Hybrid Search
+              </Label>
+            </div>
+          </div>
+        </form>
+      </Card>
 
       {error && (
-        <div className="max-w-7xl mx-auto px-6 mb-4">
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <Card className="p-4 border-destructive">
+          <div className="text-destructive text-sm">
             {error}
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="max-w-full px-6">
-        <AllModesResults
-          query={query}
-          results={results}
-          loading={loading}
-          onSelectArtwork={handleSelectArtwork}
-        />
-      </div>
+      <AllModesResults
+        query={query}
+        results={results}
+        loading={loading}
+        onSelectArtwork={handleSelectArtwork}
+      />
     </div>
   );
 }

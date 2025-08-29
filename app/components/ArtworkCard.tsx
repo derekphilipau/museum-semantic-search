@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import { Artwork } from '@/app/types';
+import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 
 interface ArtworkCardProps {
   artwork: Artwork;
@@ -28,91 +29,115 @@ export default function ArtworkCard({
   // Compact version for multi-column layout
   if (compact) {
     return (
-      <div 
-        className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-all relative group w-full max-w-[300px]"
+      <Card 
+        className="overflow-hidden cursor-pointer hover:shadow-lg transition-all w-full h-full flex flex-col"
         onClick={onCompareClick}
       >
-        <div className="relative bg-white">
-          <div className="relative h-48 w-full">
+        <CardContent className="p-3 flex flex-col h-full">
+          {/* Image - fixed height container */}
+          <div className="h-48 rounded-md bg-muted/50 mb-2 relative overflow-hidden flex items-center justify-center">
             <Image
               src={imageUrl}
               alt={metadata.title}
               fill
               className="object-contain p-2"
-              sizes="280px"
+              sizes="(max-width: 768px) 100vw, 280px"
             />
           </div>
-          {onCompareClick && (
-            <button
-              className="absolute bottom-2 right-2 bg-blue-600 text-white p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-sm shadow-lg hover:bg-blue-700"
-              title="Compare models"
-            >
-              🔍
-            </button>
+          
+          {/* Content section - flex-grow to push score to bottom */}
+          <div className="flex-grow flex flex-col">
+            {/* Title */}
+            <CardTitle className="text-sm mb-1 line-clamp-2 break-words">
+              {metadata.title}
+            </CardTitle>
+            
+            {/* Artist */}
+            <CardDescription className="text-xs mb-2 line-clamp-1">
+              {metadata.artist || 'Unknown artist'}
+            </CardDescription>
+            
+            {/* Department and Date - optional, takes available space */}
+            {(metadata.department || metadata.dateCreated) && (
+              <div className="text-xs text-muted-foreground space-y-0.5 flex-grow">
+                {metadata.department && (
+                  <div className="line-clamp-1">{metadata.department}</div>
+                )}
+                {metadata.dateCreated && (
+                  <div>{metadata.dateCreated}</div>
+                )}
+              </div>
+            )}
+          </div>
+          
+          {/* Score - always at bottom */}
+          {showScore && score !== undefined && (
+            <div className="flex items-center justify-between pt-2 mt-auto border-t">
+              <span className="text-xs text-muted-foreground">Score</span>
+              <span className="text-xs font-mono font-semibold">{score.toFixed(3)}</span>
+            </div>
           )}
-        </div>
-        <div className="p-3 w-full max-w-full overflow-hidden">
-          <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 break-words w-full">
-            {metadata.title}
-          </h3>
-          <p className="text-xs text-gray-600 line-clamp-1 mt-1 break-words w-full">{metadata.artist}</p>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     );
   }
 
   // Full version
   return (
-    <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-3">
-      {rank && (
-        <div className="text-xs text-gray-500 mb-1">#{rank}</div>
-      )}
-      
-      <div className="relative aspect-[3/4] mb-3 bg-gray-100 rounded overflow-hidden">
-        <Image
-          src={imageUrl}
-          alt={metadata.title}
-          fill
-          className="object-contain"
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 33vw, 25vw"
-        />
-      </div>
-
-      <div className="space-y-1">
-        <h3 className="font-medium text-sm line-clamp-2 break-words">
-          {metadata.title}
-        </h3>
-        
-        <p className="text-xs text-gray-600 line-clamp-1">
-          {metadata.artist}
-        </p>
-        
-        {metadata.dateCreated && (
-          <p className="text-xs text-gray-500">{metadata.dateCreated}</p>
+    <Card 
+      className="overflow-hidden cursor-pointer hover:shadow-lg transition-all h-full flex flex-col"
+      onClick={onCompareClick}
+    >
+      <CardContent className="p-4 flex flex-col h-full">
+        {rank && (
+          <div className="text-xs text-muted-foreground mb-2">Rank #{rank}</div>
         )}
         
-        {metadata.department && (
-          <p className="text-xs text-gray-500 line-clamp-1">
-            {metadata.department}
-          </p>
-        )}
-
+        {/* Image - fixed height container */}
+        <div className="h-64 rounded-md bg-muted/50 mb-3 relative overflow-hidden flex items-center justify-center">
+          <Image
+            src={imageUrl}
+            alt={metadata.title}
+            fill
+            className="object-contain p-3"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 33vw, 25vw"
+          />
+        </div>
+        
+        {/* Content section - flex-grow to fill available space */}
+        <div className="flex-grow flex flex-col">
+          {/* Title */}
+          <CardTitle className="text-base mb-1 line-clamp-2 break-words">
+            {metadata.title}
+          </CardTitle>
+          
+          {/* Artist */}
+          <CardDescription className="text-sm mb-2 line-clamp-1">
+            {metadata.artist || 'Unknown artist'}
+          </CardDescription>
+          
+          {/* Metadata - takes available space */}
+          <div className="text-xs text-muted-foreground space-y-1 flex-grow">
+            {metadata.dateCreated && (
+              <div>{metadata.dateCreated}</div>
+            )}
+            {metadata.department && (
+              <div className="line-clamp-1">{metadata.department}</div>
+            )}
+            {metadata.medium && (
+              <div className="line-clamp-1">{metadata.medium}</div>
+            )}
+          </div>
+        </div>
+        
+        {/* Score - always at bottom */}
         {showScore && score !== undefined && (
-          <div className="text-xs text-gray-400 mt-2">
-            Score: {score.toFixed(3)}
+          <div className="flex items-center justify-between pt-3 mt-auto border-t">
+            <span className="text-sm text-muted-foreground">Relevance Score</span>
+            <span className="text-sm font-mono font-semibold">{score.toFixed(3)}</span>
           </div>
         )}
-
-        {onCompareClick && (
-          <button
-            onClick={onCompareClick}
-            className="mt-2 text-xs text-blue-600 hover:text-blue-800"
-            title="Compare models for this artwork"
-          >
-            🔍 Compare Models
-          </button>
-        )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
