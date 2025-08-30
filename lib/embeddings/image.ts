@@ -250,10 +250,6 @@ export async function generateImageEmbedding(
   let embedding: number[];
   
   switch (model) {
-    case 'jina_clip_v2':
-      embedding = await generateJinaImageEmbedding(imagePath, 'jina-clip-v2', interleaveText);
-      break;
-      
     case 'jina_embeddings_v4':
       embedding = await generateJinaImageEmbedding(imagePath, 'jina-embeddings-v4', interleaveText);
       break;

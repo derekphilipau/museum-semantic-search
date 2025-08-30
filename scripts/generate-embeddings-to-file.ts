@@ -245,7 +245,6 @@ Usage:
   npm run generate-embeddings-to-file -- --model=MODEL [--limit=N] [--resume]
 
 Models:
-  - jina_clip_v2
   - jina_embeddings_v4
   - google_vertex_multimodal
 

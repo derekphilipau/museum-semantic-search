@@ -71,12 +71,15 @@ export default function MultiModelSearch() {
         )
       );
       
-      // Hybrid search with the first selected model
+      // Hybrid search - prioritize Jina v4 if available, otherwise use Google
       if (searchOptions.hybrid && selectedModels.length > 0) {
+        const hybridModel = selectedModels.includes('jina_embeddings_v4') 
+          ? 'jina_embeddings_v4' 
+          : selectedModels[0];
         searchPromises.push(
           searchArtworks({ 
             query, 
-            model: selectedModels[0] as ModelKey, 
+            model: hybridModel as ModelKey, 
             mode: 'hybrid', 
             size: 10 
           })
@@ -101,8 +104,11 @@ export default function MultiModelSearch() {
             newResults.keyword = result.value as SearchResponse;
           } else if (index === hybridIndex) {
             // Hybrid result
+            const hybridModel = selectedModels.includes('jina_embeddings_v4') 
+              ? 'jina_embeddings_v4' 
+              : selectedModels[0];
             newResults.hybrid = {
-              model: selectedModels[0],
+              model: hybridModel,
               results: result.value as SearchResponse
             };
           } else {

@@ -36,12 +36,12 @@ export default function ArtworkCard({
         >
         <CardContent className="p-3 flex flex-col h-full">
           {/* Image - fixed height container */}
-          <div className="h-48 rounded-md bg-muted/50 mb-2 relative overflow-hidden flex items-center justify-center">
+          <div className="h-56 rounded-md bg-muted/50 mb-2 relative overflow-hidden flex items-center justify-center">
             <Image
               src={imageUrl}
               alt={metadata.title}
               fill
-              className="object-contain p-2"
+              className="object-contain"
               sizes="(max-width: 768px) 100vw, 280px"
             />
           </div>

@@ -131,30 +131,18 @@ export default function ArtworkDetailPage() {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      {/* Met Museum link */}
-      <div className="mb-4 flex justify-end">
-        <Button 
-          variant="outline"
-          size="sm"
-          onClick={() => window.open(`https://www.metmuseum.org/art/collection/search/${metadata.objectId}`, '_blank')}
-        >
-          View on Met Museum
-          <ExternalLink className="w-4 h-4 ml-2" />
-        </Button>
-      </div>
-
       {/* Compact artwork info card */}
       <Card className="mb-6">
-        <CardContent className="p-6">
+        <CardContent className="">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Image on left */}
             <div className="md:col-span-1">
-              <div className="relative h-64 bg-muted rounded-lg overflow-hidden">
+              <div className="relative h-72 bg-muted rounded-lg overflow-hidden">
                 <Image
                   src={fullImageUrl}
                   alt={metadata.title}
                   fill
-                  className="object-contain p-4"
+                  className="object-contain"
                   sizes="(max-width: 768px) 100vw, 33vw"
                   priority
                 />
@@ -220,6 +208,17 @@ export default function ArtworkDetailPage() {
                   </div>
                 </div>
               )}
+
+              {/* Met Museum link */}
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(`https://www.metmuseum.org/art/collection/search/${metadata.objectId}`, '_blank')}
+              >
+                View on Met Museum
+                <ExternalLink className="w-4 h-4 ml-2" />
+              </Button>
+
             </div>
           </div>
         </CardContent>
@@ -233,8 +232,8 @@ export default function ArtworkDetailPage() {
         </h2>
         
         {similarLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(3)].map((_, i) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[...Array(2)].map((_, i) => (
               <Card key={i}>
                 <CardHeader>
                   <Skeleton className="h-4 w-32" />
@@ -246,7 +245,7 @@ export default function ArtworkDetailPage() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {Object.entries(EMBEDDING_MODELS).map(([modelKey, model]) => {
               const results = similarResults[modelKey];
               if (!results) return null;
