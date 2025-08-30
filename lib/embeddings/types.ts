@@ -20,15 +20,6 @@ export interface EmbeddingError {
 }
 
 export const EMBEDDING_MODELS: Record<string, EmbeddingModel> = {
-  jina_clip_v2: {
-    key: 'jina_clip_v2',
-    name: 'JinaCLIP v2',
-    dimension: 1024,
-    year: '2024',
-    notes: '🎨 Best for visual art - 98% accuracy on Flickr30k',
-    supportsImage: true,
-    supportsInterleaved: false,
-  },
   jina_embeddings_v4: {
     key: 'jina_embeddings_v4',
     name: 'Jina Embeddings v4',

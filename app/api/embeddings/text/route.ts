@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!model || !['jina_clip_v2', 'jina_embeddings_v4', 'google_vertex_multimodal'].includes(model)) {
+    if (!model || !['jina_embeddings_v4', 'google_vertex_multimodal'].includes(model)) {
       return NextResponse.json(
         { error: 'Valid model parameter is required' },
         { status: 400 }

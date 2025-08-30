@@ -1,0 +1,36 @@
+'use client';
+
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Github } from 'lucide-react';
+
+export default function Navbar() {
+  return (
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container mx-auto px-4 md:px-6">
+        <div className="flex h-14 items-center justify-between">
+          {/* Left side - Title and byline */}
+          <Link href="/" className="flex items-center space-x-2">
+            <div>
+              <h1 className="text-lg font-bold">Met Museum Semantic Search</h1>
+              <p className="text-xs text-muted-foreground">
+                Explore art through AI-powered visual and textual similarity
+              </p>
+            </div>
+          </Link>
+          
+          {/* Right side - GitHub button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => window.open('https://github.com/yourusername/met-semantic-search-next', '_blank')}
+          >
+            <Github className="h-4 w-4" />
+            <span className="hidden sm:inline">View on GitHub</span>
+          </Button>
+        </div>
+      </div>
+    </header>
+  );
+}

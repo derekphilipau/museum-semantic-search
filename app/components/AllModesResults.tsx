@@ -21,11 +21,6 @@ interface AllModesResultsProps {
 
 // Model metadata with URLs and descriptions
 const MODEL_INFO = {
-  jina_clip_v2: {
-    url: 'https://huggingface.co/jinaai/jina-clip-v2',
-    description: '🎨 Best for Art (2024)',
-    year: '2024'
-  },
   jina_embeddings_v4: {
     url: 'https://jina.ai/embeddings/',
     description: '🚀 Text+Image Fusion (2025)',
@@ -48,9 +43,9 @@ export default function AllModesResults({
   if (loading) {
     return (
       <div className="space-y-6">
-        {/* Loading skeletons for 5 columns */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {[...Array(5)].map((_, i) => (
+        {/* Loading skeletons for 4 columns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
             <Card key={i} className="py-0">
               <CardHeader>
                 <Skeleton className="h-4 w-24" />
@@ -104,8 +99,8 @@ export default function AllModesResults({
 
   return (
     <div className="space-y-8">
-      {/* Fixed 5-column grid layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* Fixed 4-column grid layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Keyword Search - Single Column */}
         {results.keyword !== null && (
           <SearchResultColumn

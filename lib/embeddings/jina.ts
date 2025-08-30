@@ -32,8 +32,7 @@ export async function generateJinaEmbedding(
   const embedding = data.data[0].embedding;
 
   // Map model ID to our internal model key
-  const modelKey = modelId === 'jina-clip-v2' ? 'jina_clip_v2' : 
-                   modelId === 'jina-embeddings-v4' ? 'jina_embeddings_v4' : modelId;
+  const modelKey = modelId === 'jina-embeddings-v4' ? 'jina_embeddings_v4' : modelId;
 
   return {
     embedding,

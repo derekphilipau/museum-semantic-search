@@ -40,12 +40,6 @@ export const INDEX_MAPPING = {
       embeddings: {
         properties: {
           // API-based models
-          jina_clip_v2: {
-            type: 'dense_vector',
-            dims: 1024,
-            index: true,
-            similarity: 'cosine',
-          },
           jina_embeddings_v4: {
             type: 'dense_vector',
             dims: 2048,
