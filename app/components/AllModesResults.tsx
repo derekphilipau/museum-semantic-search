@@ -23,12 +23,12 @@ interface AllModesResultsProps {
 const MODEL_INFO = {
   jina_embeddings_v4: {
     url: 'https://jina.ai/embeddings/',
-    description: '🚀 Text+Image Fusion (2025)',
+    description: 'jina-embeddings-v4',
     year: '2025'
   },
   google_vertex_multimodal: {
     url: 'https://cloud.google.com/vertex-ai/docs/generative-ai/embeddings/get-multimodal-embeddings',
-    description: '🆓 Free Tier (2024)',
+    description: 'multimodalembedding@001',
     year: '2024'
   }
 } as const;

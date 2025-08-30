@@ -28,7 +28,8 @@
       "Bash(bash:*)",
       "Bash(npm run index-with-embeddings:*)",
       "Bash(grep:*)",
-      "Bash(npm run copy-indexed-images:*)"
+      "Bash(npm run copy-indexed-images:*)",
+      "Bash(rg:*)"
     ],
     "deny": []
   }

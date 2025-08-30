@@ -4,8 +4,8 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import ArtworkCard from './ArtworkCard';
-import { SearchHit } from '@/app/types';
-import { LucideIcon } from 'lucide-react';
+import { SearchHit, Artwork } from '@/app/types';
+import { LucideIcon, ExternalLinkIcon } from 'lucide-react';
 
 interface SearchResultColumnProps {
   title: string;
@@ -15,12 +15,12 @@ interface SearchResultColumnProps {
   gradientFrom: string;
   gradientTo: string;
   badgeColor?: string;
-  onSelectArtwork: (artwork: any) => void;
+  onSelectArtwork: (artwork: Artwork) => void;
   modelUrl?: string;
   showExternalLink?: boolean;
 }
 
-export default function SearchResultColumn({
+function SearchResultColumn({
   title,
   description,
   icon: Icon,
@@ -35,22 +35,19 @@ export default function SearchResultColumn({
   return (
     <Card className="overflow-hidden py-0 h-full">
       <CardHeader className={`bg-gradient-to-r ${gradientFrom} ${gradientTo} text-white rounded-t-lg`}>
-        <div className="flex flex-col items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col items-center justify-between p-2 gap-2">
+          <div className="flex flex-col items-center gap-2 pt-2">
             <Icon className="w-5 h-5" />
-            <div>
+            <div className="text-center">
               <CardTitle className="text-base">
                 {modelUrl && showExternalLink ? (
                   <a 
                     href={modelUrl} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="hover:underline flex items-center gap-1"
+                    className="hover:underline"
                   >
-                    {title}
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
+                    {title} <ExternalLinkIcon className="size-4 inline align-text-top ml-1" />
                   </a>
                 ) : (
                   title
@@ -100,3 +97,5 @@ export default function SearchResultColumn({
     </Card>
   );
 }
+
+export default React.memo(SearchResultColumn);

@@ -176,36 +176,6 @@ See [DATA_PIPELINE.md](DATA_PIPELINE.md) for detailed documentation.
   - **Jina Embeddings v4**: 2048 dims, multimodal text+image fusion
   - **Google Vertex AI**: 1408 dims, enterprise-grade multimodal
 
-## Future Enhancements: Embedding Atlas Integration
-
-We plan to create [Apple Embedding Atlas](https://apple.github.io/embedding-atlas/)-compatible datasets for interactive visualization of the embedding space. This will allow:
-
-- Visual exploration of how different embedding models organize the Met collection
-- Interactive clustering and labeling of artwork groups
-- UMAP/t-SNE projections of the high-dimensional embedding space
-- Comparison of semantic neighborhoods across models
-
-### Creating Atlas-Compatible Datasets
-
-To explore embeddings with Embedding Atlas locally:
-
-```bash
-# 1. Export embeddings to Parquet format
-npm run export-embeddings-to-parquet
-
-# 2. Run Embedding Atlas locally
-pip install embedding-atlas
-embedding-atlas met_embeddings.parquet --x projection_x --y projection_y
-```
-
-The export script will create a Parquet file with:
-- `identifier`: Met Museum object ID
-- `embedding`: High-dimensional embedding vectors (Jina v4 or Google Vertex)
-- `projection_x/y`: Pre-computed UMAP 2D coordinates
-- `title`, `artist`, `department`, etc.: Metadata for filtering
-- `image`: Path to artwork image
-
-This enables powerful visual exploration of search results and the entire collection's semantic structure.
 
 ## License
 

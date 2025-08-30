@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 const ES_URL = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
 const INDEX_NAME = 'met_artworks_v2';
 
+// Cache duration for artwork data (1 hour)
+const CACHE_DURATION = 3600;
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -10,9 +13,10 @@ export async function GET(
   try {
     const objectId = parseInt(params.id);
     
-    if (isNaN(objectId)) {
+    // Validate objectId
+    if (isNaN(objectId) || objectId <= 0) {
       return NextResponse.json(
-        { error: 'Invalid object ID' },
+        { error: 'Invalid object ID. Must be a positive integer.' },
         { status: 400 }
       );
     }
@@ -44,7 +48,15 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(result.hits.hits[0]._source);
+    const artwork = result.hits.hits[0]._source;
+    
+    // Return with cache headers
+    return NextResponse.json(artwork, {
+      headers: {
+        'Cache-Control': `public, max-age=${CACHE_DURATION}, s-maxage=${CACHE_DURATION}`,
+        'ETag': `"${objectId}-${artwork.metadata?.lastUpdate || 'static'}"`,
+      }
+    });
 
   } catch (error) {
     console.error('Error fetching artwork:', error);

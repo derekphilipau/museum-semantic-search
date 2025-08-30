@@ -119,6 +119,41 @@ async function buildSearchQuery(params: SearchParams) {
   return { match_all: {} };
 }
 
+// Define proper types for Elasticsearch query
+interface ElasticsearchQuery {
+  bool?: {
+    must?: Array<{
+      multi_match: {
+        query: string;
+        fields: string[];
+        type: string;
+        fuzziness: string;
+      };
+    }>;
+  };
+  match_all?: {};
+  knn?: {
+    field: string;
+    query_vector: number[];
+    k: number;
+    num_candidates: number;
+  };
+  query?: ElasticsearchQuery;
+}
+
+interface ElasticsearchSearchBody {
+  size: number;
+  from: number;
+  _source: string[];
+  query?: ElasticsearchQuery;
+  knn?: {
+    field: string;
+    query_vector: number[];
+    k: number;
+    num_candidates: number;
+  };
+}
+
 // Direct Elasticsearch search
 export async function searchArtworks(params: SearchParams): Promise<SearchResponse> {
   const { size = 20, from = 0 } = params;
@@ -127,7 +162,7 @@ export async function searchArtworks(params: SearchParams): Promise<SearchRespon
     const queryConfig = await buildSearchQuery(params);
 
     // Build the search request body
-    const searchBody: any = {
+    const searchBody: ElasticsearchSearchBody = {
       size,
       from,
       _source: ['id', 'metadata', 'embeddings', 'image', 'searchableText']

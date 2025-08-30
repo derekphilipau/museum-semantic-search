@@ -1,3 +1,4 @@
+import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Artwork } from '@/app/types';
@@ -12,7 +13,7 @@ interface ArtworkCardProps {
   onCompareClick?: () => void;
 }
 
-export default function ArtworkCard({
+function ArtworkCard({
   artwork,
   score,
   showScore = false,
@@ -32,11 +33,11 @@ export default function ArtworkCard({
     return (
       <Link href={`/artwork/${metadata.objectId}`} className="block h-full">
         <Card 
-          className="overflow-hidden cursor-pointer hover:shadow-lg transition-all w-full h-full flex flex-col"
+          className="overflow-hidden cursor-pointer hover:shadow-lg transition-all w-full h-full flex flex-col p-2"
         >
-        <CardContent className="p-3 flex flex-col h-full">
+        <CardContent className="p-0 flex flex-col h-full gap-2">
           {/* Image - fixed height container */}
-          <div className="h-56 rounded-md bg-muted/50 mb-2 relative overflow-hidden flex items-center justify-center">
+          <div className="h-56 rounded-md bg-muted/50 relative overflow-hidden flex items-center justify-center">
             <Image
               src={imageUrl}
               alt={metadata.title}
@@ -144,3 +145,5 @@ export default function ArtworkCard({
     </Link>
   );
 }
+
+export default React.memo(ArtworkCard);

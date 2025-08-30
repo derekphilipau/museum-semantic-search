@@ -1,16 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ModelKey } from '@/lib/embeddings/types';
+import { ModelKey, EMBEDDING_MODELS } from '@/lib/embeddings/types';
 
 const ES_URL = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
 const INDEX_NAME = 'met_artworks_v2';
 
+// Constants for validation
+const MIN_RESULTS = 1;
+const MAX_RESULTS = 100;
+const DEFAULT_RESULTS = 10;
+
+// Type guard for model validation
+function isValidModel(model: any): model is ModelKey {
+  return model in EMBEDDING_MODELS;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { objectId, model, size = 10 } = await request.json();
+    const body = await request.json();
+    const { objectId, model, size = DEFAULT_RESULTS } = body;
 
-    if (!objectId || !model) {
+    // Validate objectId
+    if (!objectId) {
       return NextResponse.json(
-        { error: 'objectId and model are required' },
+        { error: 'objectId is required' },
+        { status: 400 }
+      );
+    }
+
+    // Validate objectId is a positive integer
+    const parsedObjectId = Number(objectId);
+    if (!Number.isInteger(parsedObjectId) || parsedObjectId <= 0) {
+      return NextResponse.json(
+        { error: 'objectId must be a positive integer' },
+        { status: 400 }
+      );
+    }
+
+    // Validate model
+    if (!model || !isValidModel(model)) {
+      return NextResponse.json(
+        { error: `Invalid model. Must be one of: ${Object.keys(EMBEDDING_MODELS).join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    // Validate and clamp size parameter
+    const validatedSize = Math.max(MIN_RESULTS, Math.min(MAX_RESULTS, Number(size) || DEFAULT_RESULTS));
+    if (!Number.isInteger(size) && size !== undefined) {
+      return NextResponse.json(
+        { error: `size must be an integer between ${MIN_RESULTS} and ${MAX_RESULTS}` },
         { status: 400 }
       );
     }
@@ -59,10 +97,10 @@ export async function POST(request: NextRequest) {
         knn: {
           field: `embeddings.${model}`,
           query_vector: embedding,
-          k: size + 1, // +1 to exclude the source artwork
-          num_candidates: 50
+          k: validatedSize + 1, // +1 to exclude the source artwork
+          num_candidates: Math.min(50, validatedSize * 5) // Scale candidates with size
         },
-        size: size + 1,
+        size: validatedSize + 1,
         _source: ['id', 'metadata', 'image']
       })
     });
@@ -81,7 +119,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       took: searchResult.took,
       total: filteredHits.length,
-      hits: filteredHits.slice(0, size)
+      hits: filteredHits.slice(0, validatedSize)
     });
 
   } catch (error) {
