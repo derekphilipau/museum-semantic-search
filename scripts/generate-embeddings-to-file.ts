@@ -31,6 +31,17 @@ interface Progress {
   timestamp: string;
 }
 
+interface ArtworkMetadata {
+  object_id: number;
+  title: string;
+  artist: string;
+  department: string;
+  culture: string;
+  period: string;
+  medium: string;
+  date: string;
+}
+
 interface EmbeddingRecord {
   object_id: number;
   embedding: number[];
@@ -61,8 +72,8 @@ async function saveProgress(model: ModelKey, progress: Progress): Promise<void> 
   await fs.writeFile(progressPath, JSON.stringify(progress, null, 2));
 }
 
-async function getArtworksToProcess(): Promise<Array<{object_id: number, has_image: boolean}>> {
-  const artworks: Array<{object_id: number, has_image: boolean}> = [];
+async function getArtworksToProcess(): Promise<Array<{object_id: number, has_image: boolean, metadata?: ArtworkMetadata}>> {
+  const artworks: Array<{object_id: number, has_image: boolean, metadata?: ArtworkMetadata}> = [];
   const csvPath = path.join(process.cwd(), 'data', 'MetObjects.csv');
   
   // Get list of available images
@@ -101,9 +112,22 @@ async function getArtworksToProcess(): Promise<Array<{object_id: number, has_ima
         if (record['Is Public Domain'] === 'True' && 
             ALLOWED_DEPARTMENTS.includes(record['Department'])) {
           const objectId = parseInt(record['Object ID']);
+          // Create metadata object for jina_embeddings_v4
+          const metadata: ArtworkMetadata = {
+            object_id: objectId,
+            title: record['Title'] || 'Untitled',
+            artist: record['Artist Display Name'] || 'Unknown',
+            department: record['Department'] || '',
+            culture: record['Culture'] || '',
+            period: record['Period'] || '',
+            medium: record['Medium'] || '',
+            date: record['Object Date'] || ''
+          };
+          
           artworks.push({
             object_id: objectId,
-            has_image: imageFiles.has(objectId)
+            has_image: imageFiles.has(objectId),
+            metadata
           });
         }
       }
@@ -128,7 +152,7 @@ async function sleep(ms: number): Promise<void> {
 }
 
 async function processArtwork(
-  artwork: {object_id: number, has_image: boolean},
+  artwork: {object_id: number, has_image: boolean, metadata?: ArtworkMetadata},
   model: ModelKey,
   writer: any,
   index: number,
@@ -152,8 +176,39 @@ async function processArtwork(
     
     console.log(`[${index + 1}/${total}] Processing ${artwork.object_id}...`);
     
+    // For jina_embeddings_v4, prepare metadata text
+    let metadataText: string | undefined;
+    if (model === 'jina_embeddings_v4' && artwork.metadata) {
+      const parts = [];
+      if (artwork.metadata.title && artwork.metadata.title !== 'Untitled') {
+        parts.push(`Title: ${artwork.metadata.title}`);
+      }
+      if (artwork.metadata.artist && artwork.metadata.artist !== 'Unknown') {
+        parts.push(`Artist: ${artwork.metadata.artist}`);
+      }
+      if (artwork.metadata.department) {
+        parts.push(`Department: ${artwork.metadata.department}`);
+      }
+      if (artwork.metadata.culture) {
+        parts.push(`Culture: ${artwork.metadata.culture}`);
+      }
+      if (artwork.metadata.period) {
+        parts.push(`Period: ${artwork.metadata.period}`);
+      }
+      if (artwork.metadata.medium) {
+        parts.push(`Medium: ${artwork.metadata.medium}`);
+      }
+      if (artwork.metadata.date) {
+        parts.push(`Date: ${artwork.metadata.date}`);
+      }
+      
+      if (parts.length > 0) {
+        metadataText = parts.join('. ');
+      }
+    }
+    
     // Generate embedding
-    const result = await generateImageEmbedding(imagePath, model);
+    const result = await generateImageEmbedding(imagePath, model, metadataText);
     
     if (result && result.embedding && result.embedding.length > 0) {
       const record: EmbeddingRecord = {
@@ -191,6 +246,7 @@ Usage:
 
 Models:
   - jina_clip_v2
+  - jina_embeddings_v4
   - google_vertex_multimodal
 
 Options:

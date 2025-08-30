@@ -46,6 +46,12 @@ export const INDEX_MAPPING = {
             index: true,
             similarity: 'cosine',
           },
+          jina_embeddings_v4: {
+            type: 'dense_vector',
+            dims: 2048,
+            index: true,
+            similarity: 'cosine',
+          },
           google_vertex_multimodal: {
             type: 'dense_vector',
             dims: 1408,

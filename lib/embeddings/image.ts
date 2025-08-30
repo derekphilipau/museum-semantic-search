@@ -6,7 +6,8 @@ import { GoogleAuth } from 'google-auth-library';
 
 export async function generateJinaImageEmbedding(
   imagePath: string,
-  modelId: string
+  modelId: string,
+  interleaveText?: string
 ): Promise<number[]> {
   const apiKey = process.env.JINA_API_KEY;
   if (!apiKey) throw new Error('JINA_API_KEY not found');
@@ -14,6 +15,21 @@ export async function generateJinaImageEmbedding(
   // Read image and convert to base64
   const imageBuffer = await fs.readFile(imagePath);
   const base64Image = imageBuffer.toString('base64');
+  
+  // For Jina v4, use interleaved input format
+  let input;
+  if (modelId === 'jina-embeddings-v4' && interleaveText) {
+    // v4 supports combined text+image input
+    input = [{
+      text: interleaveText,
+      image: base64Image
+    }];
+  } else {
+    // For clip-v2 or v4 without text, use image-only input
+    input = [{
+      image: base64Image
+    }];
+  }
   
   const response = await fetch('https://api.jina.ai/v1/embeddings', {
     method: 'POST',
@@ -23,9 +39,7 @@ export async function generateJinaImageEmbedding(
     },
     body: JSON.stringify({
       model: modelId,
-      input: [{
-        image: base64Image,
-      }],
+      input: input,
       encoding_type: 'float',
     }),
   });
@@ -237,7 +251,11 @@ export async function generateImageEmbedding(
   
   switch (model) {
     case 'jina_clip_v2':
-      embedding = await generateJinaImageEmbedding(imagePath, 'jina-clip-v2');
+      embedding = await generateJinaImageEmbedding(imagePath, 'jina-clip-v2', interleaveText);
+      break;
+      
+    case 'jina_embeddings_v4':
+      embedding = await generateJinaImageEmbedding(imagePath, 'jina-embeddings-v4', interleaveText);
       break;
       
     case 'google_vertex_multimodal':

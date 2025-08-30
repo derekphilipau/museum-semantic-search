@@ -23,6 +23,7 @@ interface EmbeddingRecord {
 interface EmbeddingsMap {
   [objectId: number]: {
     jina_clip_v2?: number[];
+    jina_embeddings_v4?: number[];
     google_vertex_multimodal?: number[];
   };
 }

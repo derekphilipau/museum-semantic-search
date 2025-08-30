@@ -29,6 +29,15 @@ export const EMBEDDING_MODELS: Record<string, EmbeddingModel> = {
     supportsImage: true,
     supportsInterleaved: false,
   },
+  jina_embeddings_v4: {
+    key: 'jina_embeddings_v4',
+    name: 'Jina Embeddings v4',
+    dimension: 2048,
+    year: '2025',
+    notes: '🚀 Multimodal with text+image fusion',
+    supportsImage: true,
+    supportsInterleaved: true,
+  },
   google_vertex_multimodal: {
     key: 'google_vertex_multimodal',
     name: 'Google Vertex Multimodal',
