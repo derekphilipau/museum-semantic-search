@@ -26,20 +26,10 @@ const MODEL_INFO = {
     description: '🎨 Best for Art (2024)',
     year: '2024'
   },
-  voyage_multimodal_3: {
-    url: 'https://www.voyageai.com/',
-    description: '🚀 Interleaved (2025)',
-    year: '2025'
-  },
   google_vertex_multimodal: {
     url: 'https://cloud.google.com/vertex-ai/docs/generative-ai/embeddings/get-multimodal-embeddings',
     description: '🆓 Free Tier (2024)',
     year: '2024'
-  },
-  cohere_embed_4: {
-    url: 'https://cohere.com/embed',
-    description: '📄 For Documents (2025)',
-    year: '2025'
   }
 } as const;
 
@@ -53,23 +43,21 @@ export default function AllModesResults({
   if (loading) {
     return (
       <div className="space-y-6">
-        {/* Loading skeletons for each column */}
-        <div className="overflow-x-auto pb-4">
-          <div className="flex gap-6" style={{ minWidth: '1000px' }}>
-            {[...Array(4)].map((_, i) => (
-              <Card key={i} className="min-w-[320px] flex-shrink-0 py-0">
-                <CardHeader>
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-3 w-32 mt-1" />
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {[...Array(3)].map((_, j) => (
-                    <Skeleton key={j} className="h-24 w-full" />
-                  ))}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+        {/* Loading skeletons for 4 columns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="py-0">
+              <CardHeader>
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-32 mt-1" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {[...Array(3)].map((_, j) => (
+                  <Skeleton key={j} className="h-24 w-full" />
+                ))}
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     );
@@ -111,13 +99,11 @@ export default function AllModesResults({
 
   return (
     <div className="space-y-8">
-      {/* Scrollable container for dynamic columns */}
-      <div className="overflow-x-auto pb-4">
-        {/* Single row with all search types */}
-        <div className="flex gap-4">
-          {/* Keyword Search - Single Column */}
-          {results.keyword !== null && (
-            <SearchResultColumn
+      {/* Fixed 4-column grid layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Keyword Search - Single Column */}
+        {results.keyword !== null && (
+          <SearchResultColumn
               title="Keyword"
               description="Native Elasticsearch"
               icon={Search}
@@ -150,24 +136,23 @@ export default function AllModesResults({
                 onSelectArtwork={onSelectArtwork}
                 modelUrl={MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.url}
                 showExternalLink={true}
-              />
-            );
-          })}
-
-          {/* Hybrid Search - Single Column */}
-          {results.hybrid !== null && (
-            <SearchResultColumn
-              title="Hybrid"
-              description={results.hybrid ? EMBEDDING_MODELS[results.hybrid.model as keyof typeof EMBEDDING_MODELS]?.name : 'Not selected'}
-              icon={Zap}
-              hits={results.hybrid?.results?.hits || []}
-              gradientFrom="from-green-500"
-              gradientTo="to-green-600"
-              badgeColor="bg-green-700"
-              onSelectArtwork={onSelectArtwork}
             />
-          )}
-        </div>
+          );
+        })}
+
+        {/* Hybrid Search - Single Column */}
+        {results.hybrid !== null && (
+          <SearchResultColumn
+            title="Hybrid"
+            description={results.hybrid ? EMBEDDING_MODELS[results.hybrid.model as keyof typeof EMBEDDING_MODELS]?.name : 'Not selected'}
+            icon={Zap}
+            hits={results.hybrid?.results?.hits || []}
+            gradientFrom="from-green-500"
+            gradientTo="to-green-600"
+            badgeColor="bg-green-700"
+            onSelectArtwork={onSelectArtwork}
+          />
+        )}
       </div>
 
     </div>

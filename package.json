@@ -8,7 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "index-artworks": "npx tsx scripts/index-artworks.ts",
+    "download-huggingface": "python3 scripts/download-huggingface-dataset.py",
     "generate-embeddings": "npx tsx scripts/generate-embeddings.ts",
+    "generate-embeddings-to-file": "npx tsx scripts/generate-embeddings-to-file.ts",
+    "index-with-embeddings": "npx tsx scripts/index-with-embeddings.ts",
+    "copy-indexed-images": "npx tsx scripts/copy-indexed-images.ts",
     "setup": "npm run index-artworks && npm run generate-embeddings"
   },
   "dependencies": {
@@ -29,11 +33,14 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^20.19.11",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sharp": "^0.31.1",
+    "csv-parse": "^6.1.0",
     "eslint": "^9",
     "eslint-config-next": "15.5.2",
+    "sharp": "^0.34.3",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.7",
     "typescript": "^5"

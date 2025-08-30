@@ -29,15 +29,6 @@ export const EMBEDDING_MODELS: Record<string, EmbeddingModel> = {
     supportsImage: true,
     supportsInterleaved: false,
   },
-  voyage_multimodal_3: {
-    key: 'voyage_multimodal_3',
-    name: 'Voyage Multimodal-3',
-    dimension: 1024,
-    year: '2025',
-    notes: '🚀 Supports interleaved image+text embeddings',
-    supportsImage: true,
-    supportsInterleaved: true,
-  },
   google_vertex_multimodal: {
     key: 'google_vertex_multimodal',
     name: 'Google Vertex Multimodal',
@@ -46,15 +37,6 @@ export const EMBEDDING_MODELS: Record<string, EmbeddingModel> = {
     notes: '🆓 Free tier 1500 RPM!',
     supportsImage: true,
     supportsInterleaved: false,
-  },
-  cohere_embed_4: {
-    key: 'cohere_embed_4',
-    name: 'Cohere Embed 4',
-    dimension: 1024,
-    year: '2025',
-    notes: '📄 128K context - optimized for documents',
-    supportsImage: true,
-    supportsInterleaved: true,
   },
 };
 

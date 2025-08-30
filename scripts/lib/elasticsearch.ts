@@ -46,18 +46,6 @@ export const INDEX_MAPPING = {
             index: true,
             similarity: 'cosine',
           },
-          voyage_multimodal_3: {
-            type: 'dense_vector',
-            dims: 1024,
-            index: true,
-            similarity: 'cosine',
-          },
-          cohere_embed_4_v2: {
-            type: 'dense_vector',
-            dims: 1024,
-            index: true,
-            similarity: 'cosine',
-          },
           google_vertex_multimodal: {
             type: 'dense_vector',
             dims: 1408,

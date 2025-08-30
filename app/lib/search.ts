@@ -69,8 +69,7 @@ async function buildSearchQuery(params: SearchParams) {
       throw new Error('Failed to generate text embedding');
     }
 
-    // Handle Cohere's temporary field name
-    const fieldName = model === 'cohere_embed_4' ? 'cohere_embed_4_v2' : model;
+    const fieldName = model;
 
     return {
       knn: {
@@ -93,7 +92,7 @@ async function buildSearchQuery(params: SearchParams) {
       throw new Error('Failed to generate text embedding');
     }
 
-    const fieldName = model === 'cohere_embed_4' ? 'cohere_embed_4_v2' : model;
+    const fieldName = model;
 
     return {
       knn: {

@@ -232,19 +232,6 @@ async function main() {
     const artworksWithImages = publicDomainArtworks.filter(a => a.filename);
     console.log(`Found ${artworksWithImages.length} public domain artworks with images`);
     
-    // Check image sources
-    const imageSources = new Map<string, number>();
-    artworksWithImages.forEach(artwork => {
-      const dir = path.dirname(artwork.filepath || '');
-      const source = path.basename(dir);
-      imageSources.set(source, (imageSources.get(source) || 0) + 1);
-    });
-    
-    console.log('\nImage sources:');
-    for (const [source, count] of imageSources) {
-      console.log(`  - ${source}: ${count} images`);
-    }
-    
     // Create index
     const indexCreated = await createIndex(forceRecreate);
     

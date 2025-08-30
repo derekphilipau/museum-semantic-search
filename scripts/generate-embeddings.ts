@@ -25,14 +25,7 @@ interface RateLimiter {
 
 // Rate limiters for different APIs
 const rateLimiters: Record<string, RateLimiter> = {
-  voyage_multimodal_3: {
-    lastRequest: 0,
-    minInterval: 20000, // 3 requests per minute = 20 seconds between requests
-  },
-  cohere_embed_4: {
-    lastRequest: 0,
-    minInterval: 6000, // 10 requests per minute = 6 seconds between requests
-  },
+  // Currently no rate limiters needed for Jina or Google
 };
 
 async function sleep(ms: number): Promise<void> {
@@ -126,18 +119,24 @@ async function processArtwork(
     return;
   }
   
-  const imagePath = path.join(
-    process.cwd(),
-    'data',
-    'met_artworks',
-    artwork.image
-  );
+  // Look for image in HuggingFace directory
+  const possiblePaths = [
+    path.join(process.cwd(), 'data', 'images', 'huggingface', artwork.image),
+  ];
   
-  // Check if image exists
-  try {
-    await fs.access(imagePath);
-  } catch {
-    console.log(`Image not found: ${artwork.image}`);
+  let imagePath = '';
+  for (const testPath of possiblePaths) {
+    try {
+      await fs.access(testPath);
+      imagePath = testPath;
+      break;
+    } catch {
+      // Continue to next path
+    }
+  }
+  
+  if (!imagePath) {
+    console.log(`Image not found in any location: ${artwork.image}`);
     models.forEach(model => stats[model].failed++);
     return;
   }
@@ -148,8 +147,7 @@ async function processArtwork(
   for (const model of models) {
     const modelStats = stats[model];
     
-    // Handle Cohere's field name
-    const fieldName = model === 'cohere_embed_4' ? 'cohere_embed_4_v2' : model;
+    const fieldName = model;
     
     // Check if embedding already exists
     if (skipExisting && updatedEmbeddings[fieldName]?.length > 0) {
@@ -159,7 +157,7 @@ async function processArtwork(
     }
     
     // Generate embedding with interleaved text for models that support it
-    const interleaveText = (model === 'voyage_multimodal_3' || model === 'cohere_embed_4' || model === 'google_vertex_multimodal') && artwork.searchableText
+    const interleaveText = model === 'google_vertex_multimodal' && artwork.searchableText
       ? artwork.searchableText
       : undefined;
     
@@ -190,7 +188,7 @@ async function main() {
   
   const models = modelsArg 
     ? modelsArg.split('=')[1].split(',') as ModelKey[]
-    : ['jina_clip_v2', 'voyage_multimodal_3', 'cohere_embed_4', 'google_vertex_multimodal'] as ModelKey[];
+    : ['jina_clip_v2', 'google_vertex_multimodal'] as ModelKey[];
   
   const limit = limitArg ? parseInt(limitArg.split('=')[1]) : undefined;
   const skipExisting = !noSkipExisting;

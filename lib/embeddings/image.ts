@@ -240,18 +240,6 @@ export async function generateImageEmbedding(
       embedding = await generateJinaImageEmbedding(imagePath, 'jina-clip-v2');
       break;
       
-    case 'voyage_multimodal_3':
-      embedding = await generateVoyageImageEmbedding(
-        imagePath, 
-        'voyage-multimodal-3',
-        interleaveText
-      );
-      break;
-      
-    case 'cohere_embed_4':
-      embedding = await generateCohereImageEmbedding(imagePath, 'embed-multilingual-v3.0', interleaveText);
-      break;
-      
     case 'google_vertex_multimodal':
       embedding = await generateGoogleImageEmbedding(imagePath, interleaveText);
       break;

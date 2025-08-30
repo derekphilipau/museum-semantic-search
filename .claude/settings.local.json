@@ -13,7 +13,22 @@
       "Bash(npm install:*)",
       "Bash(npx:*)",
       "Bash(pkill:*)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(node:*)",
+      "Bash(rm:*)",
+      "Bash(find:*)",
+      "Bash(pip install:*)",
+      "Bash(python3 -m pip install:*)",
+      "Bash(npm run download-huggingface:*)",
+      "Bash(chmod:*)",
+      "Bash(cp:*)",
+      "Bash(python3:*)",
+      "Bash(jq:*)",
+      "Bash(timeout 30 npm run generate-embeddings-to-file -- --model=jina_clip_v2)",
+      "Bash(bash:*)",
+      "Bash(npm run index-with-embeddings:*)",
+      "Bash(grep:*)",
+      "Bash(npm run copy-indexed-images:*)"
     ],
     "deny": []
   }

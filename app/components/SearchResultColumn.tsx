@@ -33,7 +33,7 @@ export default function SearchResultColumn({
   showExternalLink = false,
 }: SearchResultColumnProps) {
   return (
-    <Card className="w-[280px] flex-shrink-0 overflow-hidden py-0">
+    <Card className="overflow-hidden py-0 h-full">
       <CardHeader className={`bg-gradient-to-r ${gradientFrom} ${gradientTo} text-white rounded-t-lg`}>
         <div className="flex flex-col items-center justify-between">
           <div className="flex items-center gap-2">
@@ -75,7 +75,7 @@ export default function SearchResultColumn({
           <div className="text-muted-foreground text-sm">No results</div>
         ) : (
           <div className="space-y-2">
-            {hits.slice(0, 5).map((hit, index) => (
+            {hits.slice(0, 10).map((hit, index) => (
               <div key={`${title}-${hit._id}-${index}`} className="relative h-full">
                 <Badge 
                   variant={badgeColor === 'secondary' ? 'secondary' : 'default'}
