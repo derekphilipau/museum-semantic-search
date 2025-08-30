@@ -14,11 +14,13 @@ A Next.js application for searching the Metropolitan Museum of Art collection us
 
 After testing with museum artwork, we found:
 
-1. **Cohere Embed 4** did not produce results as relevant as other models for art-related queries. The implementation remains in `lib/embeddings/cohere.ts` for reference.
+1. **JinaCLIP v2** performed exceptionally well for visual art search, providing highly relevant results for artwork similarity matching. We ultimately removed it from the active models because **Jina Embeddings v4** (2048 dims) performed just as well while also supporting combined text+image inputs, allowing us to leverage artwork metadata for even richer semantic search.
 
-2. **Voyage Multimodal 3** had significant rate limiting issues on the free tier (3 requests/minute), making it extremely slow for generating embeddings at scale. Additionally, the search results were not as relevant as Jina CLIP v2 or Google Vertex AI for art-related queries. Further research with a paid account might yield different results. The implementation remains in `lib/embeddings/voyage.ts` for reference.
+2. **Cohere Embed 4** did not produce results as relevant as other models for art-related queries. The implementation remains in `lib/embeddings/cohere.ts` for reference.
 
-The remaining models (Jina CLIP v2 and Google Vertex AI) showed the best performance for visual art search, with Jina CLIP v2 being particularly well-suited for artwork similarity matching.
+3. **Voyage Multimodal 3** had significant rate limiting issues on the free tier (3 requests/minute), making it extremely slow for generating embeddings at scale. Additionally, the search results were not as relevant as Jina models or Google Vertex AI for art-related queries. Further research with a paid account might yield different results. The implementation remains in `lib/embeddings/voyage.ts` for reference.
+
+The current models (Jina Embeddings v4 and Google Vertex AI) provide excellent performance for visual art search, with Jina v4's multimodal fusion capability being particularly powerful for combining visual and textual understanding.
 
 ## Prerequisites
 
@@ -114,8 +116,8 @@ npm run index-artworks
 **Option A: File-based workflow (Recommended for production)**
 ```bash
 # Generate embeddings to files (resumable, portable)
-npm run generate-embeddings-to-file -- --model=jina_clip_v2
-npm run generate-embeddings-to-file -- --model=voyage_multimodal_3
+npm run generate-embeddings-to-file -- --model=jina_embeddings_v4
+npm run generate-embeddings-to-file -- --model=google_vertex_multimodal
 # ... repeat for other models
 
 # Then index everything to Elasticsearch
@@ -171,8 +173,39 @@ See [DATA_PIPELINE.md](DATA_PIPELINE.md) for detailed documentation.
 - **Search Engine**: Elasticsearch 8.11
 - **Images**: Pre-sized ~500px from HuggingFace dataset
 - **Embedding Models**: 
-  - **Jina CLIP v2**: 1024 dims, optimized for 512×512 images
+  - **Jina Embeddings v4**: 2048 dims, multimodal text+image fusion
   - **Google Vertex AI**: 1408 dims, enterprise-grade multimodal
+
+## Future Enhancements: Embedding Atlas Integration
+
+We plan to create [Apple Embedding Atlas](https://apple.github.io/embedding-atlas/)-compatible datasets for interactive visualization of the embedding space. This will allow:
+
+- Visual exploration of how different embedding models organize the Met collection
+- Interactive clustering and labeling of artwork groups
+- UMAP/t-SNE projections of the high-dimensional embedding space
+- Comparison of semantic neighborhoods across models
+
+### Creating Atlas-Compatible Datasets
+
+To explore embeddings with Embedding Atlas locally:
+
+```bash
+# 1. Export embeddings to Parquet format
+npm run export-embeddings-to-parquet
+
+# 2. Run Embedding Atlas locally
+pip install embedding-atlas
+embedding-atlas met_embeddings.parquet --x projection_x --y projection_y
+```
+
+The export script will create a Parquet file with:
+- `identifier`: Met Museum object ID
+- `embedding`: High-dimensional embedding vectors (Jina v4 or Google Vertex)
+- `projection_x/y`: Pre-computed UMAP 2D coordinates
+- `title`, `artist`, `department`, etc.: Metadata for filtering
+- `image`: Path to artwork image
+
+This enables powerful visual exploration of search results and the entire collection's semantic structure.
 
 ## License
 
