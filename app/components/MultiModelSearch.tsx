@@ -126,8 +126,7 @@ export default function MultiModelSearch() {
   };
 
   const handleSelectArtwork = (artwork: any) => {
-    console.log('Selected artwork for comparison:', artwork);
-    // TODO: Implement model comparison view
+    // Navigation is now handled by Link components in ArtworkCard
   };
 
   // Run initial search on component mount

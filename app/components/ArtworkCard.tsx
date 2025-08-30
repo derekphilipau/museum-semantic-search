@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Link from 'next/link';
 import { Artwork } from '@/app/types';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 
@@ -29,10 +30,10 @@ export default function ArtworkCard({
   // Compact version for multi-column layout
   if (compact) {
     return (
-      <Card 
-        className="overflow-hidden cursor-pointer hover:shadow-lg transition-all w-full h-full flex flex-col"
-        onClick={onCompareClick}
-      >
+      <Link href={`/artwork/${metadata.objectId}`} className="block h-full">
+        <Card 
+          className="overflow-hidden cursor-pointer hover:shadow-lg transition-all w-full h-full flex flex-col"
+        >
         <CardContent className="p-3 flex flex-col h-full">
           {/* Image - fixed height container */}
           <div className="h-48 rounded-md bg-muted/50 mb-2 relative overflow-hidden flex items-center justify-center">
@@ -78,16 +79,17 @@ export default function ArtworkCard({
             </div>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      </Link>
     );
   }
 
   // Full version
   return (
-    <Card 
-      className="overflow-hidden cursor-pointer hover:shadow-lg transition-all h-full flex flex-col"
-      onClick={onCompareClick}
-    >
+    <Link href={`/artwork/${metadata.objectId}`} className="block h-full">
+      <Card 
+        className="overflow-hidden cursor-pointer hover:shadow-lg transition-all h-full flex flex-col"
+      >
       <CardContent className="p-4 flex flex-col h-full">
         {rank && (
           <div className="text-xs text-muted-foreground mb-2">Rank #{rank}</div>
@@ -138,6 +140,7 @@ export default function ArtworkCard({
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </Link>
   );
 }
