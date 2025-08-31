@@ -92,7 +92,7 @@ async function processArtwork(
     const imageUrl = artwork.image?.url;
     
     if (!imageUrl) {
-      console.log(`  No image URL for ${artwork.id}`);
+      console.log(`  No image URL for ${artwork.metadata.id}`);
       return { processed: 0, skipped: 1, failed: 0 };
     }
 
@@ -117,6 +117,9 @@ async function processArtwork(
       console.log(`  Generating ${model} embedding...`);
       if (interleaveText) {
         console.log(`  Using text+image: "${interleaveText.substring(0, 50)}..."`);
+      }
+      if (artwork.searchableText) {
+        console.log(`  Searchable text: "${artwork.searchableText.substring(0, 100)}${artwork.searchableText.length > 100 ? '...' : ''}"`);
       }
       
       let result;

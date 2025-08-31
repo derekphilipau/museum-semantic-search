@@ -254,6 +254,9 @@ export async function POST(request: NextRequest) {
     // This runs keyword, all semantic searches, and hybrid search concurrently
     const searchResults = await Promise.all(searchPromises);
 
+    // Get index stats (lightweight operation)
+    const statsPromise = client.indices.stats({ index: INDEX_NAME });
+
     // Organize results
     const response: UnifiedSearchResponse = {
       keyword: null,
@@ -274,7 +277,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(response, {
+    // Get index stats
+    const stats = await statsPromise;
+    const indexStats = stats._all.total;
+
+    // Helper to format bytes to human readable
+    const formatBytes = (bytes: number): string => {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+    };
+
+    // Add metadata to response
+    const responseWithMetadata = {
+      ...response,
+      metadata: {
+        indexName: INDEX_NAME,
+        indexSize: indexStats.store.size_in_bytes,
+        indexSizeHuman: formatBytes(indexStats.store.size_in_bytes),
+        totalDocuments: indexStats.docs.count,
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    return NextResponse.json(responseWithMetadata, {
       headers: getCorsHeaders(request),
     });
   } catch (error) {

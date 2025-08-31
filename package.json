@@ -7,12 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "index-artworks": "npx tsx scripts/index-artworks-generic.ts",
-    "generate-embeddings": "npx tsx scripts/generate-embeddings.ts",
-    "generate-embeddings-to-file": "npx tsx scripts/generate-embeddings-to-file-moma.ts",
-    "load-embeddings-from-file": "npx tsx scripts/load-embeddings-from-file.ts",
-    "index-with-embeddings": "npx tsx scripts/index-artworks-with-embeddings.ts",
-    "setup": "npm run index-artworks && npm run generate-embeddings"
+    "generate-embeddings": "npx tsx scripts/generate-embeddings-to-file-moma.ts",
+    "index-artworks": "npx tsx scripts/index-artworks-with-embeddings.ts",
+    "setup": "echo 'Run: 1) npm run generate-embeddings, 2) npm run index-artworks'"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.19.1",

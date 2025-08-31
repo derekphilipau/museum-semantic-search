@@ -79,6 +79,15 @@ export interface SearchResponse {
   hits: SearchHit[];
 }
 
+export interface SearchMetadata {
+  indexName?: string;
+  indexSize: number;
+  indexSizeHuman: string;
+  totalDocuments: number;
+  timestamp: string;
+  totalQueryTime?: number;
+}
+
 export interface MultiSearchResponse {
   query: string;
   models: string[];

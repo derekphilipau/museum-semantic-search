@@ -18,6 +18,8 @@ interface SearchResultColumnProps {
   onSelectArtwork: (artwork: Artwork) => void;
   modelUrl?: string;
   showExternalLink?: boolean;
+  responseTime?: number;
+  totalResults?: number;
 }
 
 function SearchResultColumn({
@@ -31,6 +33,8 @@ function SearchResultColumn({
   onSelectArtwork,
   modelUrl,
   showExternalLink = false,
+  responseTime,
+  totalResults,
 }: SearchResultColumnProps) {
   return (
     <Card className="overflow-hidden py-0 h-full">
@@ -57,10 +61,16 @@ function SearchResultColumn({
             </div>
           </div>
           {hits.length > 0 && (
-            <div className="flex gap-4">
-              <div className="text-xs font-medium">{hits.length} results</div>
+            <div className="flex gap-3 text-xs">
+              <div className="font-medium">{hits.length} results</div>
+              {totalResults && totalResults > hits.length && (
+                <div className="text-white/80">of {totalResults.toLocaleString()}</div>
+              )}
+              {responseTime !== undefined && (
+                <div className="text-white/80">{responseTime}ms</div>
+              )}
               {hits[0]?._score && (
-                <div className="text-xs text-white/80">score: {hits[0]._score.toFixed(2)}</div>
+                <div className="text-white/80">score: {hits[0]._score.toFixed(2)}</div>
               )}
             </div>
           )}
@@ -69,7 +79,10 @@ function SearchResultColumn({
       
       <CardContent className="p-3 overflow-hidden">
         {hits.length === 0 ? (
-          <div className="text-muted-foreground text-sm">No results</div>
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            <p>No results found</p>
+            <p className="text-xs mt-1 opacity-70">Try different search terms</p>
+          </div>
         ) : (
           <div className="space-y-2">
             {hits.slice(0, 10).map((hit, index) => (

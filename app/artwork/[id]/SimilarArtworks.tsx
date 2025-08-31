@@ -27,21 +27,21 @@ export default function SimilarArtworks({ similarArtworks }: SimilarArtworksProp
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {Object.entries(EMBEDDING_MODELS).map(([modelKey, model]) => {
         const results = similarArtworks[modelKey];
-        if (!results || !results.hits || results.hits.length === 0) {
-          return null;
-        }
         
+        // Always show the column, even with no results
         return (
           <SearchResultColumn
             key={modelKey}
             title={model.name}
             description={model.notes}
             icon={Brain}
-            hits={results.hits}
+            hits={results?.hits || []}
             gradientFrom="from-purple-500"
             gradientTo="to-purple-600"
             badgeColor="bg-purple-700"
             onSelectArtwork={() => {}}
+            responseTime={results?.took}
+            totalResults={results?.total}
           />
         );
       })}

@@ -1,4 +1,4 @@
-import { ArtworkMetadata, ArtworkImage } from '@/app/types';
+import { ArtworkMetadata, ArtworkImage } from '../../../app/types';
 
 // Generic parser interface that all collection parsers must implement
 export interface CollectionParser {
@@ -16,6 +16,7 @@ export interface CollectionParser {
 export interface ParsedArtwork {
   metadata: ArtworkMetadata;
   image: ArtworkImage | string;
+  searchableText: string;
 }
 
 // Base parser class with common functionality
@@ -23,6 +24,30 @@ export abstract class BaseParser implements CollectionParser {
   abstract parseFile(filePath: string): Promise<ParsedArtwork[]>;
   abstract getCollectionId(): string;
   abstract getCollectionName(): string;
+  
+  // Helper to create searchable text from metadata
+  protected createSearchableText(metadata: ArtworkMetadata): string {
+    const fields = [
+      metadata.title,
+      metadata.artist,
+      metadata.date,
+      metadata.medium,
+      metadata.department,
+      metadata.classification,
+      metadata.culture,
+      metadata.period,
+      metadata.artistBio,
+      metadata.artistNationality,
+      metadata.creditLine
+    ];
+    
+    return fields
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
   
   // Helper to extract year from various date formats
   protected extractYear(dateStr: string): { begin: number | undefined, end: number | undefined } {

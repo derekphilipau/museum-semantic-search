@@ -1,7 +1,7 @@
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { BaseParser, ParsedArtwork } from './types';
-import { ArtworkMetadata, ArtworkImage } from '@/app/types';
+import { ArtworkMetadata, ArtworkImage } from '../../../app/types';
 
 interface MoMACSVRow {
   Title: string;
@@ -133,9 +133,13 @@ export class MoMAParser extends BaseParser {
         thumbnailUrl: row.ImageURL.replace('1024x1024', '400x400'),
       };
       
+      // Create searchable text
+      const searchableText = this.createSearchableText(metadata);
+      
       artworks.push({
         metadata,
-        image
+        image,
+        searchableText
       });
     }
     

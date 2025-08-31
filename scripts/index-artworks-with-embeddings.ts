@@ -26,6 +26,30 @@ interface EmbeddingRecord {
   };
 }
 
+// Extract searchable text from metadata
+function extractSearchableText(metadata: any): string {
+  const fields = [
+    metadata.title,
+    metadata.artist,
+    metadata.date,
+    metadata.medium,
+    metadata.department,
+    metadata.classification,
+    metadata.culture,
+    metadata.period,
+    metadata.artistBio,
+    metadata.artistNationality,
+    metadata.creditLine
+  ];
+  
+  return fields
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Load embeddings from JSONL file into a map
 async function loadEmbeddingsMap(filePath: string): Promise<Map<string, number[]>> {
   const embeddingsMap = new Map<string, number[]>();
@@ -91,7 +115,7 @@ async function indexArtworks(
         id: artwork.metadata.id,
         metadata: artwork.metadata,
         image: artwork.image,
-        searchableText: artwork.searchableText,
+        searchableText: extractSearchableText(artwork.metadata),
         embeddings: artworkEmbeddings
       };
       

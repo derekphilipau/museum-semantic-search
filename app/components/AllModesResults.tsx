@@ -101,58 +101,57 @@ export default function AllModesResults({
     <div className="space-y-8">
       {/* Fixed 4-column grid layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Keyword Search - Single Column */}
-        {results.keyword !== null && (
-          <SearchResultColumn
-              title="Keyword"
-              description="Native Elasticsearch"
-              icon={Search}
-              hits={results.keyword.hits}
-              gradientFrom="from-blue-500"
-              gradientTo="to-blue-600"
-              badgeColor="secondary"
-              onSelectArtwork={onSelectArtwork}
-            />
-          )}
+        {/* Keyword Search - Always show */}
+        <SearchResultColumn
+          title="Keyword"
+          description="Native Elasticsearch"
+          icon={Search}
+          hits={results.keyword?.hits || []}
+          gradientFrom="from-blue-500"
+          gradientTo="to-blue-600"
+          badgeColor="secondary"
+          onSelectArtwork={onSelectArtwork}
+          responseTime={results.keyword?.took}
+          totalResults={results.keyword?.total}
+        />
 
-          {/* Visual Similarity - One column per model */}
-          {orderedModels.map((modelKey) => {
-            const model = EMBEDDING_MODELS[modelKey as keyof typeof EMBEDDING_MODELS];
-            const semanticResults = results.semantic[modelKey];
-            
-            // Skip if no results for this model
-            if (!semanticResults) return null;
-            
-            return (
-              <SearchResultColumn
-                key={`semantic-${modelKey}`}
-                title={model.name}
-                description={MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.description || model.notes}
-                icon={Brain}
-                hits={semanticResults.hits}
-                gradientFrom="from-purple-500"
-                gradientTo="to-purple-600"
-                badgeColor="bg-purple-700"
-                onSelectArtwork={onSelectArtwork}
-                modelUrl={MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.url}
-                showExternalLink={true}
+        {/* Visual Similarity - Always show all models */}
+        {orderedModels.map((modelKey) => {
+          const model = EMBEDDING_MODELS[modelKey as keyof typeof EMBEDDING_MODELS];
+          const semanticResults = results.semantic[modelKey];
+          
+          return (
+            <SearchResultColumn
+              key={`semantic-${modelKey}`}
+              title={model.name}
+              description={MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.description || model.notes}
+              icon={Brain}
+              hits={semanticResults?.hits || []}
+              gradientFrom="from-purple-500"
+              gradientTo="to-purple-600"
+              badgeColor="bg-purple-700"
+              onSelectArtwork={onSelectArtwork}
+              modelUrl={MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.url}
+              showExternalLink={true}
+              responseTime={semanticResults?.took}
+              totalResults={semanticResults?.total}
             />
           );
         })}
 
-        {/* Hybrid Search - Single Column */}
-        {results.hybrid !== null && (
-          <SearchResultColumn
-            title="Hybrid"
-            description={results.hybrid ? EMBEDDING_MODELS[results.hybrid.model as keyof typeof EMBEDDING_MODELS]?.name : 'Not selected'}
-            icon={Zap}
-            hits={results.hybrid?.results?.hits || []}
-            gradientFrom="from-green-500"
-            gradientTo="to-green-600"
-            badgeColor="bg-green-700"
-            onSelectArtwork={onSelectArtwork}
-          />
-        )}
+        {/* Hybrid Search - Always show */}
+        <SearchResultColumn
+          title="Hybrid"
+          description={results.hybrid ? EMBEDDING_MODELS[results.hybrid.model as keyof typeof EMBEDDING_MODELS]?.name : 'Not available'}
+          icon={Zap}
+          hits={results.hybrid?.results?.hits || []}
+          gradientFrom="from-green-500"
+          gradientTo="to-green-600"
+          badgeColor="bg-green-700"
+          onSelectArtwork={onSelectArtwork}
+          responseTime={results.hybrid?.results?.took}
+          totalResults={results.hybrid?.results?.total}
+        />
       </div>
 
     </div>

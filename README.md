@@ -2,6 +2,10 @@
 
 A Next.js application for searching museum collections using state-of-the-art multimodal AI embeddings. Currently configured for the MoMA collection. Compare search results across different embedding models including Jina and Google Vertex AI.
 
+## Note
+
+This project is largely LLM vibe-coded for the purpose of quickly prototyping and experimenting with different semantic search techniques.  It should not be taken as a good example of Next.js or proper Elasticsearch indexing or querying.
+
 ## Features
 
 - **Multi-model Semantic Search**: Compare results from different embedding models side-by-side
@@ -136,23 +140,47 @@ The system supports multiple museum collections through a parser architecture. T
 
 ### 7. Generate embeddings
 
+The system generates multimodal embeddings using both text metadata and artwork images for enhanced semantic understanding.
+
+**Embedding Models:**
+- **Jina Embeddings v4** (`jina-embeddings-v4-base-en`)
+  - 2048 dimensions
+  - Supports interleaved text+image input for true multimodal understanding
+  - Model: `jina-embeddings-v4-base-en`
+  
+- **Google Vertex AI Multimodal** (`multimodalembedding@001`)
+  - 1408 dimensions  
+  - Enterprise-grade multimodal embeddings
+  - Model: `multimodalembedding@001`
+
+**Text+Image Fusion:**
+For each artwork, we combine visual and textual information:
+- **Image**: The artwork's visual representation
+- **Text**: Searchable metadata including title, artist, date, medium, department, classification, etc.
+
+**Example embedding generation output:**
+```
+[62/100] Anabol(A): PACE CAR for the HUBRIS PILL by Matthew Barney
+  Downloading image...
+  Generating jina_embeddings_v4 embedding...
+  Using text+image: "anabol(a): pace car for the hubris pill matthew ba..."
+  Searchable text: "anabol(a): pace car for the hubris pill matthew barney 1991 internally lubricated plastic, teflon fa..."
+  ✓ Success (2048 dimensions)
+```
+
+The searchable text includes all relevant metadata fields concatenated and normalized, providing rich context for the embedding models to understand both the visual and conceptual aspects of each artwork.
+
 **Option A: File-based workflow (Recommended for production)**
 ```bash
 # Generate embeddings to files (resumable, portable)
-npm run generate-embeddings-to-file -- --model=jina_embeddings_v4
-npm run generate-embeddings-to-file -- --model=google_vertex_multimodal
-# ... repeat for other models
+npm run generate-embeddings -- --model=jina_embeddings_v4
+npm run generate-embeddings -- --model=google_vertex_multimodal
 
 # Then index everything to Elasticsearch
-npm run index-with-embeddings -- --force
+npm run index-artworks -- --force
 ```
 
-**Option B: Direct to Elasticsearch (Simple for testing)**
-```bash
-npm run generate-embeddings
-```
-
-The file-based approach allows for resumable generation and easier data portability.
+The file-based approach allows for resumable generation and easier data portability between environments.
 
 ### 8. Start the application
 
