@@ -15,7 +15,7 @@
     "setup": "npm run index-artworks && npm run generate-embeddings"
   },
   "dependencies": {
-    "@elastic/elasticsearch": "^8.13.1",
+    "@elastic/elasticsearch": "^8.19.1",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.7",

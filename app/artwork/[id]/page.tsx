@@ -1,138 +1,189 @@
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Search, ExternalLink } from 'lucide-react';
+import { notFound } from 'next/navigation';
+import { Search, ExternalLink, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
+import { EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings/types';
 import { Artwork, SearchResponse } from '@/app/types';
-import SearchResultColumn from '@/app/components/SearchResultColumn';
-import { Brain } from 'lucide-react';
+import SimilarArtworks from './SimilarArtworks';
+import { Client } from '@elastic/elasticsearch';
 
-export default function ArtworkDetailPage() {
-  const params = useParams();
-  const router = useRouter();
-  const artworkId = params.id as string;
-  
-  const [artwork, setArtwork] = useState<Artwork | null>(null);
-  const [similarResults, setSimilarResults] = useState<Record<string, SearchResponse>>({});
-  const [loading, setLoading] = useState(true);
-  const [similarLoading, setSimilarLoading] = useState(false);
+// Initialize Elasticsearch client
+const client = new Client({
+  node: process.env.ELASTICSEARCH_URL || 'http://localhost:9200',
+});
 
-  useEffect(() => {
-    if (artworkId) {
-      fetchArtwork();
-    }
-  }, [artworkId]);
+const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || process.env.NEXT_PUBLIC_ELASTICSEARCH_INDEX || 'artworks_semantic';
 
-  useEffect(() => {
-    if (artwork) {
-      searchSimilarArtworks();
-    }
-  }, [artwork]);
+interface PageProps {
+  params: { id: string };
+}
 
-  const fetchArtwork = async () => {
-    try {
-      const response = await fetch('/api/artwork/' + artworkId);
-      if (response.ok) {
-        const data = await response.json();
-        setArtwork(data);
-      } else {
-        console.error('Failed to fetch artwork');
+// Server function to fetch artwork details
+async function getArtwork(id: string): Promise<Artwork | null> {
+  try {
+    const result = await client.get({
+      index: INDEX_NAME,
+      id,
+      _source: {
+        excludes: ['embeddings']
       }
-    } catch (error) {
-      console.error('Error fetching artwork:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    });
 
-  const searchSimilarArtworks = async () => {
-    if (!artwork) return;
+    if (!result.found) {
+      return null;
+    }
+
+    return result._source as Artwork;
+  } catch (error) {
+    console.error('Error fetching artwork:', error);
+    return null;
+  }
+}
+
+// Server function to fetch similar artworks for all models
+async function getSimilarArtworks(artwork: Artwork): Promise<Record<string, SearchResponse>> {
+  const results: Record<string, SearchResponse> = {};
+  
+  try {
+    // First, we need to get the embeddings for this artwork
+    const embeddingResult = await client.get({
+      index: INDEX_NAME,
+      id: artwork.metadata.id,
+      _source: {
+        includes: ['embeddings']
+      }
+    });
+
+    if (!embeddingResult.found) {
+      return results;
+    }
+
+    const embeddings = (embeddingResult._source as any).embeddings;
+    if (!embeddings) {
+      console.log('No embeddings found for artwork:', artwork.metadata.id);
+      return results;
+    }
     
-    setSimilarLoading(true);
-    try {
-      const modelKeys = Object.keys(EMBEDDING_MODELS);
-      const searchPromises = modelKeys.map(async (modelKey) => {
-        const response = await fetch('/api/search/similar', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            artworkId: artwork.metadata.id,
-            model: modelKey,
-            size: 12
-          }),
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          return { model: modelKey, results: data };
-        }
+    console.log('Found embeddings for models:', Object.keys(embeddings));
+
+    // Search for similar artworks for each model that has embeddings
+    const searchPromises = Object.entries(embeddings).map(async ([modelKey, embedding]) => {
+      if (!embedding || !Array.isArray(embedding)) {
         return null;
-      });
-      
-      const results = await Promise.all(searchPromises);
-      const newSimilarResults: Record<string, SearchResponse> = {};
-      
-      results.forEach((result) => {
-        if (result) {
-          newSimilarResults[result.model] = result.results;
-        }
-      });
-      
-      setSimilarResults(newSimilarResults);
-    } catch (error) {
-      console.error('Error searching similar artworks:', error);
-    } finally {
-      setSimilarLoading(false);
-    }
-  };
+      }
 
-  if (loading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <Skeleton className="h-8 w-48 mb-6" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <Skeleton className="h-96" />
-          <div className="space-y-4">
-            <Skeleton className="h-8 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-4 w-2/3" />
-          </div>
-        </div>
-      </div>
-    );
+      try {
+        const searchResult = await client.search({
+          index: INDEX_NAME,
+          body: {
+            knn: {
+              field: `embeddings.${modelKey}`,
+              query_vector: embedding as number[],
+              k: 13, // +1 to exclude the source artwork
+              num_candidates: 50
+            },
+            size: 13,
+            _source: {
+              excludes: ['embeddings']
+            }
+          }
+        });
+
+        // Filter out the source artwork from results
+        const filteredHits = searchResult.hits.hits.filter(
+          (hit: any) => hit._id !== artwork.metadata.id
+        );
+
+        return {
+          model: modelKey,
+          results: {
+            took: searchResult.took,
+            total: filteredHits.length,
+            hits: filteredHits.slice(0, 12).map((hit: any) => ({
+              _id: hit._id,
+              _score: hit._score,
+              _source: hit._source
+            }))
+          }
+        };
+      } catch (error) {
+        console.error(`Error searching similar artworks for ${modelKey}:`, error);
+        return null;
+      }
+    });
+
+    const searchResults = await Promise.all(searchPromises);
+    
+    searchResults.forEach((result) => {
+      if (result && result.model) {
+        results[result.model] = result.results;
+        console.log(`Got ${result.results.hits.length} similar artworks for ${result.model}`);
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching similar artworks:', error);
   }
 
+  return results;
+}
+
+// Generate metadata for SEO
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const artwork = await getArtwork(params.id);
+  
   if (!artwork) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <Card className="p-8 text-center">
-          <p className="text-muted-foreground mb-4">Artwork not found</p>
-          <Button onClick={() => router.push('/')}>
-            Back to Search
-          </Button>
-        </Card>
-      </div>
-    );
+    return {
+      title: 'Artwork Not Found',
+    };
   }
 
+  const { metadata } = artwork;
+  
+  return {
+    title: `${metadata.title} by ${metadata.artist || 'Unknown Artist'}`,
+    description: `${metadata.classification || 'Artwork'} from ${metadata.date || 'Unknown date'}. ${metadata.medium || ''}`,
+    openGraph: {
+      title: metadata.title,
+      description: `by ${metadata.artist || 'Unknown Artist'}`,
+      images: artwork.image?.url ? [artwork.image.url] : [],
+    },
+  };
+}
+
+export default async function ArtworkDetailPage({ params }: PageProps) {
+  const artwork = await getArtwork(params.id);
+  
+  if (!artwork) {
+    notFound();
+  }
+
+  const similarArtworks = await getSimilarArtworks(artwork);
+  console.log('Similar artworks results:', Object.keys(similarArtworks).map(key => ({
+    model: key,
+    count: similarArtworks[key]?.hits?.length || 0
+  })));
+  
   const { metadata, image } = artwork;
   const imageUrl = typeof image === 'string' ? image : image.url;
 
-  // Dummy function for SearchResultColumn compatibility
-  const handleSelectArtwork = () => {};
-
   return (
     <div className="container mx-auto px-4 py-6">
+      {/* Back button */}
+      <Link href="/">
+        <Button variant="ghost" size="sm" className="mb-4">
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Search
+        </Button>
+      </Link>
+
       {/* Compact artwork info card */}
       <Card className="mb-6">
-        <CardContent className="">
+        <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Image on left */}
             <div className="md:col-span-1">
@@ -213,13 +264,14 @@ export default function ArtworkDetailPage() {
                 <Button 
                   variant="outline"
                   size="sm"
-                  onClick={() => window.open(metadata.sourceUrl, '_blank')}
+                  asChild
                 >
-                  View on {metadata.collection === 'moma' ? 'MoMA' : 'Museum'} Website
-                  <ExternalLink className="w-4 h-4 ml-2" />
+                  <a href={metadata.sourceUrl} target="_blank" rel="noopener noreferrer">
+                    View on {metadata.collection === 'moma' ? 'MoMA' : 'Museum'} Website
+                    <ExternalLink className="w-4 h-4 ml-2" />
+                  </a>
                 </Button>
               )}
-
             </div>
           </div>
         </CardContent>
@@ -232,41 +284,7 @@ export default function ArtworkDetailPage() {
           Similar Artworks
         </h2>
         
-        {similarLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[...Array(2)].map((_, i) => (
-              <Card key={i}>
-                <CardHeader>
-                  <Skeleton className="h-4 w-32" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-48" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Object.entries(EMBEDDING_MODELS).map(([modelKey, model]) => {
-              const results = similarResults[modelKey];
-              if (!results) return null;
-              
-              return (
-                <SearchResultColumn
-                  key={modelKey}
-                  title={model.name}
-                  description={model.notes}
-                  icon={Brain}
-                  hits={results.hits}
-                  gradientFrom="from-purple-500"
-                  gradientTo="to-purple-600"
-                  badgeColor="bg-purple-700"
-                  onSelectArtwork={handleSelectArtwork}
-                />
-              );
-            })}
-          </div>
-        )}
+        <SimilarArtworks similarArtworks={similarArtworks} />
       </div>
     </div>
   );

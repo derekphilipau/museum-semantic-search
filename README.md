@@ -41,6 +41,10 @@ npm install
 
 ### 2. Prepare museum data
 
+Download the museum data:
+- https://github.com/MuseumofModernArt/collection/
+- https://github.com/metmuseum/openaccess
+
 Place your museum collection data in the appropriate directory. For MoMA:
 
 ```bash

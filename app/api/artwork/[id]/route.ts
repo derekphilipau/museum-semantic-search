@@ -22,7 +22,7 @@ export async function GET(
     }
 
     // Fetch artwork from Elasticsearch by document ID
-    const response = await fetch(`${ES_URL}/${INDEX_NAME}/_doc/${artworkId}`, {
+    const response = await fetch(`${ES_URL}/${INDEX_NAME}/_doc/${artworkId}?_source_excludes=embeddings`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
