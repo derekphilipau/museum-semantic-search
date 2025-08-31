@@ -4,7 +4,7 @@ import { EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings/types';
 import { SearchResponse, SearchMode } from '@/app/types';
 
 const ES_URL = process.env.NEXT_PUBLIC_ELASTICSEARCH_URL || 'http://localhost:9200';
-const INDEX_NAME = 'artworks_v1';
+const INDEX_NAME = process.env.NEXT_PUBLIC_ELASTICSEARCH_INDEX || 'artworks_semantic';
 
 // Get text embedding from our API
 async function getTextEmbedding(text: string, model: ModelKey): Promise<number[] | null> {

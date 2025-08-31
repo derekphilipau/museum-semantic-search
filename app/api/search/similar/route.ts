@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ModelKey, EMBEDDING_MODELS } from '@/lib/embeddings/types';
 
 const ES_URL = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
-const INDEX_NAME = 'artworks_v1';
+const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || process.env.NEXT_PUBLIC_ELASTICSEARCH_INDEX || 'artworks_semantic';
 
 // Constants for validation
 const MIN_RESULTS = 1;
@@ -17,21 +17,15 @@ function isValidModel(model: any): model is ModelKey {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { objectId, model, size = DEFAULT_RESULTS } = body;
+    const { objectId, artworkId, model, size = DEFAULT_RESULTS } = body;
 
-    // Validate objectId
-    if (!objectId) {
+    // Support both objectId (legacy) and artworkId
+    const id = artworkId || objectId;
+    
+    // Validate ID
+    if (!id) {
       return NextResponse.json(
-        { error: 'objectId is required' },
-        { status: 400 }
-      );
-    }
-
-    // Validate objectId is a positive integer
-    const parsedObjectId = Number(objectId);
-    if (!Number.isInteger(parsedObjectId) || parsedObjectId <= 0) {
-      return NextResponse.json(
-        { error: 'objectId must be a positive integer' },
+        { error: 'artworkId is required' },
         { status: 400 }
       );
     }
@@ -53,18 +47,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // First, get the artwork's embedding
-    const getResponse = await fetch(`${ES_URL}/${INDEX_NAME}/_search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: {
-          term: {
-            'metadata.objectId': objectId
-          }
-        },
-        size: 1
-      })
+    // First, get the artwork's embedding by document ID
+    const getResponse = await fetch(`${ES_URL}/${INDEX_NAME}/_doc/${id}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
     });
 
     if (!getResponse.ok) {
@@ -72,14 +58,14 @@ export async function POST(request: NextRequest) {
     }
 
     const getResult = await getResponse.json();
-    if (!getResult.hits.hits.length) {
+    if (!getResult.found) {
       return NextResponse.json(
         { error: 'Artwork not found' },
         { status: 404 }
       );
     }
 
-    const artwork = getResult.hits.hits[0]._source;
+    const artwork = getResult._source;
     const embedding = artwork.embeddings?.[model];
 
     if (!embedding) {
@@ -113,7 +99,7 @@ export async function POST(request: NextRequest) {
     
     // Filter out the source artwork from results
     const filteredHits = searchResult.hits.hits.filter(
-      (hit: any) => hit._source.metadata.objectId !== objectId
+      (hit: any) => hit._id !== id
     );
 
     return NextResponse.json({

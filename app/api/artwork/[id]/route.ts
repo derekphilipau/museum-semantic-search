@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const ES_URL = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
-const INDEX_NAME = 'artworks_v1';
+const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || process.env.NEXT_PUBLIC_ELASTICSEARCH_INDEX || 'artworks_semantic';
 
 // Cache duration for artwork data (1 hour)
 const CACHE_DURATION = 3600;
@@ -11,28 +11,20 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const objectId = parseInt(params.id);
+    const artworkId = params.id;
     
-    // Validate objectId
-    if (isNaN(objectId) || objectId <= 0) {
+    // Validate artwork ID
+    if (!artworkId) {
       return NextResponse.json(
-        { error: 'Invalid object ID. Must be a positive integer.' },
+        { error: 'Invalid artwork ID' },
         { status: 400 }
       );
     }
 
-    // Fetch artwork from Elasticsearch
-    const response = await fetch(`${ES_URL}/${INDEX_NAME}/_search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: {
-          term: {
-            'metadata.objectId': objectId
-          }
-        },
-        size: 1
-      })
+    // Fetch artwork from Elasticsearch by document ID
+    const response = await fetch(`${ES_URL}/${INDEX_NAME}/_doc/${artworkId}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
     });
 
     if (!response.ok) {
@@ -41,20 +33,20 @@ export async function GET(
 
     const result = await response.json();
     
-    if (!result.hits.hits.length) {
+    if (!result.found) {
       return NextResponse.json(
         { error: 'Artwork not found' },
         { status: 404 }
       );
     }
 
-    const artwork = result.hits.hits[0]._source;
+    const artwork = result._source;
     
     // Return with cache headers
     return NextResponse.json(artwork, {
       headers: {
         'Cache-Control': `public, max-age=${CACHE_DURATION}, s-maxage=${CACHE_DURATION}`,
-        'ETag': `"${objectId}-${artwork.metadata?.lastUpdate || 'static'}"`,
+        'ETag': `"${artworkId}-${artwork.metadata?.lastUpdate || 'static'}"`,
       }
     });
 

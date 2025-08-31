@@ -63,7 +63,7 @@ export default function ArtworkDetailPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            objectId: artwork.metadata.collectionId,
+            artworkId: artwork.metadata.id,
             model: modelKey,
             size: 12
           }),

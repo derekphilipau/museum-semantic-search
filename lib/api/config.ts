@@ -1,7 +1,7 @@
 // Shared configuration for API routes
 export const ES_CONFIG = {
   url: process.env.ELASTICSEARCH_URL || 'http://localhost:9200',
-  index: 'artworks_v1', // Generic index for all collections
+  index: process.env.NEXT_PUBLIC_ELASTICSEARCH_INDEX || 'artworks_semantic', // Generic index for all collections
   defaultSize: 10,
   maxCandidates: 50,
 } as const;

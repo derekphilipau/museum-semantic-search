@@ -6,7 +6,7 @@ export const esClient = new Client({
   node: ES_URL,
 });
 
-export const INDEX_NAME = 'artworks_v1'; // Generic name for multi-collection use
+export const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || process.env.NEXT_PUBLIC_ELASTICSEARCH_INDEX || 'artworks_semantic';
 
 // Index mapping for artworks with embeddings
 export const INDEX_MAPPING = {

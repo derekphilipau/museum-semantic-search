@@ -28,7 +28,7 @@ npm run index-artworks -- --limit=10
 ```
 
 **What it does:**
-- Creates `artworks_v1` index with proper mappings
+- Creates `artworks_semantic` index with proper mappings
 - Processes museum data using collection-specific parsers
 - Extracts searchable text and keywords
 - Sets up vector fields for embeddings
@@ -108,4 +108,4 @@ npm run setup
 
 **Elasticsearch errors:**
 - Ensure Elasticsearch is running: `curl http://localhost:9200`
-- Check index exists: `curl http://localhost:9200/artworks_v1`
+- Check index exists: `curl http://localhost:9200/artworks_semantic`
