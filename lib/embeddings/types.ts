@@ -31,16 +31,16 @@ export const EMBEDDING_MODELS: Record<string, EmbeddingModel> = {
   },
   jina_embeddings_v4: {
     key: 'jina_embeddings_v4',
-    name: 'Jina Embeddings v4',
+    name: 'Jina v4 (Visual)',
     dimension: 2048,
     year: '2025',
     notes: 'jina-embeddings-v4',
     supportsImage: true,
-    supportsInterleaved: true,
+    supportsInterleaved: false, // Changed to false - we use image-only
   },
   google_vertex_multimodal: {
     key: 'google_vertex_multimodal',
-    name: 'Google Vertex Multimodal',
+    name: 'Google Vertex (Visual)',
     dimension: 1408,
     year: '2024',
     notes: 'multimodalembedding@001',

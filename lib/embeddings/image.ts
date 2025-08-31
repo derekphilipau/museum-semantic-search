@@ -49,6 +49,7 @@ export async function generateJinaImageEmbedding(
     }
     requestBody = {
       model: modelId,
+      task: 'retrieval.passage', // For document embeddings
       input: input,
       encoding_type: 'float',
     };
@@ -274,11 +275,13 @@ export async function generateImageEmbedding(
       break;
       
     case 'jina_embeddings_v4':
-      embedding = await generateJinaImageEmbedding(imagePath, 'jina-embeddings-v4', interleaveText);
+      // Always use image-only for v4 (text contribution is negligible)
+      embedding = await generateJinaImageEmbedding(imagePath, 'jina-embeddings-v4', undefined);
       break;
       
     case 'google_vertex_multimodal':
-      embedding = await generateGoogleImageEmbedding(imagePath, interleaveText);
+      // Always use image-only for Google Vertex (text contribution is negligible)
+      embedding = await generateGoogleImageEmbedding(imagePath, undefined);
       break;
       
     default:

@@ -17,9 +17,11 @@ export async function generateJinaEmbedding(
     }],
   };
 
-  // Add task parameter for v3
+  // Add task parameter based on model
   if (modelId === 'jina-embeddings-v3') {
     requestBody.task = 'text-matching';
+  } else if (modelId === 'jina-embeddings-v4') {
+    requestBody.task = 'retrieval.query'; // For search queries
   }
 
   const response = await fetch('https://api.jina.ai/v1/embeddings', {

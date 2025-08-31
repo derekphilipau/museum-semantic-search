@@ -28,12 +28,12 @@ const MODEL_INFO = {
   },
   jina_embeddings_v4: {
     url: 'https://jina.ai/embeddings/',
-    description: 'Text + Image fusion',
+    description: 'Visual similarity search',
     year: '2025'
   },
   google_vertex_multimodal: {
     url: 'https://cloud.google.com/vertex-ai/docs/generative-ai/embeddings/get-multimodal-embeddings',
-    description: 'Text + Image fusion',
+    description: 'Visual similarity search',
     year: '2024'
   }
 } as const;
@@ -97,8 +97,8 @@ export default function AllModesResults({
 
   return (
     <div className="space-y-8">
-      {/* Fixed 5-column grid layout: ES text, Jina v3 text, Jina v4, Google, Hybrid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* Fixed 5-column grid layout: ES text, Jina v3 text, Jina v4 visual, Google visual, Hybrid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {/* 1. Keyword Search (ES text only) */}
         <SearchResultColumn
           title="Keyword"
@@ -129,11 +129,11 @@ export default function AllModesResults({
           totalResults={results.semantic.jina_embeddings_v3?.total}
         />
 
-        {/* 3. Jina v4 (Multimodal - text + image) */}
+        {/* 3. Jina v4 (Visual) */}
         <SearchResultColumn
           title={EMBEDDING_MODELS.jina_embeddings_v4?.name || 'Jina v4'}
-          description={MODEL_INFO.jina_embeddings_v4?.description || 'Multimodal embeddings'}
-          icon={Layers}
+          description={MODEL_INFO.jina_embeddings_v4?.description || 'Visual embeddings'}
+          icon={Image}
           hits={results.semantic.jina_embeddings_v4?.hits || []}
           gradientFrom="from-teal-500"
           gradientTo="to-teal-600"
@@ -145,11 +145,11 @@ export default function AllModesResults({
           totalResults={results.semantic.jina_embeddings_v4?.total}
         />
 
-        {/* 4. Google Vertex (Multimodal - text + image) */}
+        {/* 4. Google Vertex (Visual) */}
         <SearchResultColumn
           title={EMBEDDING_MODELS.google_vertex_multimodal?.name || 'Google Vertex'}
-          description={MODEL_INFO.google_vertex_multimodal?.description || 'Multimodal embeddings'}
-          icon={Layers}
+          description={MODEL_INFO.google_vertex_multimodal?.description || 'Visual embeddings'}
+          icon={Image}
           hits={results.semantic.google_vertex_multimodal?.hits || []}
           gradientFrom="from-emerald-500"
           gradientTo="to-emerald-600"

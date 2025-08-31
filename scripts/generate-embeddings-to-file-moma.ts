@@ -108,9 +108,11 @@ async function processArtwork(
 
     // For models that support interleaved text, use searchableText
     // For text-only models, always use searchableText
-    const interleaveText = (modelConfig.supportsInterleaved || !modelConfig.supportsImage) && artwork.searchableText
-      ? artwork.searchableText
-      : undefined;
+    // For image models that don't support interleaved, don't use text
+    let interleaveText: string | undefined;
+    if (modelConfig.supportsInterleaved || !modelConfig.supportsImage) {
+      interleaveText = artwork.searchableText;
+    }
 
     // Download image to temp file (only for image-supporting models)
     const tempDir = path.join(process.cwd(), 'tmp');
@@ -127,11 +129,10 @@ async function processArtwork(
       
       // Generate embedding with retry for network errors
       console.log(`  Generating ${model} embedding...`);
-      if (interleaveText) {
+      if (interleaveText && modelConfig.supportsImage) {
         console.log(`  Using text+image: "${interleaveText.substring(0, 50)}..."`);
-      }
-      if (artwork.searchableText) {
-        console.log(`  Searchable text: "${artwork.searchableText.substring(0, 100)}${artwork.searchableText.length > 100 ? '...' : ''}"`);
+      } else if (interleaveText && !modelConfig.supportsImage) {
+        console.log(`  Using text: "${interleaveText.substring(0, 100)}${interleaveText.length > 100 ? '...' : ''}"`);
       }
       
       let result;

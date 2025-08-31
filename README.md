@@ -18,13 +18,15 @@ This project is largely LLM vibe-coded for the purpose of quickly prototyping an
 
 After testing with museum artwork, we found:
 
-1. **JinaCLIP v2** performed exceptionally well for visual art search, providing highly relevant results for artwork similarity matching. We ultimately removed it from the active models because **Jina Embeddings v4** (2048 dims) performed just as well while also supporting combined text+image inputs, allowing us to leverage artwork metadata for even richer semantic search.
+1. **JinaCLIP v2** performed exceptionally well for visual art search, providing highly relevant results for artwork similarity matching. We ultimately removed it from the active models because **Jina Embeddings v4** (2048 dims) performed just as well with higher dimensional embeddings for more nuanced visual understanding.
 
 2. **Cohere Embed 4** did not produce results as relevant as other models for art-related queries. The implementation remains in `lib/embeddings/cohere.ts` for reference.
 
 3. **Voyage Multimodal 3** had significant rate limiting issues on the free tier (3 requests/minute), making it extremely slow for generating embeddings at scale. Additionally, the search results were not as relevant as Jina models or Google Vertex AI for art-related queries. Further research with a paid account might yield different results. The implementation remains in `lib/embeddings/voyage.ts` for reference.
 
-The current models (Jina Embeddings v4 and Google Vertex AI) provide excellent performance for visual art search, with Jina v4's multimodal fusion capability being particularly powerful for combining visual and textual understanding.
+4. **Text+Image Fusion Investigation**: We extensively tested multimodal embeddings that combine artwork metadata (title, artist, medium, etc.) with images. Testing revealed that both Jina v4 and Google Vertex produce nearly identical embeddings whether using image-only or image+text inputs - the image features dominate so heavily that text contributes negligibly to the final embedding (cosine similarity of 0.9999-1.0000). Due to this finding, we use image-only embeddings for multimodal models, as adding text provides no practical benefit for retrieval quality.
+
+The current models (Jina Embeddings v4 and Google Vertex AI) provide excellent performance for visual art search using image-only embeddings.
 
 ## Prerequisites
 
@@ -149,30 +151,26 @@ The system generates multimodal embeddings using both text metadata and artwork 
   - Uses `task: "text-matching"` for better text retrieval
   - Model: `jina-embeddings-v3`
 
-- **Jina Embeddings v4** (`jina-embeddings-v4-base-en`)
+- **Jina Embeddings v4** (`jina-embeddings-v4`)
   - 2048 dimensions
-  - Supports interleaved text+image input for true multimodal understanding
-  - Model: `jina-embeddings-v4-base-en`
+  - Image-only embeddings for visual similarity search
+  - Model: `jina-embeddings-v4`
   
 - **Google Vertex AI Multimodal** (`multimodalembedding@001`)
   - 1408 dimensions  
-  - Enterprise-grade multimodal embeddings
+  - Image-only embeddings for visual similarity search
   - Model: `multimodalembedding@001`
 
-**Text+Image Fusion:**
-For each artwork, we combine visual and textual information:
-- **Image**: The artwork's visual representation
-- **Text**: Searchable metadata including title, artist, date, medium, department, classification, etc.
+**Image Embeddings:**
+Multimodal models process artwork images to create embeddings that capture visual features like composition, color, style, and subject matter. Despite supporting text+image inputs, our testing found that text contributes negligibly when combined with images (see Model Performance Notes above).
 
 **Example embedding generation output:**
 
-For multimodal models (Jina v4, Google Vertex):
+For image models (Jina v4, Google Vertex):
 ```
 [62/100] Anabol(A): PACE CAR for the HUBRIS PILL by Matthew Barney
   Downloading image...
   Generating jina_embeddings_v4 embedding...
-  Using text+image: "anabol(a): pace car for the hubris pill matthew ba..."
-  Searchable text: "anabol(a): pace car for the hubris pill matthew barney 1991 internally lubricated plastic, teflon fa..."
   ✓ Success (2048 dimensions)
 ```
 
@@ -243,9 +241,13 @@ See [DATA_PIPELINE.md](DATA_PIPELINE.md) for detailed documentation.
 - **Images**: Direct URLs from museum servers (MoMA) or local files
 - **Embedding Models**: 
   - **Jina Embeddings v3**: 1024 dims, text-only for precise text matching
-  - **Jina Embeddings v4**: 2048 dims, multimodal text+image fusion
-  - **Google Vertex AI**: 1408 dims, enterprise-grade multimodal
+  - **Jina Embeddings v4**: 2048 dims, image-only visual similarity search
+  - **Google Vertex AI**: 1408 dims, image-only visual similarity search
 
+
+## Future Improvements
+
+Future enhancements could include native Elasticsearch integration for Jina AI embeddings and reranking models via the Open Inference API, eliminating the need for separate API calls. This would provide seamless embedding generation during indexing and built-in reranking capabilities for improved search relevance.
 
 ## License
 
