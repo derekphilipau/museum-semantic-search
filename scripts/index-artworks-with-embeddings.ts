@@ -7,7 +7,7 @@ import * as readline from 'readline';
 import { MoMAParser } from './lib/parsers/moma-parser';
 import { ParsedArtwork } from './lib/parsers/types';
 import { esClient, INDEX_NAME, INDEX_MAPPING } from './lib/elasticsearch';
-import { ModelKey } from '../lib/embeddings/types';
+import { ModelKey, EMBEDDING_MODELS } from '../lib/embeddings/types';
 
 // Load environment variables
 const projectDir = path.join(__dirname, '..');
@@ -223,13 +223,16 @@ async function main() {
   
   const embeddings: Record<string, Map<string, number[]>> = {};
   
-  // Load Jina embeddings if available
-  const jinaPath = path.join(embeddingsDir, 'jina_embeddings_v4', 'embeddings.jsonl');
-  embeddings['jina_embeddings_v4'] = await loadEmbeddingsMap(jinaPath);
-  
-  // Load Google embeddings if available
-  const googlePath = path.join(embeddingsDir, 'google_vertex_multimodal', 'embeddings.jsonl');
-  embeddings['google_vertex_multimodal'] = await loadEmbeddingsMap(googlePath);
+  // Load all available embeddings dynamically
+  for (const modelKey of Object.keys(EMBEDDING_MODELS)) {
+    const modelPath = path.join(embeddingsDir, modelKey, 'embeddings.jsonl');
+    try {
+      embeddings[modelKey] = await loadEmbeddingsMap(modelPath);
+      console.log(`✓ Loaded ${embeddings[modelKey].size} embeddings for ${modelKey}`);
+    } catch (error) {
+      console.log(`⚠️  No embeddings found for ${modelKey}`);
+    }
+  }
   
   // Count how many artworks have embeddings
   const artworksWithEmbeddings = new Set<string>();

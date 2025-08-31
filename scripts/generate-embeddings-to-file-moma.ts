@@ -89,29 +89,41 @@ async function processArtwork(
   writer: any
 ): Promise<{ processed: number; skipped: number; failed: number }> {
   try {
+    const modelConfig = EMBEDDING_MODELS[model];
     const imageUrl = artwork.image?.url;
     
-    if (!imageUrl) {
-      console.log(`  No image URL for ${artwork.metadata.id}`);
-      return { processed: 0, skipped: 1, failed: 0 };
+    // For text-only models, skip if no searchable text
+    if (!modelConfig.supportsImage) {
+      if (!artwork.searchableText) {
+        console.log(`  No searchable text for ${artwork.metadata.id}`);
+        return { processed: 0, skipped: 1, failed: 0 };
+      }
+    } else {
+      // For image models, skip if no image URL
+      if (!imageUrl) {
+        console.log(`  No image URL for ${artwork.metadata.id}`);
+        return { processed: 0, skipped: 1, failed: 0 };
+      }
     }
 
     // For models that support interleaved text, use searchableText
-    const modelConfig = EMBEDDING_MODELS[model];
-    const interleaveText = modelConfig.supportsInterleaved && artwork.searchableText
+    // For text-only models, always use searchableText
+    const interleaveText = (modelConfig.supportsInterleaved || !modelConfig.supportsImage) && artwork.searchableText
       ? artwork.searchableText
       : undefined;
 
-    // Download image to temp file
+    // Download image to temp file (only for image-supporting models)
     const tempDir = path.join(process.cwd(), 'tmp');
     await ensureDirectoryExists(tempDir);
     const tempFile = path.join(tempDir, `temp_${Date.now()}.jpg`);
     
     try {
-      // Download image with retry
-      console.log(`  Downloading image...`);
-      const buffer = await downloadWithRetry(imageUrl);
-      await fs.writeFile(tempFile, Buffer.from(buffer));
+      // Download image with retry (only for image-supporting models)
+      if (modelConfig.supportsImage) {
+        console.log(`  Downloading image...`);
+        const buffer = await downloadWithRetry(imageUrl!);
+        await fs.writeFile(tempFile, Buffer.from(buffer));
+      }
       
       // Generate embedding with retry for network errors
       console.log(`  Generating ${model} embedding...`);
@@ -145,8 +157,10 @@ async function processArtwork(
         }
       }
       
-      // Clean up temp file
-      await fs.unlink(tempFile);
+      // Clean up temp file (if it was created)
+      if (modelConfig.supportsImage) {
+        await fs.unlink(tempFile);
+      }
       
       if (result && result.embedding && result.embedding.length > 0) {
         const record: EmbeddingRecord = {
@@ -170,10 +184,12 @@ async function processArtwork(
         return { processed: 0, skipped: 0, failed: 1 };
       }
     } catch (error) {
-      // Clean up on error
-      try {
-        await fs.unlink(tempFile);
-      } catch {}
+      // Clean up on error (if temp file was created)
+      if (modelConfig.supportsImage) {
+        try {
+          await fs.unlink(tempFile);
+        } catch {}
+      }
       throw error;
     }
   } catch (error: any) {

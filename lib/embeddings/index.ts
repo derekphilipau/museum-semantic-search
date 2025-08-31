@@ -12,6 +12,9 @@ export async function generateEmbedding(
   }
 
   switch (modelKey) {
+    case 'jina_embeddings_v3':
+      return generateJinaEmbedding(text, 'jina-embeddings-v3');
+    
     case 'jina_embeddings_v4':
       return generateJinaEmbedding(text, 'jina-embeddings-v4');
     

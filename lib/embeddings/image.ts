@@ -12,23 +12,46 @@ export async function generateJinaImageEmbedding(
   const apiKey = process.env.JINA_API_KEY;
   if (!apiKey) throw new Error('JINA_API_KEY not found');
   
-  // Read image and convert to base64
-  const imageBuffer = await fs.readFile(imagePath);
-  const base64Image = imageBuffer.toString('base64');
-  
-  // For Jina v4, use interleaved input format
   let input;
-  if (modelId === 'jina-embeddings-v4' && interleaveText) {
-    // v4 supports combined text+image input
+  let requestBody: any;
+  
+  // Handle different models
+  if (modelId === 'jina-embeddings-v3') {
+    // v3 is text-only, ignore image
+    if (!interleaveText) {
+      throw new Error('Jina v3 requires text input');
+    }
     input = [{
-      text: interleaveText,
-      image: base64Image
+      text: interleaveText
     }];
+    requestBody = {
+      model: modelId,
+      task: 'text-matching',
+      input: input,
+      encoding_type: 'float',
+    };
   } else {
-    // For clip-v2 or v4 without text, use image-only input
-    input = [{
-      image: base64Image
-    }];
+    // Read image for v4 and other models
+    const imageBuffer = await fs.readFile(imagePath);
+    const base64Image = imageBuffer.toString('base64');
+    
+    if (modelId === 'jina-embeddings-v4' && interleaveText) {
+      // v4 supports combined text+image input
+      input = [{
+        text: interleaveText,
+        image: base64Image
+      }];
+    } else {
+      // For clip-v2 or v4 without text, use image-only input
+      input = [{
+        image: base64Image
+      }];
+    }
+    requestBody = {
+      model: modelId,
+      input: input,
+      encoding_type: 'float',
+    };
   }
   
   const response = await fetch('https://api.jina.ai/v1/embeddings', {
@@ -37,11 +60,7 @@ export async function generateJinaImageEmbedding(
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: modelId,
-      input: input,
-      encoding_type: 'float',
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -250,6 +269,10 @@ export async function generateImageEmbedding(
   let embedding: number[];
   
   switch (model) {
+    case 'jina_embeddings_v3':
+      embedding = await generateJinaImageEmbedding(imagePath, 'jina-embeddings-v3', interleaveText);
+      break;
+      
     case 'jina_embeddings_v4':
       embedding = await generateJinaImageEmbedding(imagePath, 'jina-embeddings-v4', interleaveText);
       break;

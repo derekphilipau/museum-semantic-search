@@ -20,6 +20,15 @@ export interface EmbeddingError {
 }
 
 export const EMBEDDING_MODELS: Record<string, EmbeddingModel> = {
+  jina_embeddings_v3: {
+    key: 'jina_embeddings_v3',
+    name: 'Jina v3 (Text-only)',
+    dimension: 1024,
+    year: '2024',
+    notes: 'jina-embeddings-v3',
+    supportsImage: false,
+    supportsInterleaved: false,
+  },
   jina_embeddings_v4: {
     key: 'jina_embeddings_v4',
     name: 'Jina Embeddings v4',

@@ -143,6 +143,12 @@ The system supports multiple museum collections through a parser architecture. T
 The system generates multimodal embeddings using both text metadata and artwork images for enhanced semantic understanding.
 
 **Embedding Models:**
+- **Jina Embeddings v3** (`jina-embeddings-v3`)
+  - 1024 dimensions
+  - Text-only embeddings optimized for text matching
+  - Uses `task: "text-matching"` for better text retrieval
+  - Model: `jina-embeddings-v3`
+
 - **Jina Embeddings v4** (`jina-embeddings-v4-base-en`)
   - 2048 dimensions
   - Supports interleaved text+image input for true multimodal understanding
@@ -159,6 +165,8 @@ For each artwork, we combine visual and textual information:
 - **Text**: Searchable metadata including title, artist, date, medium, department, classification, etc.
 
 **Example embedding generation output:**
+
+For multimodal models (Jina v4, Google Vertex):
 ```
 [62/100] Anabol(A): PACE CAR for the HUBRIS PILL by Matthew Barney
   Downloading image...
@@ -168,13 +176,23 @@ For each artwork, we combine visual and textual information:
   ✓ Success (2048 dimensions)
 ```
 
+For text-only models (Jina v3):
+```
+[62/100] Anabol(A): PACE CAR for the HUBRIS PILL by Matthew Barney
+  Generating jina_embeddings_v3 embedding...
+  Using text+image: "anabol(a): pace car for the hubris pill matthew ba..."
+  Searchable text: "anabol(a): pace car for the hubris pill matthew barney 1991 internally lubricated plastic, teflon fa..."
+  ✓ Success (1024 dimensions)
+```
+
 The searchable text includes all relevant metadata fields concatenated and normalized, providing rich context for the embedding models to understand both the visual and conceptual aspects of each artwork.
 
 **Option A: File-based workflow (Recommended for production)**
 ```bash
 # Generate embeddings to files (resumable, portable)
-npm run generate-embeddings -- --model=jina_embeddings_v4
-npm run generate-embeddings -- --model=google_vertex_multimodal
+npm run generate-embeddings -- --model=jina_embeddings_v3      # Text-only
+npm run generate-embeddings -- --model=jina_embeddings_v4      # Text+Image
+npm run generate-embeddings -- --model=google_vertex_multimodal # Text+Image
 
 # Then index everything to Elasticsearch
 npm run index-artworks -- --force
@@ -224,6 +242,7 @@ See [DATA_PIPELINE.md](DATA_PIPELINE.md) for detailed documentation.
 - **Search Engine**: Elasticsearch 8.11
 - **Images**: Direct URLs from museum servers (MoMA) or local files
 - **Embedding Models**: 
+  - **Jina Embeddings v3**: 1024 dims, text-only for precise text matching
   - **Jina Embeddings v4**: 2048 dims, multimodal text+image fusion
   - **Google Vertex AI**: 1408 dims, enterprise-grade multimodal
 

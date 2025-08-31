@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Search, Brain, Zap } from 'lucide-react';
+import { Search, Brain, Zap, FileText, Image, Layers } from 'lucide-react';
 import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
 import { Artwork, SearchResponse } from '@/app/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -21,14 +21,19 @@ interface AllModesResultsProps {
 
 // Model metadata with URLs and descriptions
 const MODEL_INFO = {
+  jina_embeddings_v3: {
+    url: 'https://jina.ai/embeddings/',
+    description: 'Text-only semantic search',
+    year: '2024'
+  },
   jina_embeddings_v4: {
     url: 'https://jina.ai/embeddings/',
-    description: 'jina-embeddings-v4',
+    description: 'Text + Image fusion',
     year: '2025'
   },
   google_vertex_multimodal: {
     url: 'https://cloud.google.com/vertex-ai/docs/generative-ai/embeddings/get-multimodal-embeddings',
-    description: 'multimodalembedding@001',
+    description: 'Text + Image fusion',
     year: '2024'
   }
 } as const;
@@ -90,64 +95,81 @@ export default function AllModesResults({
     );
   }
 
-  // Get ordered models
-  const orderedModels = Object.keys(EMBEDDING_MODELS).sort((a, b) => {
-    const yearA = parseInt(EMBEDDING_MODELS[a as keyof typeof EMBEDDING_MODELS].year);
-    const yearB = parseInt(EMBEDDING_MODELS[b as keyof typeof EMBEDDING_MODELS].year);
-    return yearB - yearA; // Most recent first
-  });
-
   return (
     <div className="space-y-8">
-      {/* Fixed 4-column grid layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Keyword Search - Always show */}
+      {/* Fixed 5-column grid layout: ES text, Jina v3 text, Jina v4, Google, Hybrid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* 1. Keyword Search (ES text only) */}
         <SearchResultColumn
           title="Keyword"
-          description="Native Elasticsearch"
-          icon={Search}
+          description="Text matching"
+          icon={FileText}
           hits={results.keyword?.hits || []}
           gradientFrom="from-blue-500"
           gradientTo="to-blue-600"
-          badgeColor="secondary"
+          badgeColor="bg-blue-700"
           onSelectArtwork={onSelectArtwork}
           responseTime={results.keyword?.took}
           totalResults={results.keyword?.total}
         />
 
-        {/* Visual Similarity - Always show all models */}
-        {orderedModels.map((modelKey) => {
-          const model = EMBEDDING_MODELS[modelKey as keyof typeof EMBEDDING_MODELS];
-          const semanticResults = results.semantic[modelKey];
-          
-          return (
-            <SearchResultColumn
-              key={`semantic-${modelKey}`}
-              title={model.name}
-              description={MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.description || model.notes}
-              icon={Brain}
-              hits={semanticResults?.hits || []}
-              gradientFrom="from-purple-500"
-              gradientTo="to-purple-600"
-              badgeColor="bg-purple-700"
-              onSelectArtwork={onSelectArtwork}
-              modelUrl={MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.url}
-              showExternalLink={true}
-              responseTime={semanticResults?.took}
-              totalResults={semanticResults?.total}
-            />
-          );
-        })}
+        {/* 2. Jina v3 (Text only embeddings) */}
+        <SearchResultColumn
+          title={EMBEDDING_MODELS.jina_embeddings_v3?.name || 'Jina v3'}
+          description={MODEL_INFO.jina_embeddings_v3?.description || 'Text-only embeddings'}
+          icon={FileText}
+          hits={results.semantic.jina_embeddings_v3?.hits || []}
+          gradientFrom="from-indigo-500"
+          gradientTo="to-indigo-600"
+          badgeColor="bg-indigo-700"
+          onSelectArtwork={onSelectArtwork}
+          modelUrl={MODEL_INFO.jina_embeddings_v3?.url}
+          showExternalLink={true}
+          responseTime={results.semantic.jina_embeddings_v3?.took}
+          totalResults={results.semantic.jina_embeddings_v3?.total}
+        />
 
-        {/* Hybrid Search - Always show */}
+        {/* 3. Jina v4 (Multimodal - text + image) */}
+        <SearchResultColumn
+          title={EMBEDDING_MODELS.jina_embeddings_v4?.name || 'Jina v4'}
+          description={MODEL_INFO.jina_embeddings_v4?.description || 'Multimodal embeddings'}
+          icon={Layers}
+          hits={results.semantic.jina_embeddings_v4?.hits || []}
+          gradientFrom="from-teal-500"
+          gradientTo="to-teal-600"
+          badgeColor="bg-teal-700"
+          onSelectArtwork={onSelectArtwork}
+          modelUrl={MODEL_INFO.jina_embeddings_v4?.url}
+          showExternalLink={true}
+          responseTime={results.semantic.jina_embeddings_v4?.took}
+          totalResults={results.semantic.jina_embeddings_v4?.total}
+        />
+
+        {/* 4. Google Vertex (Multimodal - text + image) */}
+        <SearchResultColumn
+          title={EMBEDDING_MODELS.google_vertex_multimodal?.name || 'Google Vertex'}
+          description={MODEL_INFO.google_vertex_multimodal?.description || 'Multimodal embeddings'}
+          icon={Layers}
+          hits={results.semantic.google_vertex_multimodal?.hits || []}
+          gradientFrom="from-emerald-500"
+          gradientTo="to-emerald-600"
+          badgeColor="bg-emerald-700"
+          onSelectArtwork={onSelectArtwork}
+          modelUrl={MODEL_INFO.google_vertex_multimodal?.url}
+          showExternalLink={true}
+          responseTime={results.semantic.google_vertex_multimodal?.took}
+          totalResults={results.semantic.google_vertex_multimodal?.total}
+        />
+
+        {/* 5. Hybrid Search (combines keyword + semantic) */}
         <SearchResultColumn
           title="Hybrid"
-          description={results.hybrid ? EMBEDDING_MODELS[results.hybrid.model as keyof typeof EMBEDDING_MODELS]?.name : 'Not available'}
+          description="Keyword + Semantic"
           icon={Zap}
           hits={results.hybrid?.results?.hits || []}
-          gradientFrom="from-green-500"
-          gradientTo="to-green-600"
-          badgeColor="bg-green-700"
+          gradientFrom="from-amber-500"
+          gradientTo="to-amber-600"
+          badgeColor="bg-amber-700"
           onSelectArtwork={onSelectArtwork}
           responseTime={results.hybrid?.results?.took}
           totalResults={results.hybrid?.results?.total}
