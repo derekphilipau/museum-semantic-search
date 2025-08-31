@@ -48,18 +48,22 @@ async function respectRateLimit(model: ModelKey): Promise<void> {
   limiter.lastRequest = Date.now();
 }
 
-async function imageToBase64(imagePath: string): Promise<string> {
+async function imageUrlToBase64(imageUrl: string): Promise<string> {
   try {
-    const imageBuffer = await fs.readFile(imagePath);
-    return imageBuffer.toString('base64');
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.statusText}`);
+    }
+    const buffer = await response.arrayBuffer();
+    return Buffer.from(buffer).toString('base64');
   } catch (error) {
-    console.error(`Error reading image ${imagePath}:`, error);
+    console.error(`Error fetching image ${imageUrl}:`, error);
     throw error;
   }
 }
 
 async function generateImageEmbedding(
-  imagePath: string,
+  imageUrl: string,
   model: ModelKey,
   interleaveText?: string
 ): Promise<number[] | null> {
@@ -71,17 +75,39 @@ async function generateImageEmbedding(
     const modelConfig = EMBEDDING_MODELS[model];
     
     if (modelConfig.supportsImage) {
-      console.log(`Generating ${model} embedding for image: ${path.basename(imagePath)}`);
+      console.log(`Generating ${model} embedding for image URL`);
       
-      // Use the actual image embedding API
-      const result = await generateImageEmbeddingAPI(imagePath, model, interleaveText);
-      return result.embedding;
+      // Download image to temp file for the API
+      const tempDir = path.join(process.cwd(), 'tmp');
+      await fs.mkdir(tempDir, { recursive: true });
+      const tempFile = path.join(tempDir, `temp_${Date.now()}.jpg`);
+      
+      try {
+        // Download image
+        const response = await fetch(imageUrl);
+        const buffer = await response.arrayBuffer();
+        await fs.writeFile(tempFile, Buffer.from(buffer));
+        
+        // Use the actual image embedding API
+        const result = await generateImageEmbeddingAPI(tempFile, model, interleaveText);
+        
+        // Clean up temp file
+        await fs.unlink(tempFile);
+        
+        return result.embedding;
+      } catch (error) {
+        // Clean up on error
+        try {
+          await fs.unlink(tempFile);
+        } catch {}
+        throw error;
+      }
     }
     
     console.warn(`Model ${model} does not support image embeddings`);
     return null;
   } catch (error) {
-    console.error(`Error generating embedding for ${imagePath} with ${model}:`, error);
+    console.error(`Error generating embedding for ${imageUrl} with ${model}:`, error);
     return null;
   }
 }
@@ -119,24 +145,11 @@ async function processArtwork(
     return;
   }
   
-  // Look for image in HuggingFace directory
-  const possiblePaths = [
-    path.join(process.cwd(), 'data', 'images', 'huggingface', artwork.image),
-  ];
+  // Get image URL from the artwork
+  const imageUrl = typeof artwork.image === 'string' ? artwork.image : artwork.image.url;
   
-  let imagePath = '';
-  for (const testPath of possiblePaths) {
-    try {
-      await fs.access(testPath);
-      imagePath = testPath;
-      break;
-    } catch {
-      // Continue to next path
-    }
-  }
-  
-  if (!imagePath) {
-    console.log(`Image not found in any location: ${artwork.image}`);
+  if (!imageUrl) {
+    console.log(`No image URL found for ${docId}`);
     models.forEach(model => stats[model].failed++);
     return;
   }
@@ -157,11 +170,16 @@ async function processArtwork(
     }
     
     // Generate embedding with interleaved text for models that support it
-    const interleaveText = model === 'google_vertex_multimodal' && artwork.searchableText
+    const modelConfig = EMBEDDING_MODELS[model];
+    const interleaveText = modelConfig.supportsInterleaved && artwork.searchableText
       ? artwork.searchableText
       : undefined;
     
-    const embedding = await generateImageEmbedding(imagePath, model, interleaveText);
+    if (interleaveText && model === 'jina_embeddings_v4') {
+      console.log(`  Using text+image for Jina v4: "${interleaveText.substring(0, 100)}..."`);
+    }
+    
+    const embedding = await generateImageEmbedding(imageUrl, model, interleaveText);
     
     if (embedding) {
       updatedEmbeddings[fieldName] = embedding;
@@ -188,7 +206,7 @@ async function main() {
   
   const models = modelsArg 
     ? modelsArg.split('=')[1].split(',') as ModelKey[]
-    : ['jina_clip_v2', 'google_vertex_multimodal'] as ModelKey[];
+    : ['jina_embeddings_v4', 'google_vertex_multimodal'] as ModelKey[];
   
   const limit = limitArg ? parseInt(limitArg.split('=')[1]) : undefined;
   const skipExisting = !noSkipExisting;
@@ -202,8 +220,8 @@ async function main() {
     process.exit(1);
   }
   
-  console.log('Met Museum Embedding Generation Script');
-  console.log('=====================================');
+  console.log('Artwork Embedding Generation Script');
+  console.log('===================================');
   console.log(`Models: ${validModels.join(', ')}`);
   console.log(`Skip existing: ${skipExisting}`);
   console.log(`Limit: ${limit || 'none'}`);
@@ -220,9 +238,9 @@ async function main() {
     const searchResponse = await esClient.search({
       index: INDEX_NAME,
       size: limit || 10000,
-      _source: ['metadata.title', 'image', 'embeddings'],
+      _source: ['metadata.title', 'image', 'embeddings', 'searchableText'],
       query: {
-        exists: { field: 'image' }
+        match_all: {}
       }
     });
     

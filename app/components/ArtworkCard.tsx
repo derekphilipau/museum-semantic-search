@@ -23,15 +23,12 @@ function ArtworkCard({
 }: ArtworkCardProps) {
   const { metadata, image } = artwork;
   // Handle both full image objects and simple string URLs
-  const imageUrlString = typeof image === 'string' ? image : image.url;
-  const imageUrl = imageUrlString.startsWith('/images/') 
-    ? imageUrlString 
-    : `/images/${imageUrlString}`;
+  const imageUrl = typeof image === 'string' ? image : image.url;
 
   // Compact version for multi-column layout
   if (compact) {
     return (
-      <Link href={`/artwork/${metadata.objectId}`} className="block h-full">
+      <Link href={`/artwork/${metadata.id}`} className="block h-full">
         <Card 
           className="overflow-hidden cursor-pointer hover:shadow-lg transition-all w-full h-full flex flex-col p-2"
         >
@@ -59,17 +56,18 @@ function ArtworkCard({
               {metadata.artist || 'Unknown artist'}
             </CardDescription>
             
-            {/* Department and Date - optional, takes available space */}
-            {(metadata.department || metadata.dateCreated) && (
-              <div className="text-xs text-muted-foreground space-y-0.5 flex-grow">
-                {metadata.department && (
-                  <div className="line-clamp-1">{metadata.department}</div>
-                )}
-                {metadata.dateCreated && (
-                  <div>{metadata.dateCreated}</div>
-                )}
-              </div>
-            )}
+            {/* Classification, Date, and Medium - optional, takes available space */}
+            <div className="text-xs text-muted-foreground space-y-0.5 flex-grow">
+              {metadata.classification && (
+                <div className="line-clamp-1 font-medium">{metadata.classification}</div>
+              )}
+              {metadata.date && (
+                <div>{metadata.date}</div>
+              )}
+              {metadata.medium && (
+                <div className="line-clamp-1">{metadata.medium}</div>
+              )}
+            </div>
           </div>
           
           {/* Score - always at bottom */}
@@ -121,14 +119,17 @@ function ArtworkCard({
           
           {/* Metadata - takes available space */}
           <div className="text-xs text-muted-foreground space-y-1 flex-grow">
-            {metadata.dateCreated && (
-              <div>{metadata.dateCreated}</div>
+            {metadata.date && (
+              <div>{metadata.date}</div>
+            )}
+            {metadata.classification && (
+              <div className="font-medium">{metadata.classification}</div>
             )}
             {metadata.department && (
               <div className="line-clamp-1">{metadata.department}</div>
             )}
             {metadata.medium && (
-              <div className="line-clamp-1">{metadata.medium}</div>
+              <div className="line-clamp-2 text-xs">{metadata.medium}</div>
             )}
           </div>
         </div>

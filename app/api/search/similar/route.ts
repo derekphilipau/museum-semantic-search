@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ModelKey, EMBEDDING_MODELS } from '@/lib/embeddings/types';
 
 const ES_URL = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
-const INDEX_NAME = 'met_artworks_v2';
+const INDEX_NAME = 'artworks_v1';
 
 // Constants for validation
 const MIN_RESULTS = 1;

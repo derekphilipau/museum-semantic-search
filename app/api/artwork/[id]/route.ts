@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const ES_URL = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
-const INDEX_NAME = 'met_artworks_v2';
+const INDEX_NAME = 'artworks_v1';
 
 // Cache duration for artwork data (1 hour)
 const CACHE_DURATION = 3600;

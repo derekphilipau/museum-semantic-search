@@ -17,7 +17,7 @@ import { Brain } from 'lucide-react';
 export default function ArtworkDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const objectId = parseInt(params.id as string);
+  const artworkId = params.id as string;
   
   const [artwork, setArtwork] = useState<Artwork | null>(null);
   const [similarResults, setSimilarResults] = useState<Record<string, SearchResponse>>({});
@@ -25,10 +25,10 @@ export default function ArtworkDetailPage() {
   const [similarLoading, setSimilarLoading] = useState(false);
 
   useEffect(() => {
-    if (objectId) {
+    if (artworkId) {
       fetchArtwork();
     }
-  }, [objectId]);
+  }, [artworkId]);
 
   useEffect(() => {
     if (artwork) {
@@ -38,7 +38,7 @@ export default function ArtworkDetailPage() {
 
   const fetchArtwork = async () => {
     try {
-      const response = await fetch('/api/artwork/' + objectId);
+      const response = await fetch('/api/artwork/' + artworkId);
       if (response.ok) {
         const data = await response.json();
         setArtwork(data);
@@ -63,7 +63,7 @@ export default function ArtworkDetailPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            objectId: artwork.metadata.objectId,
+            objectId: artwork.metadata.collectionId,
             model: modelKey,
             size: 12
           }),
@@ -124,7 +124,6 @@ export default function ArtworkDetailPage() {
 
   const { metadata, image } = artwork;
   const imageUrl = typeof image === 'string' ? image : image.url;
-  const fullImageUrl = imageUrl.startsWith('/images/') ? imageUrl : `/images/${imageUrl}`;
 
   // Dummy function for SearchResultColumn compatibility
   const handleSelectArtwork = () => {};
@@ -139,7 +138,7 @@ export default function ArtworkDetailPage() {
             <div className="md:col-span-1">
               <div className="relative h-72 bg-muted rounded-lg overflow-hidden">
                 <Image
-                  src={fullImageUrl}
+                  src={imageUrl}
                   alt={metadata.title}
                   fill
                   className="object-contain"
@@ -158,10 +157,10 @@ export default function ArtworkDetailPage() {
                   <span className="font-semibold">Artist:</span>{' '}
                   {metadata.artist || 'Unknown'}
                 </div>
-                {metadata.dateCreated && (
+                {metadata.date && (
                   <div>
                     <span className="font-semibold">Date:</span>{' '}
-                    {metadata.dateCreated}
+                    {metadata.date}
                   </div>
                 )}
                 {metadata.department && (
@@ -170,10 +169,16 @@ export default function ArtworkDetailPage() {
                     {metadata.department}
                   </div>
                 )}
-                {metadata.culture && (
+                {metadata.classification && (
                   <div>
-                    <span className="font-semibold">Culture:</span>{' '}
-                    {metadata.culture}
+                    <span className="font-semibold">Classification:</span>{' '}
+                    {metadata.classification}
+                  </div>
+                )}
+                {metadata.artistNationality && (
+                  <div>
+                    <span className="font-semibold">Nationality:</span>{' '}
+                    {metadata.artistNationality}
                   </div>
                 )}
                 {metadata.medium && (
@@ -196,28 +201,24 @@ export default function ArtworkDetailPage() {
                 )}
               </div>
               
-              {metadata.tags && metadata.tags.length > 0 && (
-                <div>
-                  <span className="font-semibold text-sm">Tags:</span>{' '}
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {metadata.tags.map((tag, index) => (
-                      <Badge key={index} variant="secondary" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
+              {/* Artist bio if available */}
+              {metadata.artistBio && (
+                <div className="text-sm text-muted-foreground">
+                  {metadata.artistBio}
                 </div>
               )}
 
-              {/* Met Museum link */}
-              <Button 
-                variant="outline"
-                size="sm"
-                onClick={() => window.open(`https://www.metmuseum.org/art/collection/search/${metadata.objectId}`, '_blank')}
-              >
-                View on Met Museum
-                <ExternalLink className="w-4 h-4 ml-2" />
-              </Button>
+              {/* Museum link */}
+              {metadata.sourceUrl && (
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(metadata.sourceUrl, '_blank')}
+                >
+                  View on {metadata.collection === 'moma' ? 'MoMA' : 'Museum'} Website
+                  <ExternalLink className="w-4 h-4 ml-2" />
+                </Button>
+              )}
 
             </div>
           </div>

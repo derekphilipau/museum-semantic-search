@@ -1,11 +1,11 @@
-# Met Museum Search - Data Processing Scripts
+# Museum Search - Data Processing Scripts
 
-These TypeScript scripts handle the data pipeline for the Met Museum semantic search application.
+These TypeScript scripts handle the data pipeline for the museum semantic search application.
 
 ## Prerequisites
 
 1. Elasticsearch running on `http://localhost:9200`
-2. Met Museum data in `../data/met_artworks/` directory
+2. Museum data in appropriate directory (e.g., `../data/moma/` for MoMA)
 3. API keys configured in `.env.local`:
    ```
    JINA_API_KEY=your_key
@@ -28,8 +28,8 @@ npm run index-artworks -- --limit=10
 ```
 
 **What it does:**
-- Creates `met_artworks_v2` index with proper mappings
-- Processes metadata.json from Met Museum dataset
+- Creates `artworks_v1` index with proper mappings
+- Processes museum data using collection-specific parsers
 - Extracts searchable text and keywords
 - Sets up vector fields for embeddings
 
@@ -98,7 +98,7 @@ npm run setup
 ## Troubleshooting
 
 **"Image not found" errors:**
-- Ensure images exist in `../data/met_artworks/` directory
+- Ensure data exists in appropriate directory (e.g., `../data/moma/`)
 - Image filenames should match the pattern: `{objectId}_{artistName}.jpg`
 
 **API errors:**
@@ -108,4 +108,4 @@ npm run setup
 
 **Elasticsearch errors:**
 - Ensure Elasticsearch is running: `curl http://localhost:9200`
-- Check index exists: `curl http://localhost:9200/met_artworks_v2`
+- Check index exists: `curl http://localhost:9200/artworks_v1`

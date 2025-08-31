@@ -4,7 +4,7 @@ import { EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings/types';
 import { SearchResponse, SearchMode } from '@/app/types';
 
 const ES_URL = process.env.NEXT_PUBLIC_ELASTICSEARCH_URL || 'http://localhost:9200';
-const INDEX_NAME = 'met_artworks_v2';
+const INDEX_NAME = 'artworks_v1';
 
 // Get text embedding from our API
 async function getTextEmbedding(text: string, model: ModelKey): Promise<number[] | null> {
@@ -49,7 +49,15 @@ async function buildSearchQuery(params: SearchParams) {
         must: query ? [{
           multi_match: {
             query,
-            fields: ['metadata.title^3', 'metadata.artist^2', 'metadata.department', 'metadata.culture', 'metadata.tags'],
+            fields: [
+              'metadata.title^3',
+              'metadata.artist^2',
+              'metadata.classification^1.5',
+              'metadata.medium',
+              'metadata.date',
+              'metadata.artistNationality',
+              'metadata.department'
+            ],
             type: 'best_fields',
             fuzziness: 'AUTO'
           }
@@ -106,7 +114,15 @@ async function buildSearchQuery(params: SearchParams) {
           must: [{
             multi_match: {
               query,
-              fields: ['metadata.title^3', 'metadata.artist^2', 'metadata.department', 'metadata.culture', 'metadata.tags'],
+              fields: [
+              'metadata.title^3',
+              'metadata.artist^2',
+              'metadata.classification^1.5',
+              'metadata.medium',
+              'metadata.date',
+              'metadata.artistNationality',
+              'metadata.department'
+            ],
               type: 'best_fields',
               fuzziness: 'AUTO'
             }

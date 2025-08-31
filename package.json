@@ -1,5 +1,5 @@
 {
-  "name": "met-search-next",
+  "name": "museum-search-next",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,12 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "index-artworks": "npx tsx scripts/index-artworks.ts",
-    "download-huggingface": "python3 scripts/download-huggingface-dataset.py",
+    "index-artworks": "npx tsx scripts/index-artworks-generic.ts",
     "generate-embeddings": "npx tsx scripts/generate-embeddings.ts",
     "generate-embeddings-to-file": "npx tsx scripts/generate-embeddings-to-file.ts",
     "index-with-embeddings": "npx tsx scripts/index-with-embeddings.ts",
-    "copy-indexed-images": "npx tsx scripts/copy-indexed-images.ts",
     "setup": "npm run index-artworks && npm run generate-embeddings"
   },
   "dependencies": {

@@ -6,7 +6,7 @@ export const esClient = new Client({
   node: ES_URL,
 });
 
-export const INDEX_NAME = 'met_artworks_v2';
+export const INDEX_NAME = 'artworks_v1'; // Generic name for multi-collection use
 
 // Index mapping for artworks with embeddings
 export const INDEX_MAPPING = {
@@ -15,28 +15,62 @@ export const INDEX_MAPPING = {
       id: { type: 'keyword' },
       metadata: {
         properties: {
-          objectId: { type: 'integer' },
-          title: { type: 'text' },
-          artist: { type: 'text' },
-          artistBio: { type: 'text' },
-          department: { type: 'keyword' },
-          culture: { type: 'keyword' },
-          period: { type: 'text' },
-          dateCreated: { type: 'keyword' },
-          dateBegin: { type: 'integer' },
-          dateEnd: { type: 'integer' },
+          // Core fields
+          id: { type: 'keyword' },
+          title: { type: 'text', analyzer: 'standard' },
+          artist: { type: 'text', analyzer: 'standard' },
+          date: { type: 'text' },
           medium: { type: 'text' },
           dimensions: { type: 'text' },
           creditLine: { type: 'text' },
-          tags: { type: 'keyword' },
+          
+          // Collection info
+          collection: { type: 'keyword' },
+          collectionId: { type: 'keyword' },
+          sourceUrl: { type: 'keyword' },
+          
+          // Additional common fields
+          department: { type: 'keyword' },
+          classification: { type: 'keyword' },
+          culture: { type: 'keyword' },
+          period: { type: 'keyword' },
+          dynasty: { type: 'keyword' },
+          
+          // Artist info
+          artistBio: { type: 'text' },
+          artistNationality: { type: 'keyword' },
+          artistBeginDate: { type: 'integer' },
+          artistEndDate: { type: 'integer' },
+          artistGender: { type: 'keyword' },
+          
+          // Dates
+          dateBegin: { type: 'integer' },
+          dateEnd: { type: 'integer' },
+          
+          // Physical properties
+          width: { type: 'float' },
+          height: { type: 'float' },
+          depth: { type: 'float' },
+          diameter: { type: 'float' },
+          weight: { type: 'float' },
+          
+          // Status flags
           isHighlight: { type: 'boolean' },
-          hasImage: { type: 'boolean' },
           isPublicDomain: { type: 'boolean' },
+          onView: { type: 'boolean' },
+          
+          // Flexible additional data
+          additionalData: { type: 'object', enabled: false }
         },
       },
-      image: { type: 'keyword' },
-      searchableText: { type: 'text' },
-      boostedKeywords: { type: 'text' },
+      image: { 
+        type: 'object',
+        enabled: false
+      },
+      searchableText: { 
+        type: 'text',
+        analyzer: 'standard'
+      },
       embeddings: {
         properties: {
           // API-based models

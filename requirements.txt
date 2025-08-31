@@ -1,4 +1,0 @@
-datasets>=2.14.0
-Pillow>=10.0.0
-tqdm>=4.65.0
-huggingface-hub>=0.16.0

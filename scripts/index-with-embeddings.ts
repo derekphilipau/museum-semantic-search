@@ -145,7 +145,7 @@ async function main() {
   const limitArg = args.find(arg => arg.startsWith('--limit='));
   const limit = limitArg ? parseInt(limitArg.split('=')[1]) : undefined;
   
-  console.log('Met Museum Artwork Indexing with Pre-computed Embeddings');
+  console.log('Museum Artwork Indexing with Pre-computed Embeddings');
   console.log('======================================================');
   console.log('Options:');
   console.log('  --force      Force recreate index (deletes existing data)');

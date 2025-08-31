@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 
 export default function MultiModelSearch() {
-  const [query, setQuery] = useState('baby');
+  const [query, setQuery] = useState('abstract');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<{
@@ -233,7 +233,7 @@ export default function MultiModelSearch() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search artworks (try 'woman', 'landscape', 'portrait')"
+            placeholder="Search artworks (try 'abstract', 'picasso', 'print', 'collage')"
             className="flex-1"
             disabled={loading}
           />

@@ -1,6 +1,6 @@
-# Met Museum Semantic Search
+# Museum Semantic Search
 
-A Next.js application for searching the Metropolitan Museum of Art collection using state-of-the-art multimodal AI embeddings. Compare search results across different embedding models including Jina and Google Vertex AI.
+A Next.js application for searching museum collections using state-of-the-art multimodal AI embeddings. Currently configured for the MoMA collection. Compare search results across different embedding models including Jina and Google Vertex AI.
 
 ## Features
 
@@ -26,7 +26,7 @@ The current models (Jina Embeddings v4 and Google Vertex AI) provide excellent p
 
 - Node.
 - Docker (for Elasticsearch)
-- Met Museum artwork images (in `data/met_artworks/`)
+- Museum artwork data (e.g., MoMA CSV in `data/moma/`)
 - API keys for embedding providers (Jina, Google Vertex AI)
 
 ## Installation
@@ -34,33 +34,27 @@ The current models (Jina Embeddings v4 and Google Vertex AI) provide excellent p
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/met-semantic-search-next.git
-cd met-semantic-search-next
+git clone https://github.com/yourusername/museum-semantic-search-next.git
+cd museum-semantic-search-next
 npm install
 ```
 
-### 2. Download the Met Museum data
+### 2. Prepare museum data
 
-Download the Metropolitan Museum's open access CSV file:
+Place your museum collection data in the appropriate directory. For MoMA:
 
 ```bash
 # Create data directory
 mkdir -p data
 
-# Download the CSV (it's large, ~250MB)
-curl -L https://github.com/metmuseum/openaccess/raw/master/MetObjects.csv -o data/MetObjects.csv
+# For MoMA data:
+# Place Artworks_50k.csv in data/moma/
+# The file should contain artwork metadata with ImageURL field
 ```
 
-### 3. Add artwork images
+### 3. Data preparation
 
-Download the HuggingFace dataset:
-```bash
-# Install Python dependencies
-python3 -m pip install -r requirements.txt
-
-# Download filtered dataset (~102k images, ~5-10GB)
-npm run download-huggingface
-```
+For MoMA, the artwork images are referenced by URLs in the CSV file, so no separate image download is needed.
 
 
 ### 4. Set up environment variables
@@ -103,25 +97,22 @@ npm run index-artworks
   - NOT re-index any artworks - it simply exits
   - This is safe to run multiple times - it won't duplicate or overwrite data
 
-## Department Selection and Dataset Statistics
+## Dataset Information
 
-The Met Museum's open access collection contains 484,956 objects across 19 departments. We currently index a curated selection of departments focusing on historical art with high public domain availability.
+The system is designed to work with various museum collections. Currently configured for MoMA's collection of modern and contemporary art.
 
-### Currently Indexed Departments
+### MoMA Collection
+- **Total artworks**: ~48,000+ in the indexed dataset
+- **Coverage**: Modern and contemporary art from 1870s to present
+- **Metadata**: Artist, date, medium, department, classification
+- **Images**: Direct URLs to MoMA's image server
 
-| Department | Total Objects | Public Domain | Has Image | **Indexable** |
-|------------|--------------|---------------|-----------|---------------|
-| Asian Art | 37,000 | 31,295 (84.6%) | 37,000 (100.0%) | **31,295 (84.6%)** |
-| Islamic Art | 15,573 | 13,226 (84.9%) | 15,573 (100.0%) | **13,226 (84.9%)** |
-| European Paintings | 2,626 | 2,327 (88.6%) | 2,626 (100.0%) | **2,327 (88.6%)** |
-| **Total** | **55,199** | **46,848** | **55,199** | **46,848** |
+### Adding Other Collections
 
-### Recently Excluded Departments
-
-To maintain a manageable dataset size, we recently excluded these departments that were previously included:
-
-| Department | Total Objects | Public Domain | % Public Domain |
-|------------|--------------|---------------|-----------------|
+The system supports multiple museum collections through a parser architecture. To add a new collection:
+1. Create a parser implementing the `CollectionParser` interface
+2. Place data files in `data/[collection-name]/`
+3. Run indexing with `--collection [collection-name]`
 | Greek and Roman Art | 33,726 | 29,877 | 88.6% |
 | Egyptian Art | 27,969 | 12,269 | 43.9% |
 | Medieval Art | 7,142 | 6,920 | 96.9% |
@@ -169,9 +160,9 @@ Open [http://localhost:3000](http://localhost:3000) to use the application.
 
 ## Scripts
 
-- `npm run download-huggingface` - Download filtered Met Museum images from HuggingFace
-  - `--limit=N` - Download only N images (for testing)
-- `npm run index-artworks` - Index artworks from CSV into Elasticsearch
+- `npm run index-artworks` - Index artworks from museum data
+  - `--collection=NAME` - Specify collection to index (e.g., moma)
+- `npm run index-artworks` - Index artworks into Elasticsearch
   - `--force` - Force recreate the index (WARNING: deletes all existing data)
   - `--limit=N` - Only index N artworks (useful for testing)
 - `npm run generate-embeddings` - Generate embeddings directly to Elasticsearch
@@ -188,7 +179,7 @@ Open [http://localhost:3000](http://localhost:3000) to use the application.
 
 ## Data Pipeline
 
-1. **MetObjects.csv** → Filtered for public domain → Matched with images → Indexed to Elasticsearch
+1. **Museum data (CSV/JSON)** → Parsed by collection adapter → Indexed to Elasticsearch
 2. **Elasticsearch documents** → Generate embeddings → Update documents with embeddings
 3. **Search queries** → Multi-model search → Side-by-side results comparison
 
@@ -199,7 +190,7 @@ See [DATA_PIPELINE.md](DATA_PIPELINE.md) for detailed documentation.
 - **Frontend**: Next.js 15 with TypeScript
 - **UI Components**: Shadcn/ui with Tailwind CSS
 - **Search Engine**: Elasticsearch 8.11
-- **Images**: Pre-sized ~500px from HuggingFace dataset
+- **Images**: Direct URLs from museum servers (MoMA) or local files
 - **Embedding Models**: 
   - **Jina Embeddings v4**: 2048 dims, multimodal text+image fusion
   - **Google Vertex AI**: 1408 dims, enterprise-grade multimodal
@@ -207,4 +198,4 @@ See [DATA_PIPELINE.md](DATA_PIPELINE.md) for detailed documentation.
 
 ## License
 
-This project is MIT licensed. The Metropolitan Museum of Art data is used under their open access policy for public domain works.
+This project is MIT licensed. Museum data is used according to each institution's open access policies.
