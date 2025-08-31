@@ -102,14 +102,42 @@ npm run index-artworks
   - If it exists, skip index creation and preserve all existing data
   - NOT re-index any artworks - it simply exits
   - This is safe to run multiple times - it won't duplicate or overwrite data
-- Only indexes public domain artworks from these 7 departments:
-  - European Paintings (2,327 works)
-  - Greek and Roman Art (29,877 works)
-  - Egyptian Art (12,269 works)
-  - Asian Art (31,295 works)
-  - Islamic Art (13,226 works)
-  - Medieval Art (6,920 works)
-  - Ancient Near Eastern Art (6,190 works)
+
+## Department Selection and Dataset Statistics
+
+The Met Museum's open access collection contains 484,956 objects across 19 departments. We currently index a curated selection of departments focusing on historical art with high public domain availability.
+
+### Currently Indexed Departments
+
+| Department | Total Objects | Public Domain | Has Image | **Indexable** |
+|------------|--------------|---------------|-----------|---------------|
+| Asian Art | 37,000 | 31,295 (84.6%) | 37,000 (100.0%) | **31,295 (84.6%)** |
+| Islamic Art | 15,573 | 13,226 (84.9%) | 15,573 (100.0%) | **13,226 (84.9%)** |
+| European Paintings | 2,626 | 2,327 (88.6%) | 2,626 (100.0%) | **2,327 (88.6%)** |
+| **Total** | **55,199** | **46,848** | **55,199** | **46,848** |
+
+### Recently Excluded Departments
+
+To maintain a manageable dataset size, we recently excluded these departments that were previously included:
+
+| Department | Total Objects | Public Domain | % Public Domain |
+|------------|--------------|---------------|-----------------|
+| Greek and Roman Art | 33,726 | 29,877 | 88.6% |
+| Egyptian Art | 27,969 | 12,269 | 43.9% |
+| Medieval Art | 7,142 | 6,920 | 96.9% |
+| Ancient Near Eastern Art | 6,223 | 6,190 | 99.5% |
+
+### Dataset Characteristics
+
+1. **Current dataset size**: 46,848 indexable artworks
+2. **Department focus**: 
+   - Asian Art dominates with 66.8% of the dataset
+   - Islamic Art provides 28.2% of the collection
+   - European Paintings adds 5.0% with high-quality Western art
+3. **Estimated embedding costs**:
+   - At ~$0.02 per 1000 embeddings (typical pricing)
+   - Current dataset: ~$0.94 per model
+   - Total for both models: ~$1.88
 
 ### 7. Generate embeddings
 
@@ -129,7 +157,7 @@ npm run index-with-embeddings -- --force
 npm run generate-embeddings
 ```
 
-See [EMBEDDINGS_WORKFLOW.md](EMBEDDINGS_WORKFLOW.md) for details on the file-based approach.
+The file-based approach allows for resumable generation and easier data portability.
 
 ### 8. Start the application
 

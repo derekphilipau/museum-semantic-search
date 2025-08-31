@@ -80,15 +80,11 @@ interface RawArtwork {
   is_highlight: boolean;
 }
 
-// Departments we want to include - focused on high-quality art collections
+// Departments we want to include - reduced dataset focusing on key collections
 const ALLOWED_DEPARTMENTS = [
   'European Paintings',
-  'Greek and Roman Art',
-  'Egyptian Art',
   'Asian Art',
-  'Islamic Art',
-  'Medieval Art',
-  'Ancient Near Eastern Art'
+  'Islamic Art'
 ];
 
 async function getAvailableImages(): Promise<Map<number, string>> {
