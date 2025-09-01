@@ -1,111 +1,135 @@
 # Museum Search - Data Processing Scripts
 
-These TypeScript scripts handle the data pipeline for the museum semantic search application.
+These scripts handle the data pipeline for the museum semantic search application.
 
 ## Prerequisites
 
 1. Elasticsearch running on `http://localhost:9200`
-2. Museum data in appropriate directory (e.g., `../data/moma/` for MoMA)
+2. Museum data in appropriate directory (e.g., `data/moma/` for MoMA)
 3. API keys configured in `.env.local`:
    ```
    JINA_API_KEY=your_key
-   VOYAGE_API_KEY=your_key
-   COHERE_API_KEY=your_key
+   GOOGLE_GEMINI_API_KEY=your_key  # For visual descriptions
+   MODAL_EMBEDDING_API_URL=your_modal_url  # For SigLIP 2
    ```
+
+## Data Pipeline Overview
+
+```
+CSV File → Generate Visual Descriptions → Generate Embeddings → Index to Elasticsearch
+```
 
 ## Scripts
 
-### 1. Index Artworks (`index-artworks.ts`)
+### 1. Generate Visual Descriptions (`generate-descriptions-to-file-moma.ts`)
 
-Creates the Elasticsearch index and populates it with artwork metadata.
+Generates AI visual descriptions using Gemini 2.5 Flash for accessibility and enhanced search.
 
 ```bash
-# Index all artworks
+# Generate descriptions for testing
+npm run generate-descriptions -- --limit=100
+
+# Resume from checkpoint
+npm run generate-descriptions -- --resume
+```
+
+**Output:** `data/descriptions/descriptions.jsonl`
+
+### 2. Generate SigLIP 2 Embeddings (`generate_siglip2_embeddings.py`)
+
+Generates cross-modal embeddings for text-to-image search.
+
+```bash
+# Install dependencies (one-time)
+npm run setup-siglip2
+
+# Generate embeddings
+npm run generate-siglip2-embeddings -- --limit=100
+
+# Resume from checkpoint
+npm run generate-siglip2-embeddings -- --resume
+```
+
+**Output:** `data/embeddings/siglip2/embeddings.jsonl`
+
+### 3. Generate Jina v3 Embeddings (`generate_jina_v3_embeddings.py`)
+
+Generates advanced text embeddings combining metadata with visual descriptions.
+
+```bash
+# Generate embeddings
+npm run generate-jina-embeddings -- --limit=100
+
+# Resume from checkpoint
+npm run generate-jina-embeddings -- --resume
+```
+
+**Output:** `data/embeddings/jina_v3/embeddings.jsonl`
+
+### 4. Index Artworks (`index-artworks-with-embeddings.ts`)
+
+Creates the Elasticsearch index and populates it with artworks, embeddings, and descriptions.
+
+```bash
+# Index all artworks with embeddings
 npm run index-artworks
 
+# Force recreate index (WARNING: deletes existing data)
+npm run index-artworks -- --force
+
 # Index limited number for testing
-npm run index-artworks -- --limit=10
+npm run index-artworks -- --limit=100
 ```
 
-**What it does:**
-- Creates `artworks_semantic` index with proper mappings
-- Processes museum data using collection-specific parsers
-- Extracts searchable text and keywords
-- Sets up vector fields for embeddings
-
-### 2. Generate Embeddings (`generate-embeddings.ts`)
-
-Generates image embeddings using various AI models.
+## Complete Workflow
 
 ```bash
-# Generate embeddings with default models
-npm run generate-embeddings
+# 1. Generate visual descriptions
+npm run generate-descriptions -- --limit=100
 
-# Generate for specific models
-npm run generate-embeddings -- --models=jina_clip_v2,voyage_multimodal_3
+# 2. Generate embeddings
+npm run generate-siglip2-embeddings -- --limit=100
+npm run generate-jina-embeddings -- --limit=100
 
-# Limit to first 10 artworks
-npm run generate-embeddings -- --limit=10
-
-# Force regenerate existing embeddings
-npm run generate-embeddings -- --no-skip-existing
+# 3. Index everything
+npm run index-artworks -- --force
 ```
 
-**Supported models:**
-- `jina_clip_v2` - JinaCLIP v2 (1024 dims) - Best for visual art
-- `voyage_multimodal_3` - Voyage Multimodal-3 (1024 dims) - Supports interleaved text+image
-- `cohere_embed_4` - Cohere Embed 4 (1536 dims) - For documents
-- `google_vertex_multimodal` - Google Vertex (1408 dims) - Requires OAuth setup
+## File Structure
 
-**Rate limits:**
-- Voyage: 3 requests per minute (automatic rate limiting)
-- Other APIs: Check provider documentation
-
-### 3. Combined Setup
-
-Run both scripts in sequence:
-
-```bash
-npm run setup
 ```
-
-## Workflow
-
-1. **Initial setup:**
-   ```bash
-   npm run setup -- --limit=10  # Test with 10 artworks
-   ```
-
-2. **Full dataset:**
-   ```bash
-   npm run index-artworks
-   npm run generate-embeddings -- --models=jina_clip_v2,voyage_multimodal_3
-   ```
-
-3. **Add new model embeddings:**
-   ```bash
-   npm run generate-embeddings -- --models=cohere_embed_4
-   ```
+data/
+├── moma/
+│   └── Artworks_50k.csv          # Source data
+├── descriptions/
+│   ├── descriptions.jsonl        # AI visual descriptions
+│   └── progress.json             # Resume state
+└── embeddings/
+    ├── siglip2/
+    │   ├── embeddings.jsonl      # Cross-modal embeddings
+    │   └── progress.json         # Resume state
+    └── jina_v3/
+        ├── embeddings.jsonl      # Text embeddings
+        └── progress.json         # Resume state
+```
 
 ## Notes
 
-- Image embeddings are generated from actual artwork images using provider APIs
-- The script respects rate limits automatically
-- Failed embeddings are logged but don't stop the process
-- Progress is saved after each artwork (can resume if interrupted)
-- Cohere uses field name `cohere_embed_4_v2` due to dimension change
+- All scripts support resume functionality if interrupted
+- Progress is saved periodically (configurable batch size)
+- Failed items are logged but don't stop the process
+- The indexing script loads all data from files (no ES dependencies during generation)
 
 ## Troubleshooting
 
-**"Image not found" errors:**
-- Ensure data exists in appropriate directory (e.g., `../data/moma/`)
-- Image filenames should match the pattern: `{objectId}_{artistName}.jpg`
+**"File not found" errors:**
+- Ensure embedding files exist before indexing
+- Check file paths match expected structure
 
-**API errors:**
-- Check API keys in `.env.local`
-- Verify rate limits haven't been exceeded
-- Some models may have size limits for images
+**Out of memory:**
+- Reduce batch size in Python scripts with `--batch-size=8`
+- For indexing, process fewer artworks at once
 
-**Elasticsearch errors:**
-- Ensure Elasticsearch is running: `curl http://localhost:9200`
-- Check index exists: `curl http://localhost:9200/artworks_semantic`
+**Modal deployment issues:**
+- Deploy SigLIP 2 to Modal first: `cd modal && modal deploy embedding_api.py`
+- Set `MODAL_EMBEDDING_API_URL` in `.env.local`

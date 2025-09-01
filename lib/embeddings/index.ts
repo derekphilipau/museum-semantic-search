@@ -1,5 +1,6 @@
 import { EMBEDDING_MODELS, ModelKey, EmbeddingResponse } from './types';
-import { generateGoogleEmbedding, generateGoogleTextEmbedding } from './google';
+import { generateSigLIPEmbedding } from './siglip2';
+import { generateJinaV3Embedding } from './jina';
 
 export async function generateEmbedding(
   text: string,
@@ -11,11 +12,21 @@ export async function generateEmbedding(
   }
 
   switch (modelKey) {
-    case 'google_gemini_text':
-      return generateGoogleTextEmbedding(text, 'text-embedding-005');
+    case 'siglip2':
+      const result = await generateSigLIPEmbedding(text, 'text');
+      return {
+        embedding: result.embedding,
+        model: result.model,
+        dimension: result.dimensions
+      };
     
-    case 'google_vertex_multimodal':
-      return generateGoogleEmbedding(text, 'multimodalembedding@001');
+    case 'jina_v3':
+      const jinaResult = await generateJinaV3Embedding(text);
+      return {
+        embedding: jinaResult.embedding,
+        model: jinaResult.model,
+        dimension: jinaResult.dimensions
+      };
     
     default:
       throw new Error(`Model ${modelKey} not implemented`);

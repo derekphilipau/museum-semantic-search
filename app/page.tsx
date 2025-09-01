@@ -82,13 +82,13 @@ async function SearchResults({ searchParams }: PageProps) {
     let modelsToUse: ModelKey | ModelKey[] | undefined;
     
     if (hybridMode === 'both') {
-      // For "both" mode, pass multiple models
+      // For "both" mode, use both Jina v3 (text) and SigLIP 2 (image)
       const models: ModelKey[] = [];
-      const textModel = selectedModels.find(m => m === 'google_gemini_text');
-      const imageModel = selectedModels.find(m => m === 'google_vertex_multimodal');
+      const jinaModel = selectedModels.find(m => m === 'jina_v3');
+      const siglipModel = selectedModels.find(m => m === 'siglip2');
       
-      if (textModel) models.push(textModel);
-      if (imageModel) models.push(imageModel);
+      if (jinaModel) models.push(jinaModel);
+      if (siglipModel) models.push(siglipModel);
       
       if (models.length > 0) {
         modelsToUse = models;
@@ -96,9 +96,11 @@ async function SearchResults({ searchParams }: PageProps) {
     } else {
       // Single model hybrid search
       if (hybridMode === 'text') {
-        modelsToUse = selectedModels.find(m => m === 'google_gemini_text');
+        // Use Jina v3 for text mode hybrid search
+        modelsToUse = selectedModels.find(m => m === 'jina_v3');
       } else if (hybridMode === 'image') {
-        modelsToUse = selectedModels.find(m => m === 'google_vertex_multimodal');
+        // Use SigLIP 2 for image mode hybrid search (cross-modal)
+        modelsToUse = selectedModels.find(m => m === 'siglip2');
       }
     }
     

@@ -13,8 +13,8 @@ Traditional Elasticsearch text search using BM25 scoring across artwork metadata
 
 ### 2. **Semantic Search** 
 Vector similarity search using pre-computed embeddings:
-- **Text Embeddings**: Search artwork metadata and descriptions using Google's `text-embedding-005` (768 dimensions)
-- **Image Embeddings**: Visual similarity search using Google's `multimodalembedding@001` (1408 dimensions)
+- **Jina v3 Text**: Advanced text search combining artwork metadata with AI-generated descriptions (768 dimensions)
+- **SigLIP 2 Cross-Modal**: True text-to-image search using Google's SigLIP 2 model (768 dimensions) - enables natural language queries like "red car in snow" or "mourning scene"
 
 ### 3. **Hybrid Search**
 Combines keyword and semantic search with user-adjustable balance control:
@@ -49,16 +49,20 @@ After testing with museum artwork, we found:
 
 3. **Voyage Multimodal 3** had significant rate limiting issues on the free tier (3 requests/minute), making it extremely slow for generating embeddings at scale. Additionally, the search results were not as relevant as Jina models or Google Vertex AI for art-related queries. Further research with a paid account might yield different results. The implementation remains in `lib/embeddings/voyage.ts` for reference.
 
-4. **Text+Image Fusion Investigation**: We extensively tested multimodal embeddings that combine artwork metadata (title, artist, medium, etc.) with images using Google's `multimodalembedding@001` model. Testing revealed that the model produces nearly identical embeddings whether using image-only or image+text inputs - the visual features dominate so heavily that text metadata contributes negligibly to the final embedding (cosine similarity of 0.999999999+). This was confirmed across multiple artworks including detailed metadata and AI-generated visual descriptions. Due to this finding, we use image-only embeddings for multimodal models, as adding text provides no practical benefit for retrieval quality while adding unnecessary complexity and API costs.
+4. **Google Multimodal Embeddings** (`multimodalembedding@001`) worked well for visual similarity search but in our testing did not perform as well as CLIP/SigLIP/SigLIP2 models for cross-modal search (text-to-image queries). The Google model excels at finding visually similar artworks but is less effective at understanding natural language queries about visual content.
 
-The current system uses Google's models exclusively (Google Gemini for text embeddings and Google Vertex AI for visual embeddings) to provide a unified embedding architecture.
+5. **Google Text Embeddings** (`text-embedding-005`) performed very well for text-based semantic search. However, we ultimately chose **Jina v3** for our text embeddings because it offers comparable quality while allowing us to generate embeddings locally without API dependencies, reducing costs and latency.
+
+6. **Text+Image Fusion Investigation**: We extensively tested multimodal embeddings that combine artwork metadata (title, artist, medium, etc.) with images using Google's `multimodalembedding@001` model. Testing revealed that the model produces nearly identical embeddings whether using image-only or image+text inputs - the visual features dominate so heavily that text metadata contributes negligibly to the final embedding (cosine similarity of 0.999999999+). This was confirmed across multiple artworks including detailed metadata and AI-generated visual descriptions. Due to this finding, we use image-only embeddings for multimodal models, as adding text provides no practical benefit for retrieval quality while adding unnecessary complexity and API costs. Separate text and image embeddings proved more effective than combined text+image embeddings.
+
+The current system uses **Jina v3** for text embeddings and **SigLIP 2** for cross-modal image search, providing the best balance of quality, flexibility, and cost-effectiveness.
 
 ## Prerequisites
 
 - Node.
 - Docker (for Elasticsearch)
 - Museum artwork data (e.g., MoMA CSV in `data/moma/`)
-- API keys for embedding providers (Google Vertex AI, Google Gemini AI)
+- API keys for embedding providers (Jina AI, HuggingFace)
 
 ## Installation
 
@@ -97,14 +101,14 @@ For MoMA, the artwork images are referenced by URLs in the CSV file, so no separ
 Create a `.env.local` file:
 
 ```env
-# Google Cloud Credentials (for embeddings)
-GOOGLE_PROJECT_ID=your_project_id
-GOOGLE_CLIENT_EMAIL=your_service_account_email
-GOOGLE_PRIVATE_KEY=your_service_account_private_key
-GOOGLE_VERTEX_LOCATION=us-central1
-
 # Visual Description Generation
 GOOGLE_GEMINI_API_KEY=your_gemini_api_key  # For Gemini 2.5 Flash descriptions
+
+# Jina v3 Text Embeddings
+JINA_API_KEY=your_jina_api_key  # Get from https://jina.ai
+
+# SigLIP 2 Cross-Modal Embeddings (via Modal)
+MODAL_EMBEDDING_API_URL=your_modal_url  # After deploying to Modal
 
 # Elasticsearch
 ELASTICSEARCH_URL=http://localhost:9200
@@ -174,39 +178,38 @@ The system supports multiple museum collections through a parser architecture. T
 The system generates multimodal embeddings using both text metadata and artwork images for enhanced semantic understanding.
 
 **Embedding Models:**
-- **Google Gemini Text** (`text-embedding-005`)
+- **Jina v3** (`jina-embeddings-v3`)
   - 768 dimensions
-  - Text embeddings combining artwork metadata with AI-generated visual descriptions
+  - Advanced text embeddings combining artwork metadata with AI-generated visual descriptions
+  - Task-specific embeddings: "retrieval.passage" for indexing, "retrieval.query" for search
   - Only generated for artworks with visual descriptions
-  - Model: `text-embedding-005`
   
-- **Google Vertex AI Multimodal** (`multimodalembedding@001`)
-  - 1408 dimensions  
-  - Image-only embeddings for visual similarity search
-  - Model: `multimodalembedding@001`
+- **SigLIP 2** (`google/siglip2-base-patch16-224`)
+  - 768 dimensions
+  - True cross-modal embeddings - text and image in shared space
+  - Improved semantic understanding and localization vs original SigLIP
+  - Enables natural language image search ("cat on a chair", "stormy seascape")
+  - Image embeddings stored in database, text queries processed at search time
+  - Deployed via Modal for serverless GPU inference
 
-**Image Embeddings:**
-Multimodal models process artwork images to create embeddings that capture visual features like composition, color, style, and subject matter. Google's `multimodalembedding@001` model supports both text+image and image-only inputs, but our testing revealed that adding text metadata to image embeddings provides no meaningful differentiation (cosine similarity 0.999999999+ between approaches). Therefore, we use image-only embeddings for optimal efficiency and cost.
 
 **Example embedding generation output:**
 
-For image models (Google Vertex):
+For SigLIP 2 (cross-modal):
 ```
 [62/100] Anabol(A): PACE CAR for the HUBRIS PILL by Matthew Barney
   Downloading image...
-  Generating google_vertex_multimodal embedding...
-  ✓ Success (1408 dimensions)
-```
-
-For text models (Google Gemini):
-```
-[62/100] Anabol(A): PACE CAR for the HUBRIS PILL by Matthew Barney
-  Generating google_gemini_text embedding...
-  Combined text: "Title: Anabol(A): PACE CAR for the HUBRIS PILL\nArtist: Matthew Barney\nVisual Description: A glossy, translucent plastic sculpture..."
+  Generating image embedding...
   ✓ Success (768 dimensions)
 ```
 
-The searchable text includes all relevant metadata fields concatenated and normalized, providing rich context for the embedding models to understand both the visual and conceptual aspects of each artwork.
+For Jina v3 (text):
+```
+[62/100] Anabol(A): PACE CAR for the HUBRIS PILL by Matthew Barney
+  Creating text for embedding...
+  Combined text: "Title: Anabol(A): PACE CAR for the HUBRIS PILL. Artist: Matthew Barney. Visual description: A glossy, translucent plastic sculpture..."
+  ✓ Success (768 dimensions)
+```
 
 **Visual Descriptions with Gemini 2.5 Flash:**
 We also generate bias-free visual descriptions using Google's Gemini 2.5 Flash model, following Cooper Hewitt accessibility guidelines:
@@ -221,14 +224,23 @@ We also generate bias-free visual descriptions using Google's Gemini 2.5 Flash m
 npm run generate-descriptions -- --limit=100    # Start with 100 for testing
 npm run generate-descriptions -- --resume        # Resume from last checkpoint
 
-# 2. Generate image embeddings (resumable, portable)
-npm run generate-embeddings -- --model=google_vertex_multimodal # Image-only
+# 2. Deploy SigLIP 2 to Modal (one-time setup)
+cd modal
+modal deploy embedding_api.py
 
-# 3. Generate text embeddings (combines metadata + visual descriptions)
-npm run generate-text-embeddings                # Only for artworks with descriptions
-npm run generate-text-embeddings -- --resume-from=<artwork_id> --skip-existing
+# 3. Generate SigLIP 2 cross-modal embeddings
+# First install Python dependencies (one-time setup)
+npm run setup-siglip2
 
-# 4. Index everything to Elasticsearch (includes embeddings and descriptions)
+# Then generate embeddings (runs locally on your Mac)
+npm run generate-siglip2-embeddings -- --limit 100    # Test with 100 first
+npm run generate-siglip2-embeddings -- --resume       # Resume from checkpoint
+
+# 4. Generate Jina v3 text embeddings (combines metadata + visual descriptions)
+npm run generate-jina-embeddings -- --limit 100      # Test with 100 first
+npm run generate-jina-embeddings -- --resume         # Resume from checkpoint
+
+# 5. Index everything to Elasticsearch (includes embeddings and descriptions)
 npm run index-artworks -- --force
 ```
 
@@ -249,8 +261,11 @@ Open [http://localhost:3000](http://localhost:3000) to use the application.
 - `npm run index-artworks` - Index artworks into Elasticsearch
   - `--force` - Force recreate the index (WARNING: deletes all existing data)
   - `--limit=N` - Only index N artworks (useful for testing)
-- `npm run generate-embeddings` - Generate embeddings to files (resumable)
-  - `--model=MODEL` - Which model to generate (required)
+- `npm run generate-siglip2-embeddings` - Generate SigLIP 2 cross-modal embeddings
+  - `--limit=N` - Only process N artworks
+  - `--resume` - Continue from last checkpoint
+  - `--batch-size=N` - Save progress every N artworks (default: 16)
+- `npm run generate-jina-embeddings` - Generate Jina v3 text embeddings
   - `--limit=N` - Only process N artworks
   - `--resume` - Continue from last checkpoint
   - `--batch-size=N` - Save progress every N artworks (default: 10)
@@ -279,8 +294,8 @@ See [DATA_PIPELINE.md](DATA_PIPELINE.md) for detailed documentation.
 - **Search Engine**: Elasticsearch 8.19.1
 - **Images**: Direct URLs from museum servers (MoMA) or local files
 - **Embedding Models**: 
-  - **Google Gemini Text** (`text-embedding-005`): 768 dims, text-only for metadata and description search
-  - **Google Vertex AI Multimodal** (`multimodalembedding@001`): 1408 dims, image-only for visual similarity search
+  - **Jina v3** (`jina-embeddings-v3`): 768 dims, advanced text search for metadata and descriptions
+  - **SigLIP 2** (`siglip2-base-patch16-224`): 768 dims, true cross-modal search via Modal GPU inference
 
 
 ## Future Improvements

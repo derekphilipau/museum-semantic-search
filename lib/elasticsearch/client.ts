@@ -159,6 +159,53 @@ async function performSingleEmbeddingHybridSearch(
   const keywordBoost = 1 - balance;
   const semanticBoost = balance;
   
+  // If balance is 1 (100% semantic), just do a pure KNN search
+  if (balance >= 0.99) {
+    const searchBody = {
+      size,
+      _source: {
+        excludes: ['embeddings']
+      },
+      knn: {
+        field: `embeddings.${model}`,
+        query_vector: embeddingResult.embedding,
+        k: size,
+        num_candidates: size * 2
+      }
+    };
+    
+    const response = await client.search({
+      index: INDEX_NAME,
+      body: searchBody
+    });
+    
+    return {
+      took: response.took,
+      total: response.hits.total.value,
+      hits: response.hits.hits.map((hit: any) => ({
+        _id: hit._id,
+        _score: hit._score,
+        _source: hit._source
+      })),
+      esQuery: {
+        note: 'Pure semantic search (balance = 1)',
+        balance,
+        model,
+        ...searchBody,
+        knn: {
+          ...searchBody.knn,
+          query_vector: '[embedding vector]'
+        }
+      }
+    };
+  }
+  
+  // If balance is 0 (100% keyword), just do a pure keyword search
+  if (balance <= 0.01) {
+    return await performKeywordSearch(query, size, includeDescriptions);
+  }
+  
+  // Otherwise, do hybrid search
   const searchBody = {
     size,
     _source: {

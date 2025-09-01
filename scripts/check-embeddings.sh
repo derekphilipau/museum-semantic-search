@@ -3,7 +3,7 @@
 echo "Checking generated embeddings..."
 echo "================================"
 
-models=("jina_clip_v2" "google_vertex_multimodal")
+models=("siglip2" "jina_v3")
 
 for model in "${models[@]}"; do
     file="/Users/dau/Projects/Github/met-semantic-search-next/data/embeddings/$model/embeddings.jsonl"

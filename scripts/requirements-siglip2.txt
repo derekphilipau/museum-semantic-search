@@ -1,0 +1,9 @@
+# Requirements for SigLIP 2 embeddings generation
+torch>=2.0.0  # Will use Metal Performance Shaders on Apple Silicon
+transformers>=4.36.0
+pillow>=10.0.0
+requests>=2.31.0
+elasticsearch>=8.0.0
+tqdm>=4.66.0
+accelerate>=0.25.0  # For better Apple Silicon support
+flask>=3.0.0  # For text embedding server

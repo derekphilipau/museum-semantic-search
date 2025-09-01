@@ -20,22 +20,22 @@ export interface EmbeddingError {
 }
 
 export const EMBEDDING_MODELS: Record<string, EmbeddingModel> = {
-  google_gemini_text: {
-    key: 'google_gemini_text',
-    name: 'Text Embeddings',
+  siglip2: {
+    key: 'siglip2',
+    name: 'SigLIP 2 Cross-Modal',
     dimension: 768,
-    year: '2024',
-    notes: 'text-embedding-005',
-    supportsImage: false,
+    year: '2025',
+    notes: 'True text-to-image search v2',
+    supportsImage: true,
     supportsInterleaved: false,
   },
-  google_vertex_multimodal: {
-    key: 'google_vertex_multimodal',
-    name: 'Image Embeddings',
-    dimension: 1408,
+  jina_v3: {
+    key: 'jina_v3',
+    name: 'Jina v3 Text',
+    dimension: 768,
     year: '2024',
-    notes: 'multimodalembedding@001',
-    supportsImage: true,
+    notes: 'Advanced text embeddings with metadata + descriptions',
+    supportsImage: false,
     supportsInterleaved: false,
   },
 };

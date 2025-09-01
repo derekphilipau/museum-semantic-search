@@ -182,7 +182,7 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
         {/* Second row: Visual descriptions and hybrid mode options */}
         <div className="flex flex-wrap items-center gap-4">
           {/* Include visual descriptions checkbox */}
-          <span className="text-sm font-medium">Keyword Search Options:</span>
+          <span className="text-sm font-medium">Keyword & Text Embedding Options:</span>
           <div className="flex items-center space-x-2">
             <Checkbox
               id="includeDescriptions"
@@ -235,9 +235,9 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
                     <TooltipContent>
                       <p className="max-w-xs text-sm">
                         Choose which embeddings to combine with keyword search using Elasticsearch's RRF:
-                        <br />• Text: Keyword + text embeddings
-                        <br />• Image: Keyword + image embeddings (default)
-                        <br />• Both: Run both text and image hybrid searches
+                        <br />• Text: Keyword + Jina v3 text embeddings
+                        <br />• Image: Keyword + SigLIP 2 cross-modal embeddings (default)
+                        <br />• Both: Keyword + both Jina v3 and SigLIP 2
                       </p>
                     </TooltipContent>
                   </Tooltip>

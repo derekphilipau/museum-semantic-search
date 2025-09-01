@@ -135,19 +135,31 @@ export async function POST(request: NextRequest) {
       let modelsToUse: ModelKey | ModelKey[] | undefined;
       
       if (hybridMode === 'text') {
-        // Use the text embedding model for hybrid search
-        modelsToUse = selectedModels.find(m => m === 'google_gemini_text');
+        // Use Jina v3 for text mode hybrid search
+        modelsToUse = selectedModels.find(m => m === 'jina_v3');
+        if (!modelsToUse) {
+          console.warn('Jina v3 not found in selectedModels, using first text model');
+          modelsToUse = selectedModels.find(m => 
+            EMBEDDING_MODELS[m] && !EMBEDDING_MODELS[m].supportsImage
+          );
+        }
       } else if (hybridMode === 'image') {
-        // Use the image embedding model for hybrid search
-        modelsToUse = selectedModels.find(m => m === 'google_vertex_multimodal');
+        // Use SigLIP 2 for image mode hybrid search (cross-modal)
+        modelsToUse = selectedModels.find(m => m === 'siglip2');
+        if (!modelsToUse) {
+          console.warn('SigLIP not found in selectedModels, using first image model');
+          modelsToUse = selectedModels.find(m => 
+            EMBEDDING_MODELS[m] && EMBEDDING_MODELS[m].supportsImage
+          );
+        }
       } else if (hybridMode === 'both') {
-        // For "both" mode, use multiple models
+        // For "both" mode, use both Jina v3 (text) and SigLIP 2 (image)
         const models: ModelKey[] = [];
-        const textModel = selectedModels.find(m => m === 'google_gemini_text');
-        const imageModel = selectedModels.find(m => m === 'google_vertex_multimodal');
+        const jinaModel = selectedModels.find(m => m === 'jina_v3');
+        const siglipModel = selectedModels.find(m => m === 'siglip2');
         
-        if (textModel) models.push(textModel);
-        if (imageModel) models.push(imageModel);
+        if (jinaModel) models.push(jinaModel);
+        if (siglipModel) models.push(siglipModel);
         
         if (models.length > 0) {
           modelsToUse = models;
@@ -161,7 +173,8 @@ export async function POST(request: NextRequest) {
             query, 
             modelsToUse, 
             size, 
-            options.includeDescriptions
+            options.includeDescriptions,
+            hybridBalance
           );
           
           response.hybrid = {

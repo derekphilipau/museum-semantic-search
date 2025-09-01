@@ -21,14 +21,14 @@ interface AllModesResultsProps {
 
 // Model metadata with URLs and descriptions
 const MODEL_INFO = {
-  google_gemini_text: {
-    url: 'https://cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings',
-    description: 'Text semantic search with metadata + AI visual descriptions',
-    year: '2024'
+  siglip2: {
+    url: 'https://huggingface.co/google/siglip2-base-patch16-224',
+    description: 'Cross-modal text-to-image search',
+    year: '2025'
   },
-  google_vertex_multimodal: {
-    url: 'https://cloud.google.com/vertex-ai/docs/generative-ai/embeddings/get-multimodal-embeddings',
-    description: 'Visual similarity search',
+  jina_v3: {
+    url: 'https://jina.ai/embeddings/',
+    description: 'Advanced text search with metadata + descriptions',
     year: '2024'
   }
 } as const;
@@ -92,7 +92,7 @@ export default function AllModesResults({
 
   return (
     <div className="space-y-8">
-      {/* Fixed 4-column grid layout: ES text, Google Gemini text, Google visual, Hybrid */}
+      {/* Fixed 4-column grid layout: ES text, Jina v3, SigLIP, Hybrid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* 1. Keyword Search (ES text only) */}
         <SearchResultColumn
@@ -108,42 +108,42 @@ export default function AllModesResults({
           totalResults={results.keyword?.total}
         />
 
-        {/* 2. Google Gemini (Text embeddings with descriptions) */}
+        {/* 2. Jina v3 (Enhanced text embeddings) */}
         <SearchResultColumn
-          title={EMBEDDING_MODELS.google_gemini_text?.name || 'Google Gemini'}
-          description={MODEL_INFO.google_gemini_text?.description || 'Text semantic search'}
+          title={EMBEDDING_MODELS.jina_v3?.name || 'Jina v3'}
+          description={MODEL_INFO.jina_v3?.description || 'Enhanced text search'}
           icon={FileText}
-          hits={results.semantic.google_gemini_text?.hits || []}
-          gradientFrom="from-indigo-500"
-          gradientTo="to-indigo-600"
-          badgeColor="bg-indigo-700"
+          hits={results.semantic.jina_v3?.hits || []}
+          gradientFrom="from-orange-500"
+          gradientTo="to-orange-600"
+          badgeColor="bg-orange-700"
           onSelectArtwork={onSelectArtwork}
-          modelUrl={MODEL_INFO.google_gemini_text?.url}
+          modelUrl={MODEL_INFO.jina_v3?.url}
           showExternalLink={true}
-          responseTime={results.semantic.google_gemini_text?.took}
-          totalResults={results.semantic.google_gemini_text?.total}
+          responseTime={results.semantic.jina_v3?.took}
+          totalResults={results.semantic.jina_v3?.total}
         />
 
-        {/* 3. Google Vertex (Visual) */}
+        {/* 3. SigLIP 2 (Cross-modal) */}
         <SearchResultColumn
-          title={EMBEDDING_MODELS.google_vertex_multimodal?.name || 'Google Vertex'}
-          description={MODEL_INFO.google_vertex_multimodal?.description || 'Visual embeddings'}
-          icon={Image}
-          hits={results.semantic.google_vertex_multimodal?.hits || []}
-          gradientFrom="from-emerald-500"
-          gradientTo="to-emerald-600"
-          badgeColor="bg-emerald-700"
+          title={EMBEDDING_MODELS.siglip2?.name || 'SigLIP 2'}
+          description={MODEL_INFO.siglip2?.description || 'Cross-modal search'}
+          icon={Layers}
+          hits={results.semantic.siglip2?.hits || []}
+          gradientFrom="from-purple-500"
+          gradientTo="to-purple-600"
+          badgeColor="bg-purple-700"
           onSelectArtwork={onSelectArtwork}
-          modelUrl={MODEL_INFO.google_vertex_multimodal?.url}
+          modelUrl={MODEL_INFO.siglip2?.url}
           showExternalLink={true}
-          responseTime={results.semantic.google_vertex_multimodal?.took}
-          totalResults={results.semantic.google_vertex_multimodal?.total}
+          responseTime={results.semantic.siglip2?.took}
+          totalResults={results.semantic.siglip2?.total}
         />
 
-        {/* 4. Hybrid Search (combines keyword + semantic) */}
+        {/* 4. Hybrid Search (Jina v3 + SigLIP 2) */}
         <SearchResultColumn
           title="Hybrid"
-          description="Keyword + Semantic"
+          description="Jina v3 + SigLIP 2"
           icon={Zap}
           hits={results.hybrid?.results?.hits || []}
           gradientFrom="from-amber-500"

@@ -13,8 +13,8 @@ const testSearch = async () => {
         options: {
           keyword: true,
           models: {
-            jina_embeddings_v4: true,
-            google_vertex_multimodal: true
+            siglip2: true,
+            jina_v3: true
           },
           hybrid: true
         },

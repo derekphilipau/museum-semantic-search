@@ -7,12 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "generate-embeddings": "npx tsx scripts/generate-embeddings-to-file-moma.ts",
-    "generate-text-embeddings": "npx tsx scripts/generate-text-embeddings-moma.ts",
+    "generate-siglip2-embeddings": "python3 scripts/generate_siglip2_embeddings.py",
+    "generate-jina-embeddings": "python3 scripts/generate_jina_v3_embeddings.py",
+    "setup-siglip2": "pip3 install -r scripts/requirements-siglip2.txt",
     "generate-descriptions": "npx tsx scripts/generate-descriptions-to-file-moma.ts",
     "index-artworks": "npx tsx scripts/index-artworks-with-embeddings.ts",
     "update-descriptions": "npx tsx scripts/index-descriptions-with-artworks.ts",
-    "setup": "echo 'Run: 1) npm run generate-embeddings, 2) npm run generate-descriptions, 3) npm run generate-text-embeddings, 4) npm run index-artworks'"
+    "setup": "echo 'Run: 1) npm run generate-descriptions, 2) npm run generate-siglip2-embeddings, 3) npm run generate-jina-embeddings, 4) npm run index-artworks'"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.19.1",

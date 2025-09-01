@@ -33,7 +33,13 @@
       "Bash(mv:*)",
       "Bash(docker-compose:*)",
       "Bash(docker volume:*)",
-      "Bash(docker start:*)"
+      "Bash(docker start:*)",
+      "Bash(python:*)",
+      "WebFetch(domain:huggingface.co)",
+      "Bash(/Users/dau/Library/Python/3.11/bin/modal deploy embedding_api_minimal.py)",
+      "Bash(/Users/dau/Library/Python/3.11/bin/modal deploy embedding_api_minimal.py --force)",
+      "Bash(npm run index:force:*)",
+      "Bash(touch:*)"
     ],
     "deny": []
   }

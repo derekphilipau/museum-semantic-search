@@ -1,50 +1,60 @@
-import { EmbeddingResponse } from './types';
+/**
+ * Jina v3 embeddings client
+ * 
+ * Note: For search time, we need to use task="retrieval.query"
+ * For indexing, the Python script uses task="retrieval.passage"
+ */
 
-export async function generateJinaEmbedding(
-  text: string,
-  modelId: string = 'jina-clip-v2'
-): Promise<EmbeddingResponse> {
-  const apiKey = process.env.JINA_API_KEY;
-  if (!apiKey) {
-    throw new Error('JINA_API_KEY not configured');
-  }
-
-  // Build request body based on model
-  const requestBody: any = {
-    model: modelId,
-    input: [{
-      text: text
-    }],
+interface JinaEmbeddingResponse {
+  object: string;
+  data: Array<{
+    object: string;
+    index: number;
+    embedding: number[];
+  }>;
+  model: string;
+  usage: {
+    total_tokens: number;
   };
+}
 
-  // Add task parameter for v4
-  if (modelId === 'jina-embeddings-v4') {
-    requestBody.task = 'retrieval.query'; // For search queries
+export async function generateJinaV3Embedding(
+  text: string,
+  apiKey?: string
+): Promise<{ embedding: number[]; model: string; dimensions: number }> {
+  const key = apiKey || process.env.JINA_API_KEY;
+  if (!key) {
+    throw new Error('JINA_API_KEY environment variable is required');
   }
 
   const response = await fetch('https://api.jina.ai/v1/embeddings', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${key}`,
     },
-    body: JSON.stringify(requestBody),
+    body: JSON.stringify({
+      model: 'jina-embeddings-v3',
+      input: [text],
+      task: 'retrieval.query', // For search queries
+      dimensions: 768, // Match our indexed embeddings
+    }),
   });
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Jina API error: ${response.statusText} - ${error}`);
+    throw new Error(`Jina API error: ${response.status} ${error}`);
   }
 
-  const data = await response.json();
-  const embedding = data.data[0].embedding;
-
-  // Map model ID to our internal model key
-  const modelKey = modelId === 'jina-embeddings-v4' ? 'jina_embeddings_v4' : modelId;
+  const data: JinaEmbeddingResponse = await response.json();
+  
+  if (!data.data?.[0]?.embedding) {
+    throw new Error('Invalid response from Jina API');
+  }
 
   return {
-    embedding,
-    model: modelKey,
-    dimension: embedding.length,
+    embedding: data.data[0].embedding,
+    model: 'jina_v3',
+    dimensions: data.data[0].embedding.length,
   };
 }
