@@ -30,7 +30,10 @@
       "Bash(grep:*)",
       "Bash(npm run copy-indexed-images:*)",
       "Bash(rg:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker volume:*)",
+      "Bash(docker start:*)"
     ],
     "deny": []
   }

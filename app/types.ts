@@ -93,6 +93,11 @@ export interface SearchMetadata {
   totalDocuments: number;
   timestamp: string;
   totalQueryTime?: number;
+  esQueries?: {
+    keyword?: any;
+    semantic?: Record<string, any>;
+    hybrid?: any;
+  };
 }
 
 export interface MultiSearchResponse {

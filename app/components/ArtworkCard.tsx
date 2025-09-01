@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -165,4 +167,4 @@ function ArtworkCard({
   );
 }
 
-export default React.memo(ArtworkCard);
+export default ArtworkCard;

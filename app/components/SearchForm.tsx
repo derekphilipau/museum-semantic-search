@@ -51,8 +51,8 @@ function buildSearchParams(
     params.set('hybridMode', options.hybridMode);
   }
   
-  // Add hybrid balance if different from default
-  if (options.hybrid && options.hybridBalance !== undefined && options.hybridBalance !== 0.5) {
+  // Add hybrid balance if hybrid is enabled and balance is specified
+  if (options.hybrid && options.hybridBalance !== undefined) {
     params.set('hybridBalance', options.hybridBalance.toString());
   }
   
@@ -234,30 +234,34 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="max-w-xs text-sm">
-                        Choose which embeddings to combine with keyword search:
+                        Choose which embeddings to combine with keyword search using Elasticsearch's RRF:
                         <br />• Text: Keyword + text embeddings
                         <br />• Image: Keyword + image embeddings (default)
-                        <br />• Both: Keyword + best of text/image embeddings
+                        <br />• Both: Run both text and image hybrid searches
                       </p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
               </TooltipProvider>
               
-              {/* Hybrid balance slider */}
+              {/* Balance slider */}
               <div className="flex items-center gap-2">
-                <span className="text-sm">Keyword</span>
+                <Label className="text-xs whitespace-nowrap">
+                  Keyword
+                </Label>
                 <Slider
-                  value={[searchOptions.hybridBalance || 0.5]}
+                  value={[searchOptions.hybridBalance ?? 0.5]}
                   onValueChange={([value]) => handleOptionsChange({ hybridBalance: value })}
-                  min={0}
                   max={1}
+                  min={0}
                   step={0.1}
                   className="w-32"
                 />
-                <span className="text-sm">Semantic</span>
-                <span className="text-sm font-mono ml-1">
-                  ({((searchOptions.hybridBalance || 0.5) * 100).toFixed(0)}%)
+                <Label className="text-xs whitespace-nowrap">
+                  Semantic
+                </Label>
+                <span className="text-xs min-w-[3ch] text-right">
+                  {Math.round((searchOptions.hybridBalance ?? 0.5) * 100)}%
                 </span>
               </div>
             </>

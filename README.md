@@ -6,12 +6,32 @@ A Next.js application for searching museum collections using state-of-the-art mu
 
 This project is largely LLM vibe-coded for the purpose of quickly prototyping and experimenting with different semantic search techniques.  It should not be taken as a good example of Next.js or proper Elasticsearch indexing or querying.
 
-## Features
+## Search Types
 
-- **Multi-model Semantic Search**: Compare results from different embedding models side-by-side
-- **Keyword Search**: Traditional Elasticsearch text search
-- **Hybrid Search**: Combine keyword and semantic search
-- **Visual Search**: Search by image similarity using multimodal embeddings
+### 1. **Keyword Search**
+Traditional Elasticsearch text search using BM25 scoring across artwork metadata (title, artist, medium, etc.) and optional AI-generated visual descriptions.
+
+### 2. **Semantic Search** 
+Vector similarity search using pre-computed embeddings:
+- **Text Embeddings**: Search artwork metadata and descriptions using Google's `text-embedding-005` (768 dimensions)
+- **Image Embeddings**: Visual similarity search using Google's `multimodalembedding@001` (1408 dimensions)
+
+### 3. **Hybrid Search**
+Combines keyword and semantic search with user-adjustable balance control:
+
+- **Single Embedding Mode**: Keyword + one embedding type (text OR image)
+  - Uses score normalization and weighted combination
+  - Balance slider: 0% = all keyword, 100% = all semantic, 50% = equal weight
+
+- **Multiple Embedding Mode**: Keyword + text + image embeddings 
+  - Manual Reciprocal Rank Fusion (RRF) implementation
+  - Combines results from separate searches using rank-based scoring
+  - **Note**: With an Elasticsearch license, this could use native RRF retrievers for better performance
+
+## Additional Features
+
+- **Multi-model Comparison**: Side-by-side results from different search types
+- **Visual Search**: Search by image similarity using multimodal embeddings  
 - **Public Domain Only**: Respects copyright by only indexing public domain artworks
 
 ## Model Performance Notes
@@ -29,7 +49,7 @@ After testing with museum artwork, we found:
 
 3. **Voyage Multimodal 3** had significant rate limiting issues on the free tier (3 requests/minute), making it extremely slow for generating embeddings at scale. Additionally, the search results were not as relevant as Jina models or Google Vertex AI for art-related queries. Further research with a paid account might yield different results. The implementation remains in `lib/embeddings/voyage.ts` for reference.
 
-4. **Text+Image Fusion Investigation**: We extensively tested multimodal embeddings that combine artwork metadata (title, artist, medium, etc.) with images. Testing revealed that both Jina v4 and Google Vertex produce nearly identical embeddings whether using image-only or image+text inputs - the image features dominate so heavily that text contributes negligibly to the final embedding (cosine similarity of 0.9999-1.0000). Due to this finding, we use image-only embeddings for multimodal models, as adding text provides no practical benefit for retrieval quality.
+4. **Text+Image Fusion Investigation**: We extensively tested multimodal embeddings that combine artwork metadata (title, artist, medium, etc.) with images using Google's `multimodalembedding@001` model. Testing revealed that the model produces nearly identical embeddings whether using image-only or image+text inputs - the visual features dominate so heavily that text metadata contributes negligibly to the final embedding (cosine similarity of 0.999999999+). This was confirmed across multiple artworks including detailed metadata and AI-generated visual descriptions. Due to this finding, we use image-only embeddings for multimodal models, as adding text provides no practical benefit for retrieval quality while adding unnecessary complexity and API costs.
 
 The current system uses Google's models exclusively (Google Gemini for text embeddings and Google Vertex AI for visual embeddings) to provide a unified embedding architecture.
 
@@ -166,7 +186,7 @@ The system generates multimodal embeddings using both text metadata and artwork 
   - Model: `multimodalembedding@001`
 
 **Image Embeddings:**
-Multimodal models process artwork images to create embeddings that capture visual features like composition, color, style, and subject matter. Despite supporting text+image inputs, our testing found that text contributes negligibly when combined with images (see Model Performance Notes above).
+Multimodal models process artwork images to create embeddings that capture visual features like composition, color, style, and subject matter. Google's `multimodalembedding@001` model supports both text+image and image-only inputs, but our testing revealed that adding text metadata to image embeddings provides no meaningful differentiation (cosine similarity 0.999999999+ between approaches). Therefore, we use image-only embeddings for optimal efficiency and cost.
 
 **Example embedding generation output:**
 
@@ -256,12 +276,11 @@ See [DATA_PIPELINE.md](DATA_PIPELINE.md) for detailed documentation.
 
 - **Frontend**: Next.js 15 with TypeScript
 - **UI Components**: Shadcn/ui with Tailwind CSS
-- **Search Engine**: Elasticsearch 8.11
+- **Search Engine**: Elasticsearch 8.19.1
 - **Images**: Direct URLs from museum servers (MoMA) or local files
 - **Embedding Models**: 
-  - **Jina Embeddings v3**: 1024 dims, text-only for precise text matching
-  - **Jina Embeddings v4**: 2048 dims, image-only visual similarity search
-  - **Google Vertex AI**: 1408 dims, image-only visual similarity search
+  - **Google Gemini Text** (`text-embedding-005`): 768 dims, text-only for metadata and description search
+  - **Google Vertex AI Multimodal** (`multimodalembedding@001`): 1408 dims, image-only for visual similarity search
 
 
 ## Future Improvements
