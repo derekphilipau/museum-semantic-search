@@ -82,13 +82,14 @@ export const INDEX_MAPPING = {
       },
       embeddings: {
         properties: {
-          // API-based models
-          jina_embeddings_v4: {
+          // Text embedding models
+          google_gemini_text: {
             type: 'dense_vector',
-            dims: 2048,
+            dims: 768,
             index: true,
             similarity: 'cosine',
           },
+          // Image embedding models
           google_vertex_multimodal: {
             type: 'dense_vector',
             dims: 1408,

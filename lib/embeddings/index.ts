@@ -1,6 +1,5 @@
 import { EMBEDDING_MODELS, ModelKey, EmbeddingResponse } from './types';
-import { generateJinaEmbedding } from './jina';
-import { generateGoogleEmbedding } from './google';
+import { generateGoogleEmbedding, generateGoogleTextEmbedding } from './google';
 
 export async function generateEmbedding(
   text: string,
@@ -12,11 +11,8 @@ export async function generateEmbedding(
   }
 
   switch (modelKey) {
-    case 'jina_embeddings_v3':
-      return generateJinaEmbedding(text, 'jina-embeddings-v3');
-    
-    case 'jina_embeddings_v4':
-      return generateJinaEmbedding(text, 'jina-embeddings-v4');
+    case 'google_gemini_text':
+      return generateGoogleTextEmbedding(text, 'text-embedding-005');
     
     case 'google_vertex_multimodal':
       return generateGoogleEmbedding(text, 'multimodalembedding@001');

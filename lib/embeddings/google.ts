@@ -27,6 +27,60 @@ function getAuthClient(): GoogleAuth {
   return authClient;
 }
 
+export async function generateGoogleTextEmbedding(
+  text: string,
+  modelId: string = 'text-embedding-005'
+): Promise<EmbeddingResponse> {
+  try {
+    const auth = getAuthClient();
+    const accessToken = await auth.getAccessToken();
+    
+    if (!accessToken) {
+      throw new Error('Failed to get Google access token');
+    }
+
+    const projectId = process.env.GOOGLE_PROJECT_ID;
+    const location = process.env.GOOGLE_VERTEX_LOCATION || 'us-central1';
+    
+    const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:predict`;
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        instances: [{
+          content: text,
+        }],
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Google Vertex AI error: ${response.statusText} - ${error}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.predictions || !data.predictions[0] || !data.predictions[0].embeddings || !data.predictions[0].embeddings.values) {
+      throw new Error('Unexpected Google Vertex AI response format');
+    }
+
+    const embedding = data.predictions[0].embeddings.values;
+
+    return {
+      embedding,
+      model: 'google_gemini_text',
+      dimension: embedding.length,
+    };
+  } catch (error) {
+    console.error('Google Vertex AI text embedding error:', error);
+    throw error;
+  }
+}
+
 export async function generateGoogleEmbedding(
   text: string,
   modelId: string = 'multimodalembedding@001'

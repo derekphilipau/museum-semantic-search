@@ -15,45 +15,28 @@ export async function generateJinaImageEmbedding(
   let input;
   let requestBody: any;
   
-  // Handle different models
-  if (modelId === 'jina-embeddings-v3') {
-    // v3 is text-only, ignore image
-    if (!interleaveText) {
-      throw new Error('Jina v3 requires text input');
-    }
+  // Read image for v4 and other models
+  const imageBuffer = await fs.readFile(imagePath);
+  const base64Image = imageBuffer.toString('base64');
+  
+  if (modelId === 'jina-embeddings-v4' && interleaveText) {
+    // v4 supports combined text+image input
     input = [{
-      text: interleaveText
+      text: interleaveText,
+      image: base64Image
     }];
-    requestBody = {
-      model: modelId,
-      task: 'text-matching',
-      input: input,
-      encoding_type: 'float',
-    };
   } else {
-    // Read image for v4 and other models
-    const imageBuffer = await fs.readFile(imagePath);
-    const base64Image = imageBuffer.toString('base64');
-    
-    if (modelId === 'jina-embeddings-v4' && interleaveText) {
-      // v4 supports combined text+image input
-      input = [{
-        text: interleaveText,
-        image: base64Image
-      }];
-    } else {
-      // For clip-v2 or v4 without text, use image-only input
-      input = [{
-        image: base64Image
-      }];
-    }
-    requestBody = {
-      model: modelId,
-      task: 'retrieval.passage', // For document embeddings
-      input: input,
-      encoding_type: 'float',
-    };
+    // For clip-v2 or v4 without text, use image-only input
+    input = [{
+      image: base64Image
+    }];
   }
+  requestBody = {
+    model: modelId,
+    task: 'retrieval.passage', // For document embeddings
+    input: input,
+    encoding_type: 'float',
+  };
   
   const response = await fetch('https://api.jina.ai/v1/embeddings', {
     method: 'POST',
@@ -270,15 +253,6 @@ export async function generateImageEmbedding(
   let embedding: number[];
   
   switch (model) {
-    case 'jina_embeddings_v3':
-      embedding = await generateJinaImageEmbedding(imagePath, 'jina-embeddings-v3', interleaveText);
-      break;
-      
-    case 'jina_embeddings_v4':
-      // Always use image-only for v4 (text contribution is negligible)
-      embedding = await generateJinaImageEmbedding(imagePath, 'jina-embeddings-v4', undefined);
-      break;
-      
     case 'google_vertex_multimodal':
       // Always use image-only for Google Vertex (text contribution is negligible)
       embedding = await generateGoogleImageEmbedding(imagePath, undefined);

@@ -18,7 +18,12 @@ This project is largely LLM vibe-coded for the purpose of quickly prototyping an
 
 After testing with museum artwork, we found:
 
-1. **JinaCLIP v2** performed exceptionally well for visual art search, providing highly relevant results for artwork similarity matching. We ultimately removed it from the active models because **Jina Embeddings v4** (2048 dims) performed just as well with higher dimensional embeddings for more nuanced visual understanding.
+1. **Jina Embeddings** performed exceptionally well across all their models:
+   - **JinaCLIP v2** provided highly relevant results for visual art search
+   - **Jina v3** delivered excellent text-only semantic search capabilities
+   - **Jina v4** matched Google's performance for multimodal search with 2048-dimensional embeddings
+   - Both text and image search quality was comparable to Google's models
+   - The implementation remains in `lib/embeddings/jina.ts` for reference
 
 2. **Cohere Embed 4** did not produce results as relevant as other models for art-related queries. The implementation remains in `lib/embeddings/cohere.ts` for reference.
 
@@ -26,14 +31,14 @@ After testing with museum artwork, we found:
 
 4. **Text+Image Fusion Investigation**: We extensively tested multimodal embeddings that combine artwork metadata (title, artist, medium, etc.) with images. Testing revealed that both Jina v4 and Google Vertex produce nearly identical embeddings whether using image-only or image+text inputs - the image features dominate so heavily that text contributes negligibly to the final embedding (cosine similarity of 0.9999-1.0000). Due to this finding, we use image-only embeddings for multimodal models, as adding text provides no practical benefit for retrieval quality.
 
-The current models (Jina Embeddings v4 and Google Vertex AI) provide excellent performance for visual art search using image-only embeddings.
+The current system uses Google's models exclusively (Google Gemini for text embeddings and Google Vertex AI for visual embeddings) to provide a unified embedding architecture.
 
 ## Prerequisites
 
 - Node.
 - Docker (for Elasticsearch)
 - Museum artwork data (e.g., MoMA CSV in `data/moma/`)
-- API keys for embedding providers (Jina, Google Vertex AI)
+- API keys for embedding providers (Google Vertex AI, Google Gemini AI)
 
 ## Installation
 
@@ -72,10 +77,11 @@ For MoMA, the artwork images are referenced by URLs in the CSV file, so no separ
 Create a `.env.local` file:
 
 ```env
-# Embedding API Keys
-JINA_API_KEY=your_jina_api_key
-GOOGLE_CLOUD_API_KEY=your_google_api_key
-GOOGLE_CLOUD_PROJECT_ID=your_project_id
+# Google Cloud Credentials (for embeddings)
+GOOGLE_PROJECT_ID=your_project_id
+GOOGLE_CLIENT_EMAIL=your_service_account_email
+GOOGLE_PRIVATE_KEY=your_service_account_private_key
+GOOGLE_VERTEX_LOCATION=us-central1
 
 # Visual Description Generation
 GOOGLE_GEMINI_API_KEY=your_gemini_api_key  # For Gemini 2.5 Flash descriptions
@@ -148,16 +154,11 @@ The system supports multiple museum collections through a parser architecture. T
 The system generates multimodal embeddings using both text metadata and artwork images for enhanced semantic understanding.
 
 **Embedding Models:**
-- **Jina Embeddings v3** (`jina-embeddings-v3`)
-  - 1024 dimensions
-  - Text-only embeddings optimized for text matching
-  - Uses `task: "text-matching"` for better text retrieval
-  - Model: `jina-embeddings-v3`
-
-- **Jina Embeddings v4** (`jina-embeddings-v4`)
-  - 2048 dimensions
-  - Image-only embeddings for visual similarity search
-  - Model: `jina-embeddings-v4`
+- **Google Gemini Text** (`text-embedding-005`)
+  - 768 dimensions
+  - Text embeddings combining artwork metadata with AI-generated visual descriptions
+  - Only generated for artworks with visual descriptions
+  - Model: `text-embedding-005`
   
 - **Google Vertex AI Multimodal** (`multimodalembedding@001`)
   - 1408 dimensions  
@@ -169,21 +170,20 @@ Multimodal models process artwork images to create embeddings that capture visua
 
 **Example embedding generation output:**
 
-For image models (Jina v4, Google Vertex):
+For image models (Google Vertex):
 ```
 [62/100] Anabol(A): PACE CAR for the HUBRIS PILL by Matthew Barney
   Downloading image...
-  Generating jina_embeddings_v4 embedding...
-  ✓ Success (2048 dimensions)
+  Generating google_vertex_multimodal embedding...
+  ✓ Success (1408 dimensions)
 ```
 
-For text-only models (Jina v3):
+For text models (Google Gemini):
 ```
 [62/100] Anabol(A): PACE CAR for the HUBRIS PILL by Matthew Barney
-  Generating jina_embeddings_v3 embedding...
-  Using text+image: "anabol(a): pace car for the hubris pill matthew ba..."
-  Searchable text: "anabol(a): pace car for the hubris pill matthew barney 1991 internally lubricated plastic, teflon fa..."
-  ✓ Success (1024 dimensions)
+  Generating google_gemini_text embedding...
+  Combined text: "Title: Anabol(A): PACE CAR for the HUBRIS PILL\nArtist: Matthew Barney\nVisual Description: A glossy, translucent plastic sculpture..."
+  ✓ Success (768 dimensions)
 ```
 
 The searchable text includes all relevant metadata fields concatenated and normalized, providing rich context for the embedding models to understand both the visual and conceptual aspects of each artwork.
@@ -197,20 +197,19 @@ We also generate bias-free visual descriptions using Google's Gemini 2.5 Flash m
 
 **Workflow (Recommended for production)**
 ```bash
-# 1. Generate embeddings to files (resumable, portable)
-npm run generate-embeddings -- --model=jina_embeddings_v3      # Text-only
-npm run generate-embeddings -- --model=jina_embeddings_v4      # Image-only
-npm run generate-embeddings -- --model=google_vertex_multimodal # Image-only
-
-# 2. Generate visual descriptions with Gemini
+# 1. Generate visual descriptions with Gemini (required for text embeddings)
 npm run generate-descriptions -- --limit=100    # Start with 100 for testing
 npm run generate-descriptions -- --resume        # Resume from last checkpoint
 
-# 3. Index everything to Elasticsearch
-npm run index-artworks -- --force
+# 2. Generate image embeddings (resumable, portable)
+npm run generate-embeddings -- --model=google_vertex_multimodal # Image-only
 
-# 4. Update with visual descriptions
-npm run update-descriptions
+# 3. Generate text embeddings (combines metadata + visual descriptions)
+npm run generate-text-embeddings                # Only for artworks with descriptions
+npm run generate-text-embeddings -- --resume-from=<artwork_id> --skip-existing
+
+# 4. Index everything to Elasticsearch (includes embeddings and descriptions)
+npm run index-artworks -- --force
 ```
 
 The file-based approach allows for resumable generation and easier data portability between environments.

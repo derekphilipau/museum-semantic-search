@@ -8,6 +8,7 @@ import {
   INDEX_NAME 
 } from '@/lib/elasticsearch/client';
 import { SearchResponse, SearchMode } from '@/app/types';
+import { HybridMode } from '@/app/components/SearchForm';
 
 // Type definitions
 interface SearchRequest {
@@ -16,6 +17,8 @@ interface SearchRequest {
     keyword: boolean;
     models: Record<string, boolean>;
     hybrid: boolean;
+    hybridMode?: HybridMode;
+    hybridBalance?: number;
     includeDescriptions?: boolean;
   };
   size?: number;
@@ -24,7 +27,7 @@ interface SearchRequest {
 interface UnifiedSearchResponse {
   keyword: SearchResponse | null;
   semantic: Record<string, SearchResponse>;
-  hybrid: { model: string; results: SearchResponse } | null;
+  hybrid: { model: string; results: SearchResponse; mode?: HybridMode } | null;
 }
 
 
@@ -52,6 +55,7 @@ export async function POST(request: NextRequest) {
   try {
     const body: SearchRequest = await request.json();
     const { query, options, size = 10 } = body;
+    const hybridBalance = options.hybridBalance ?? 0.5;
 
     // Validate request
     if (!query || typeof query !== 'string') {
@@ -99,21 +103,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Hybrid search - prioritize Jina v4 if available, otherwise use first selected model
-    if (options.hybrid && selectedModels.length > 0) {
-      const hybridModel = selectedModels.includes('jina_embeddings_v4' as ModelKey)
-        ? 'jina_embeddings_v4' as ModelKey
-        : selectedModels[0];
-      
-      searchPromises.push(
-        performHybridSearch(query, hybridModel, size, options.includeDescriptions)
-          .then(results => ({ type: 'hybrid', model: hybridModel, results }))
-          .catch(error => {
-            console.error(`Hybrid search failed for ${hybridModel}:`, error);
-            return { type: 'hybrid', model: hybridModel, results: { took: 0, total: 0, hits: [] } };
-          })
-      );
-    }
+    // For hybrid search, we'll run separate searches and combine with normalization
+    // We don't add hybrid to searchPromises as we'll handle it separately after all searches complete
 
     // Execute all searches in parallel for better performance
     // This runs keyword, all semantic searches, and hybrid search concurrently
@@ -129,15 +120,139 @@ export async function POST(request: NextRequest) {
       hybrid: null,
     };
 
+    // Process results
     for (const result of searchResults) {
       if (result.type === 'keyword') {
         response.keyword = result.results;
       } else if (result.type === 'semantic' && result.model) {
         response.semantic[result.model] = result.results;
-      } else if (result.type === 'hybrid' && result.model) {
+      }
+    }
+
+    // Handle hybrid search with score normalization
+    if (options.hybrid && selectedModels.length > 0) {
+      const hybridMode = options.hybridMode || 'image';
+      
+      // Determine which semantic results to use
+      let semanticResults: SearchResponse | null = null;
+      let hybridModel: string = '';
+      
+      if (hybridMode === 'text') {
+        const textModel = selectedModels.find(m => m === 'google_gemini_text');
+        if (textModel && response.semantic[textModel]) {
+          semanticResults = response.semantic[textModel];
+          hybridModel = textModel;
+        }
+      } else if (hybridMode === 'image') {
+        const imageModel = selectedModels.find(m => m === 'google_vertex_multimodal');
+        if (imageModel && response.semantic[imageModel]) {
+          semanticResults = response.semantic[imageModel];
+          hybridModel = imageModel;
+        }
+      } else if (hybridMode === 'both') {
+        // For "both" mode, merge text and image semantic results first
+        const textModel = selectedModels.find(m => m === 'google_gemini_text');
+        const imageModel = selectedModels.find(m => m === 'google_vertex_multimodal');
+        const textResults = textModel ? response.semantic[textModel] : null;
+        const imageResults = imageModel ? response.semantic[imageModel] : null;
+        
+        if (textResults || imageResults) {
+          const mergedHits = new Map<string, any>();
+          
+          // Add all results, keeping highest scores
+          [textResults, imageResults].forEach(res => {
+            if (res) {
+              res.hits.forEach(hit => {
+                const existing = mergedHits.get(hit._id);
+                if (!existing || hit._score > existing._score) {
+                  mergedHits.set(hit._id, hit);
+                }
+              });
+            }
+          });
+          
+          semanticResults = {
+            took: Math.max(textResults?.took || 0, imageResults?.took || 0),
+            total: mergedHits.size,
+            hits: Array.from(mergedHits.values())
+          };
+          hybridModel = 'combined';
+        }
+      }
+      
+      // Combine keyword and semantic results with score normalization
+      if (response.keyword && semanticResults && semanticResults.hits.length > 0 && response.keyword.hits.length > 0) {
+        // Score normalization function
+        const normalizeScores = (hits: any[], minScore: number, maxScore: number) => {
+          if (maxScore === minScore) return hits.map(h => ({ ...h, normalizedScore: 1 }));
+          return hits.map(hit => ({
+            ...hit,
+            normalizedScore: (hit._score - minScore) / (maxScore - minScore)
+          }));
+        };
+        
+        // Get min/max scores for normalization
+        const keywordScores = response.keyword.hits.map(h => h._score);
+        const semanticScores = semanticResults.hits.map(h => h._score);
+        
+        const keywordMin = Math.min(...keywordScores);
+        const keywordMax = Math.max(...keywordScores);
+        const semanticMin = Math.min(...semanticScores);
+        const semanticMax = Math.max(...semanticScores);
+        
+        // Normalize scores
+        const normalizedKeyword = normalizeScores(response.keyword.hits, keywordMin, keywordMax);
+        const normalizedSemantic = normalizeScores(semanticResults.hits, semanticMin, semanticMax);
+        
+        // Apply balance parameter (0 = all keyword, 1 = all semantic)
+        const keywordWeight = 1 - hybridBalance;
+        const semanticWeight = hybridBalance;
+        
+        // Merge results
+        const mergedHits = new Map<string, any>();
+        
+        // Add keyword results with weighted scores
+        normalizedKeyword.forEach(hit => {
+          mergedHits.set(hit._id, {
+            ...hit,
+            _score: hit.normalizedScore * keywordWeight,
+            _originalScore: hit._score,
+            _scoreType: 'keyword'
+          });
+        });
+        
+        // Add/update with semantic results
+        normalizedSemantic.forEach(hit => {
+          const existing = mergedHits.get(hit._id);
+          if (existing) {
+            // Document exists in both - combine scores
+            existing._score += hit.normalizedScore * semanticWeight;
+            existing._scoreType = 'hybrid';
+            existing._semanticScore = hit._score;
+          } else {
+            // Only in semantic results
+            mergedHits.set(hit._id, {
+              ...hit,
+              _score: hit.normalizedScore * semanticWeight,
+              _originalScore: hit._score,
+              _scoreType: 'semantic'
+            });
+          }
+        });
+        
+        // Convert to array and sort by combined score
+        const hybridHits = Array.from(mergedHits.values())
+          .sort((a, b) => b._score - a._score)
+          .slice(0, size);
+        
         response.hybrid = {
-          model: result.model,
-          results: result.results
+          model: hybridModel,
+          results: {
+            took: Math.max(response.keyword.took, semanticResults.took),
+            total: mergedHits.size,
+            hits: hybridHits
+          },
+          mode: hybridMode
         };
       }
     }

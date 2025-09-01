@@ -21,15 +21,10 @@ interface AllModesResultsProps {
 
 // Model metadata with URLs and descriptions
 const MODEL_INFO = {
-  jina_embeddings_v3: {
-    url: 'https://jina.ai/embeddings/',
-    description: 'Text-only semantic search',
+  google_gemini_text: {
+    url: 'https://cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings',
+    description: 'Text semantic search with metadata + AI visual descriptions',
     year: '2024'
-  },
-  jina_embeddings_v4: {
-    url: 'https://jina.ai/embeddings/',
-    description: 'Visual similarity search',
-    year: '2025'
   },
   google_vertex_multimodal: {
     url: 'https://cloud.google.com/vertex-ai/docs/generative-ai/embeddings/get-multimodal-embeddings',
@@ -97,8 +92,8 @@ export default function AllModesResults({
 
   return (
     <div className="space-y-8">
-      {/* Fixed 5-column grid layout: ES text, Jina v3 text, Jina v4 visual, Google visual, Hybrid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      {/* Fixed 4-column grid layout: ES text, Google Gemini text, Google visual, Hybrid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* 1. Keyword Search (ES text only) */}
         <SearchResultColumn
           title="Keyword"
@@ -113,39 +108,23 @@ export default function AllModesResults({
           totalResults={results.keyword?.total}
         />
 
-        {/* 2. Jina v3 (Text only embeddings) */}
+        {/* 2. Google Gemini (Text embeddings with descriptions) */}
         <SearchResultColumn
-          title={EMBEDDING_MODELS.jina_embeddings_v3?.name || 'Jina v3'}
-          description={MODEL_INFO.jina_embeddings_v3?.description || 'Text-only embeddings'}
+          title={EMBEDDING_MODELS.google_gemini_text?.name || 'Google Gemini'}
+          description={MODEL_INFO.google_gemini_text?.description || 'Text semantic search'}
           icon={FileText}
-          hits={results.semantic.jina_embeddings_v3?.hits || []}
+          hits={results.semantic.google_gemini_text?.hits || []}
           gradientFrom="from-indigo-500"
           gradientTo="to-indigo-600"
           badgeColor="bg-indigo-700"
           onSelectArtwork={onSelectArtwork}
-          modelUrl={MODEL_INFO.jina_embeddings_v3?.url}
+          modelUrl={MODEL_INFO.google_gemini_text?.url}
           showExternalLink={true}
-          responseTime={results.semantic.jina_embeddings_v3?.took}
-          totalResults={results.semantic.jina_embeddings_v3?.total}
+          responseTime={results.semantic.google_gemini_text?.took}
+          totalResults={results.semantic.google_gemini_text?.total}
         />
 
-        {/* 3. Jina v4 (Visual) */}
-        <SearchResultColumn
-          title={EMBEDDING_MODELS.jina_embeddings_v4?.name || 'Jina v4'}
-          description={MODEL_INFO.jina_embeddings_v4?.description || 'Visual embeddings'}
-          icon={Image}
-          hits={results.semantic.jina_embeddings_v4?.hits || []}
-          gradientFrom="from-teal-500"
-          gradientTo="to-teal-600"
-          badgeColor="bg-teal-700"
-          onSelectArtwork={onSelectArtwork}
-          modelUrl={MODEL_INFO.jina_embeddings_v4?.url}
-          showExternalLink={true}
-          responseTime={results.semantic.jina_embeddings_v4?.took}
-          totalResults={results.semantic.jina_embeddings_v4?.total}
-        />
-
-        {/* 4. Google Vertex (Visual) */}
+        {/* 3. Google Vertex (Visual) */}
         <SearchResultColumn
           title={EMBEDDING_MODELS.google_vertex_multimodal?.name || 'Google Vertex'}
           description={MODEL_INFO.google_vertex_multimodal?.description || 'Visual embeddings'}
@@ -161,7 +140,7 @@ export default function AllModesResults({
           totalResults={results.semantic.google_vertex_multimodal?.total}
         />
 
-        {/* 5. Hybrid Search (combines keyword + semantic) */}
+        {/* 4. Hybrid Search (combines keyword + semantic) */}
         <SearchResultColumn
           title="Hybrid"
           description="Keyword + Semantic"

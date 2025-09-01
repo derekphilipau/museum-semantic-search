@@ -17,10 +17,8 @@ export async function generateJinaEmbedding(
     }],
   };
 
-  // Add task parameter based on model
-  if (modelId === 'jina-embeddings-v3') {
-    requestBody.task = 'text-matching';
-  } else if (modelId === 'jina-embeddings-v4') {
+  // Add task parameter for v4
+  if (modelId === 'jina-embeddings-v4') {
     requestBody.task = 'retrieval.query'; // For search queries
   }
 
@@ -42,8 +40,7 @@ export async function generateJinaEmbedding(
   const embedding = data.data[0].embedding;
 
   // Map model ID to our internal model key
-  const modelKey = modelId === 'jina-embeddings-v4' ? 'jina_embeddings_v4' : 
-                   modelId === 'jina-embeddings-v3' ? 'jina_embeddings_v3' : modelId;
+  const modelKey = modelId === 'jina-embeddings-v4' ? 'jina_embeddings_v4' : modelId;
 
   return {
     embedding,
