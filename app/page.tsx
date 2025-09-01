@@ -72,7 +72,7 @@ async function SearchResults({ searchParams }: PageProps) {
   // Keyword search
   if (keyword) {
     searchPromises.push(
-      performKeywordSearch(query, 10, includeDescriptions)
+      performKeywordSearch(query, 20, includeDescriptions)
         .then(results => ({ type: 'keyword', results }))
     );
   }
@@ -82,7 +82,7 @@ async function SearchResults({ searchParams }: PageProps) {
     const embedding = embeddings[model];
     if (embedding) {
       searchPromises.push(
-        performSemanticSearchWithEmbedding(embedding, model, 10)
+        performSemanticSearchWithEmbedding(embedding, model, 20)
           .then(results => ({ type: 'semantic', model, results }))
       );
     }
@@ -117,7 +117,7 @@ async function SearchResults({ searchParams }: PageProps) {
     
     if (modelsToUse) {
       searchPromises.push(
-        performHybridSearchWithEmbeddings(query, embeddings, modelsToUse, 10, includeDescriptions, hybridBalance)
+        performHybridSearchWithEmbeddings(query, embeddings, modelsToUse, 20, includeDescriptions, hybridBalance)
           .then(results => ({ 
             type: 'hybrid', 
             model: Array.isArray(modelsToUse) ? 'multi' : modelsToUse, 

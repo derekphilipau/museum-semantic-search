@@ -85,7 +85,7 @@ function SearchResultColumn({
           </div>
         ) : (
           <div className="space-y-2">
-            {hits.slice(0, 10).map((hit, index) => (
+            {hits.slice(0, 20).map((hit, index) => (
               <div key={`${title}-${hit._id}-${index}`} className="relative h-full">
                 <Badge 
                   variant={badgeColor === 'secondary' ? 'secondary' : 'default'}

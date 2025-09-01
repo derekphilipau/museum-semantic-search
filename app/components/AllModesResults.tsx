@@ -83,7 +83,7 @@ export default function AllModesResults({
     return (
       <Card className="p-8">
         <div className="text-center text-muted-foreground">
-          <p>No results found for "{query}"</p>
+          <p>No results found for &quot;{query}&quot;</p>
           <p className="text-sm mt-2">Try different search terms</p>
         </div>
       </Card>

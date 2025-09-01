@@ -22,7 +22,7 @@ export const INDEX_NAME = process.env.ELASTICSEARCH_INDEX ||
 
 export async function performKeywordSearch(
   query: string,
-  size: number = 10,
+  size: number = 20,
   includeDescriptions: boolean = false
 ): Promise<SearchResponse & { esQuery?: any }> {
   try {
@@ -91,7 +91,7 @@ export async function performKeywordSearch(
 export async function performSemanticSearchWithEmbedding(
   embedding: number[],
   model: ModelKey,
-  size: number = 10
+  size: number = 20
 ): Promise<SearchResponse & { esQuery?: any }> {
   try {
     const client = getElasticsearchClient();
@@ -141,16 +141,10 @@ async function performSingleEmbeddingHybridSearchWithEmbedding(
   query: string,
   embedding: number[],
   model: ModelKey,
-  size: number = 10,
+  size: number = 20,
   includeDescriptions: boolean = false,
   balance: number = 0.5
 ): Promise<SearchResponse & { esQuery?: any }> {
-  const client = getElasticsearchClient();
-  
-  // Convert balance to boost values for native ES scoring
-  const keywordBoost = 1 - balance;
-  const semanticBoost = balance;
-  
   // If balance is 1 (100% semantic), just do a pure KNN search
   if (balance >= 0.99) {
     return performSemanticSearchWithEmbedding(embedding, model, size);
@@ -161,64 +155,87 @@ async function performSingleEmbeddingHybridSearchWithEmbedding(
     return performKeywordSearch(query, size, includeDescriptions);
   }
   
-  // Combined query+knn search
-  const searchFields = [
-    'metadata.title^3',
-    'metadata.artist^2',
-    'metadata.date',
-    'metadata.classification',
-    'metadata.medium',
-    ...(includeDescriptions ? ['ai_description^2', 'visual_alt_text'] : [])
-  ];
+  // For balanced search, use manual RRF like the multi-embedding version
+  // Run parallel searches: keyword + semantic
+  const searchPromises: Promise<any>[] = [];
   
-  const searchBody = {
-    size,
-    _source: {
-      excludes: ['embeddings']
-    },
-    query: {
-      multi_match: {
-        query,
-        fields: searchFields,
-        type: 'best_fields',
-        operator: 'or',
-        minimum_should_match: '30%',
-        boost: keywordBoost
-      }
-    },
-    knn: {
-      field: `embeddings.${model}`,
-      query_vector: embedding,
-      k: size,
-      num_candidates: size * 2,
-      boost: semanticBoost
-    }
-  };
+  // Keyword search
+  searchPromises.push(performKeywordSearch(query, size * 2, includeDescriptions));
   
-  const response = await client.search({
-    index: INDEX_NAME,
-    body: searchBody
+  // Semantic search
+  searchPromises.push(performSemanticSearchWithEmbedding(embedding, model, size * 2));
+  
+  const results = await Promise.all(searchPromises);
+  const keywordResults = results[0];
+  const semanticResults = results[1];
+  
+  // Manual RRF implementation with improved balance handling
+  const documentScores = new Map<string, { hit: any, rrfScore: number, keywordRank?: number, semanticRank?: number }>();
+  
+  // Use smaller k for more pronounced differences
+  // k=10 is more aggressive, k=60 is more conservative
+  // We'll use a dynamic k based on the balance to make the effect more noticeable
+  const k = 10 + (1 - Math.abs(balance - 0.5) * 2) * 20; // k ranges from 10 to 30
+  
+  // Apply balance weights with exponential scaling for more pronounced effect
+  // This makes extreme balance values (near 0 or 1) have stronger effects
+  const keywordWeight = Math.pow(1 - balance, 1.5);
+  const semanticWeight = Math.pow(balance, 1.5);
+  
+  // Normalize weights so they sum to 1
+  const totalWeight = keywordWeight + semanticWeight;
+  const normalizedKeywordWeight = keywordWeight / totalWeight;
+  const normalizedSemanticWeight = semanticWeight / totalWeight;
+
+  // Process keyword results
+  keywordResults.hits.forEach((hit: any, rank: number) => {
+    const rrfScore = normalizedKeywordWeight * (1 / (k + rank + 1));
+    documentScores.set(hit._id, { hit, rrfScore, keywordRank: rank });
   });
   
+  // Process semantic results
+  semanticResults.hits.forEach((hit: any, rank: number) => {
+    const rrfScore = normalizedSemanticWeight * (1 / (k + rank + 1));
+    
+    if (documentScores.has(hit._id)) {
+      const existing = documentScores.get(hit._id)!;
+      existing.rrfScore += rrfScore;
+      existing.semanticRank = rank;
+    } else {
+      documentScores.set(hit._id, { hit, rrfScore, semanticRank: rank });
+    }
+  });
+  
+  // Sort by RRF score and take top N
+  const sortedHits = Array.from(documentScores.values())
+    .sort((a, b) => b.rrfScore - a.rrfScore)
+    .slice(0, size)
+    .map(({ hit, rrfScore }) => ({
+      ...hit,
+      _score: rrfScore
+    }));
+  
   return {
-    took: response.took,
-    total: response.hits.total.value,
-    hits: response.hits.hits.map((hit: any) => ({
-      _id: hit._id,
-      _score: hit._score,
-      _source: hit._source
-    })),
+    took: Math.max(keywordResults.took || 0, semanticResults.took || 0),
+    total: documentScores.size,
+    hits: sortedHits,
     esQuery: {
-      note: 'Single-model hybrid search with pre-computed embedding',
+      note: 'Single-model hybrid search with manual RRF',
       balance,
-      keywordBoost,
-      semanticBoost,
+      k,
+      weights: {
+        keyword: {
+          raw: keywordWeight,
+          normalized: normalizedKeywordWeight
+        },
+        semantic: {
+          raw: semanticWeight,
+          normalized: normalizedSemanticWeight
+        }
+      },
       model,
-      ...searchBody,
-      knn: {
-        ...searchBody.knn,
-        query_vector: '[embedding vector]'
-      }
+      keywordQuery: (keywordResults as any).esQuery,
+      semanticQuery: (semanticResults as any).esQuery
     }
   };
 }
@@ -228,7 +245,7 @@ async function performMultipleEmbeddingHybridSearchWithEmbeddings(
   query: string,
   embeddings: Record<ModelKey, number[]>,
   models: ModelKey[],
-  size: number = 10,
+  size: number = 20,
   includeDescriptions: boolean = false,
   balance: number = 0.5
 ): Promise<SearchResponse & { esQuery?: any }> {
@@ -249,24 +266,31 @@ async function performMultipleEmbeddingHybridSearchWithEmbeddings(
   const keywordResults = results[0];
   const semanticResults = results.slice(1);
   
-  // Manual RRF implementation
+  // Manual RRF implementation with improved balance handling
   const documentScores = new Map<string, { hit: any, rrfScore: number }>();
-  const k = 60; // RRF constant
   
-  // Apply balance weights
-  const keywordWeight = 1 - balance;
-  const semanticWeight = balance;
+  // Use smaller k for more pronounced differences
+  const k = 10 + (1 - Math.abs(balance - 0.5) * 2) * 20; // k ranges from 10 to 30
+  
+  // Apply balance weights with exponential scaling
+  const keywordWeight = Math.pow(1 - balance, 1.5);
+  const semanticWeight = Math.pow(balance, 1.5);
+  
+  // Normalize weights
+  const totalWeight = keywordWeight + semanticWeight;
+  const normalizedKeywordWeight = keywordWeight / totalWeight;
+  const normalizedSemanticWeight = semanticWeight / totalWeight;
 
   // Process keyword results
   keywordResults.hits.forEach((hit: any, rank: number) => {
-    const rrfScore = keywordWeight * (1 / (k + rank + 1));
+    const rrfScore = normalizedKeywordWeight * (1 / (k + rank + 1));
     documentScores.set(hit._id, { hit, rrfScore });
   });
   
   // Process semantic results
   semanticResults.forEach((result: any, modelIndex: number) => {
     result.hits.forEach((hit: any, rank: number) => {
-      const rrfScore = (semanticWeight / models.length) * (1 / (k + rank + 1));
+      const rrfScore = (normalizedSemanticWeight / models.length) * (1 / (k + rank + 1));
       
       if (documentScores.has(hit._id)) {
         const existing = documentScores.get(hit._id)!;
@@ -293,8 +317,18 @@ async function performMultipleEmbeddingHybridSearchWithEmbeddings(
     esQuery: {
       note: 'Multi-model hybrid search with pre-computed embeddings',
       balance,
-      keywordWeight,
-      semanticWeight,
+      k,
+      weights: {
+        keyword: {
+          raw: keywordWeight,
+          normalized: normalizedKeywordWeight
+        },
+        semantic: {
+          raw: semanticWeight,
+          normalized: normalizedSemanticWeight,
+          perModel: normalizedSemanticWeight / models.length
+        }
+      },
       models: models,
       keywordQuery: (keywordResults as any).esQuery,
       semanticQueries: semanticResults.map((r, i) => ({
@@ -310,7 +344,7 @@ export async function performHybridSearchWithEmbeddings(
   query: string,
   embeddings: { siglip2?: number[]; jina_v3?: number[] },
   models: ModelKey | ModelKey[],
-  size: number = 10,
+  size: number = 20,
   includeDescriptions: boolean = false,
   balance: number = 0.5
 ): Promise<SearchResponse & { esQuery?: any }> {
@@ -360,7 +394,7 @@ export async function performHybridSearchWithEmbeddings(
 export async function findSimilarArtworks(
   artworkId: string,
   model: ModelKey,
-  size: number = 10
+  size: number = 20
 ): Promise<SearchResponse> {
   try {
     const client = getElasticsearchClient();

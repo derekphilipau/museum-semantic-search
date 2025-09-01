@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Info } from 'lucide-react';
+import { Search, Info, Image as ImageIcon } from 'lucide-react';
 import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import ImageSearchUpload from './ImageSearchUpload';
+import SearchResultsWrapper from './SearchResultsWrapper';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { generateImageEmbedding, extractImageSigLIP2Embedding } from '@/lib/embeddings/image';
 
 export type HybridMode = 'text' | 'image' | 'both';
 
@@ -63,7 +67,7 @@ function buildSearchParams(
   
   // Always include models parameter
   const enabledModels = Object.entries(options.models)
-    .filter(([_, enabled]) => enabled)
+    .filter(([, enabled]) => enabled)
     .map(([key]) => key);
   
   // Always set models param, even if all are selected
@@ -72,21 +76,79 @@ function buildSearchParams(
   return params.toString();
 }
 
+interface ImageSearchState {
+  isSearching: boolean;
+  results: any | null;
+  error: string | null;
+}
+
 export default function SearchForm({ initialQuery, initialOptions }: SearchFormProps) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
+  const [searchMode, setSearchMode] = useState<'text' | 'image'>('text');
+  const [selectedImage, setSelectedImage] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null });
+  const [imageSearchState, setImageSearchState] = useState<ImageSearchState>({
+    isSearching: false,
+    results: null,
+    error: null
+  });
   const [searchOptions, setSearchOptions] = useState({
     ...initialOptions,
     hybridMode: initialOptions.hybridMode || 'image',
     hybridBalance: initialOptions.hybridBalance ?? 0.5
   });
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim()) return;
-
-    const params = buildSearchParams(query, searchOptions);
-    router.push(`/?${params}`);
+    
+    if (searchMode === 'text') {
+      if (!query.trim()) return;
+      const params = buildSearchParams(query, searchOptions);
+      router.push(`/?${params}`);
+    } else {
+      // Image search
+      if (!selectedImage.preview) {
+        setImageSearchState({ ...imageSearchState, error: 'Please select an image to search' });
+        return;
+      }
+      
+      setImageSearchState({ isSearching: true, results: null, error: null });
+      
+      try {
+        // Call the image search API endpoint
+        const response = await fetch('/api/image-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: selectedImage.preview })
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Image search failed');
+        }
+        
+        const results = await response.json();
+        setImageSearchState({ isSearching: false, results, error: null });
+        
+        // Scroll to results if they exist
+        if (results.semantic?.siglip2?.hits?.length > 0) {
+          setTimeout(() => {
+            document.getElementById('search-results')?.scrollIntoView({ behavior: 'smooth' });
+          }, 100);
+        }
+      } catch (error) {
+        console.error('Image search error:', error);
+        setImageSearchState({ 
+          isSearching: false, 
+          results: null, 
+          error: error instanceof Error ? error.message : 'Failed to process image'
+        });
+      }
+    }
+  };
+  
+  const handleImageSelect = (file: File | null, preview: string | null) => {
+    setSelectedImage({ file, preview });
   };
 
   const handleOptionsChange = (updates: Partial<typeof searchOptions>) => {
@@ -101,26 +163,59 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
   };
 
   return (
+    <>
     <form onSubmit={handleSearch} className="space-y-4">
-      <div className="flex gap-3">
-        <Input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search artworks (try 'abstract', 'picasso', 'print', 'collage')"
-          className="flex-1"
-        />
-        <Button 
-          type="submit" 
-          disabled={!query.trim()}
-          size="default"
-        >
-          <Search className="w-4 h-4 mr-2" />
-          Search
-        </Button>
-      </div>
+      <Tabs value={searchMode} onValueChange={(value) => setSearchMode(value as 'text' | 'image')}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="text">Text Search</TabsTrigger>
+          <TabsTrigger value="image">Image Search</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="text" className="space-y-3">
+          <div className="flex gap-3">
+            <Input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search artworks (try 'abstract', 'picasso', 'print', 'collage')"
+              className="flex-1"
+            />
+            <Button 
+              type="submit" 
+              disabled={!query.trim()}
+              size="default"
+            >
+              <Search className="w-4 h-4 mr-2" />
+              Search
+            </Button>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="image" className="space-y-3">
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <ImageSearchUpload onImageSelect={handleImageSelect} />
+            </div>
+            <Button 
+              type="submit" 
+              disabled={!selectedImage.file || imageSearchState.isSearching}
+              size="default"
+            >
+              <ImageIcon className="w-4 h-4 mr-2" />
+              {imageSearchState.isSearching ? 'Processing...' : 'Search'}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Upload an image to find visually similar artworks using AI
+          </p>
+          {imageSearchState.error && (
+            <p className="text-xs text-red-500 mt-2">{imageSearchState.error}</p>
+          )}
+        </TabsContent>
+      </Tabs>
       
-      {/* Search options */}
+      {/* Search options - only show for text search */}
+      {searchMode === 'text' && (
       <div className="space-y-4">
         {/* First row: All search type switches including hybrid */}
         <div className="flex flex-wrap items-center gap-4">
@@ -234,7 +329,7 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="max-w-xs text-sm">
-                        Choose which embeddings to combine with keyword search using Elasticsearch's RRF:
+                        Choose which embeddings to combine with keyword search using Elasticsearch&apos;s RRF:
                         <br />• Text: Keyword + Jina v3 text embeddings
                         <br />• Image: Keyword + SigLIP 2 cross-modal embeddings (default)
                         <br />• Both: Keyword + both Jina v3 and SigLIP 2
@@ -268,6 +363,18 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
           )}
         </div>
       </div>
+      )}
     </form>
+    
+    {/* Image search results display */}
+    {searchMode === 'image' && imageSearchState.results && (
+      <div id="search-results" className="mt-6">
+        <SearchResultsWrapper
+          query="Image Search"
+          results={imageSearchState.results}
+        />
+      </div>
+    )}
+    </>
   );
 }

@@ -54,7 +54,7 @@ function getCorsHeaders(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body: SearchRequest = await request.json();
-    const { query, options, size = 10 } = body;
+    const { query, options, size = 20 } = body;
     const hybridBalance = options.hybridBalance ?? 0.5;
 
     // Validate request

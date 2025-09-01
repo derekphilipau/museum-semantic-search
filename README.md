@@ -2,6 +2,12 @@
 
 A Next.js application for searching museum collections using state-of-the-art multimodal AI embeddings. Features true cross-modal search capabilities through SigLIP 2 and advanced text search via Jina v3, deployed on Modal for efficient GPU inference. Currently configured for the MoMA collection.
 
+## Related projects:
+
+- Musefully: [website](https://musefully.org/), [github](https://github.com/derekphilipau/musefully)
+- [“Accessible Art Tags” GPT](https://www.derekau.net/this-vessel-does-not-exist/2023/12/21/accessible-art-ai-gpt)
+- [OpenAI CLIP Embedding Similarity](https://www.derekau.net/this-vessel-does-not-exist/2023/8/11/openai-clip-embedding-similarity)
+
 ## Note
 
 This project is largely LLM vibe-coded for the purpose of quickly prototyping and experimenting with different semantic search techniques.  It should not be taken as a good example of Next.js or proper Elasticsearch indexing or querying.
