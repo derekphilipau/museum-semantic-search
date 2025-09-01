@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ModelKey, EMBEDDING_MODELS } from '@/lib/embeddings/types';
-
-const ES_URL = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
-const INDEX_NAME = 'met_artworks_v2';
+import { findSimilarArtworks } from '@/lib/elasticsearch/client';
 
 // Constants for validation
 const MIN_RESULTS = 1;
@@ -17,21 +15,15 @@ function isValidModel(model: any): model is ModelKey {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { objectId, model, size = DEFAULT_RESULTS } = body;
+    const { objectId, artworkId, model, size = DEFAULT_RESULTS } = body;
 
-    // Validate objectId
-    if (!objectId) {
+    // Support both objectId (legacy) and artworkId
+    const id = artworkId || objectId;
+    
+    // Validate ID
+    if (!id) {
       return NextResponse.json(
-        { error: 'objectId is required' },
-        { status: 400 }
-      );
-    }
-
-    // Validate objectId is a positive integer
-    const parsedObjectId = Number(objectId);
-    if (!Number.isInteger(parsedObjectId) || parsedObjectId <= 0) {
-      return NextResponse.json(
-        { error: 'objectId must be a positive integer' },
+        { error: 'artworkId is required' },
         { status: 400 }
       );
     }
@@ -53,74 +45,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // First, get the artwork's embedding
-    const getResponse = await fetch(`${ES_URL}/${INDEX_NAME}/_search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: {
-          term: {
-            'metadata.objectId': objectId
-          }
-        },
-        size: 1
-      })
-    });
+    // Use the utility function to find similar artworks
+    const searchResult = await findSimilarArtworks(id, model, validatedSize);
 
-    if (!getResponse.ok) {
-      throw new Error('Failed to fetch artwork');
-    }
-
-    const getResult = await getResponse.json();
-    if (!getResult.hits.hits.length) {
+    if (searchResult.total === 0) {
       return NextResponse.json(
-        { error: 'Artwork not found' },
+        { error: 'Artwork not found or no embedding available' },
         { status: 404 }
       );
     }
 
-    const artwork = getResult.hits.hits[0]._source;
-    const embedding = artwork.embeddings?.[model];
-
-    if (!embedding) {
-      return NextResponse.json(
-        { error: `No embedding found for model ${model}` },
-        { status: 404 }
-      );
-    }
-
-    // Search for similar artworks using the embedding
-    const searchResponse = await fetch(`${ES_URL}/${INDEX_NAME}/_search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        knn: {
-          field: `embeddings.${model}`,
-          query_vector: embedding,
-          k: validatedSize + 1, // +1 to exclude the source artwork
-          num_candidates: Math.min(50, validatedSize * 5) // Scale candidates with size
-        },
-        size: validatedSize + 1,
-        _source: ['id', 'metadata', 'image']
-      })
-    });
-
-    if (!searchResponse.ok) {
-      throw new Error('Search failed');
-    }
-
-    const searchResult = await searchResponse.json();
-    
-    // Filter out the source artwork from results
-    const filteredHits = searchResult.hits.hits.filter(
-      (hit: any) => hit._source.metadata.objectId !== objectId
-    );
-
-    return NextResponse.json({
-      took: searchResult.took,
-      total: filteredHits.length,
-      hits: filteredHits.slice(0, validatedSize)
-    });
+    return NextResponse.json(searchResult);
 
   } catch (error) {
     console.error('Similar search error:', error);

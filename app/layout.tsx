@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Met Museum Semantic Search",
-  description: "Explore the Met Museum collection using semantic search - find artworks by meaning, visual similarity, and multimodal AI embeddings",
+  title: "MoMA Semantic Search",
+  description: "Explore the MoMA collection using semantic search - find artworks by meaning, visual similarity, and multimodal AI embeddings",
 };
 
 export default function RootLayout({
@@ -24,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="scroll-smooth">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

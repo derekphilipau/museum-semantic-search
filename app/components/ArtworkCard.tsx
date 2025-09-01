@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -23,15 +25,12 @@ function ArtworkCard({
 }: ArtworkCardProps) {
   const { metadata, image } = artwork;
   // Handle both full image objects and simple string URLs
-  const imageUrlString = typeof image === 'string' ? image : image.url;
-  const imageUrl = imageUrlString.startsWith('/images/') 
-    ? imageUrlString 
-    : `/images/${imageUrlString}`;
+  const imageUrl = typeof image === 'string' ? image : image.url;
 
   // Compact version for multi-column layout
   if (compact) {
     return (
-      <Link href={`/artwork/${metadata.objectId}`} className="block h-full">
+      <Link href={`/artwork/${metadata.id}`} className="block h-full">
         <Card 
           className="overflow-hidden cursor-pointer hover:shadow-lg transition-all w-full h-full flex flex-col p-2"
         >
@@ -59,17 +58,27 @@ function ArtworkCard({
               {metadata.artist || 'Unknown artist'}
             </CardDescription>
             
-            {/* Department and Date - optional, takes available space */}
-            {(metadata.department || metadata.dateCreated) && (
-              <div className="text-xs text-muted-foreground space-y-0.5 flex-grow">
-                {metadata.department && (
-                  <div className="line-clamp-1">{metadata.department}</div>
-                )}
-                {metadata.dateCreated && (
-                  <div>{metadata.dateCreated}</div>
-                )}
-              </div>
-            )}
+            {/* Classification, Date, and Medium - optional, takes available space */}
+            <div className="text-xs text-muted-foreground space-y-0.5 flex-grow">
+              {metadata.classification && (
+                <div className="line-clamp-1 font-medium">{metadata.classification}</div>
+              )}
+              {metadata.date && (
+                <div>{metadata.date}</div>
+              )}
+              {metadata.medium && (
+                <div className="line-clamp-1">{metadata.medium}</div>
+              )}
+              {/* AI-generated alt text */}
+              {artwork.visual_alt_text && (
+                <div className="mt-1 pt-1 border-t">
+                  <span className="inline-flex items-center gap-1 text-xs">
+                    <span className="bg-muted px-1 py-0.5 rounded text-[10px] font-medium">AI</span>
+                    <span className="line-clamp-2 italic">{artwork.visual_alt_text}</span>
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
           
           {/* Score - always at bottom */}
@@ -121,14 +130,26 @@ function ArtworkCard({
           
           {/* Metadata - takes available space */}
           <div className="text-xs text-muted-foreground space-y-1 flex-grow">
-            {metadata.dateCreated && (
-              <div>{metadata.dateCreated}</div>
+            {metadata.date && (
+              <div>{metadata.date}</div>
+            )}
+            {metadata.classification && (
+              <div className="font-medium">{metadata.classification}</div>
             )}
             {metadata.department && (
               <div className="line-clamp-1">{metadata.department}</div>
             )}
             {metadata.medium && (
-              <div className="line-clamp-1">{metadata.medium}</div>
+              <div className="line-clamp-2 text-xs">{metadata.medium}</div>
+            )}
+            {/* AI-generated description */}
+            {artwork.visual_alt_text && (
+              <div className="mt-2 pt-2 border-t">
+                <div className="inline-flex items-start gap-1.5 text-xs">
+                  <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-medium mt-0.5">AI</span>
+                  <span className="line-clamp-3 italic text-muted-foreground">{artwork.visual_alt_text}</span>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -146,4 +167,4 @@ function ArtworkCard({
   );
 }
 
-export default React.memo(ArtworkCard);
+export default ArtworkCard;

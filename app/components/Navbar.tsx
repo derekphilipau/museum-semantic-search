@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Github } from 'lucide-react';
 
 // Configure GitHub repository URL - update this with your actual repository
-const GITHUB_REPO_URL = process.env.NEXT_PUBLIC_GITHUB_REPO_URL || 'https://github.com/yourusername/met-semantic-search-next';
+const GITHUB_REPO_URL = process.env.NEXT_PUBLIC_GITHUB_REPO_URL || 'https://github.com/yourusername/museum-semantic-search-next';
 
 export default function Navbar() {
   const handleGitHubClick = useCallback(() => {
@@ -20,7 +20,7 @@ export default function Navbar() {
           {/* Left side - Title and byline */}
           <Link href="/" className="flex items-center space-x-2">
             <div>
-              <h1 className="text-lg font-bold">Met Museum Semantic Search</h1>
+              <h1 className="text-lg font-bold">MoMA Semantic Search</h1>
               <p className="text-xs text-muted-foreground">
                 Explore art through AI-powered visual and textual similarity
               </p>

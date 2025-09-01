@@ -1,0 +1,273 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Search, Info } from 'lucide-react';
+import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Slider } from '@/components/ui/slider';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+
+export type HybridMode = 'text' | 'image' | 'both';
+
+interface SearchFormProps {
+  initialQuery: string;
+  initialOptions: {
+    keyword: boolean;
+    models: Record<string, boolean>;
+    hybrid: boolean;
+    hybridMode?: HybridMode;
+    hybridBalance?: number;
+    includeDescriptions?: boolean;
+  };
+}
+
+// Helper to build URL search params
+function buildSearchParams(
+  query: string,
+  options: { keyword: boolean; models: Record<string, boolean>; hybrid: boolean; hybridMode?: HybridMode; hybridBalance?: number; includeDescriptions?: boolean }
+): string {
+  const params = new URLSearchParams();
+  
+  if (query) {
+    params.set('q', query);
+  }
+  
+  params.set('keyword', options.keyword.toString());
+  params.set('hybrid', options.hybrid.toString());
+  
+  // Add hybrid mode if hybrid is enabled
+  if (options.hybrid && options.hybridMode) {
+    params.set('hybridMode', options.hybridMode);
+  }
+  
+  // Add hybrid balance if hybrid is enabled and balance is specified
+  if (options.hybrid && options.hybridBalance !== undefined) {
+    params.set('hybridBalance', options.hybridBalance.toString());
+  }
+  
+  // Add includeDescriptions parameter if true
+  if (options.includeDescriptions) {
+    params.set('includeDescriptions', 'true');
+  }
+  
+  // Always include models parameter
+  const enabledModels = Object.entries(options.models)
+    .filter(([_, enabled]) => enabled)
+    .map(([key]) => key);
+  
+  // Always set models param, even if all are selected
+  params.set('models', enabledModels.join(','));
+  
+  return params.toString();
+}
+
+export default function SearchForm({ initialQuery, initialOptions }: SearchFormProps) {
+  const router = useRouter();
+  const [query, setQuery] = useState(initialQuery);
+  const [searchOptions, setSearchOptions] = useState({
+    ...initialOptions,
+    hybridMode: initialOptions.hybridMode || 'image',
+    hybridBalance: initialOptions.hybridBalance ?? 0.5
+  });
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+
+    const params = buildSearchParams(query, searchOptions);
+    router.push(`/?${params}`);
+  };
+
+  const handleOptionsChange = (updates: Partial<typeof searchOptions>) => {
+    const newOptions = { ...searchOptions, ...updates };
+    
+    // If hybrid is enabled but no models are selected, disable hybrid
+    if (newOptions.hybrid && !Object.values(newOptions.models).some(v => v)) {
+      newOptions.hybrid = false;
+    }
+    
+    setSearchOptions(newOptions);
+  };
+
+  return (
+    <form onSubmit={handleSearch} className="space-y-4">
+      <div className="flex gap-3">
+        <Input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search artworks (try 'abstract', 'picasso', 'print', 'collage')"
+          className="flex-1"
+        />
+        <Button 
+          type="submit" 
+          disabled={!query.trim()}
+          size="default"
+        >
+          <Search className="w-4 h-4 mr-2" />
+          Search
+        </Button>
+      </div>
+      
+      {/* Search options */}
+      <div className="space-y-4">
+        {/* First row: All search type switches including hybrid */}
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="text-sm font-medium">Search types:</span>
+          
+          {/* Keyword search switch */}
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="keyword"
+              checked={searchOptions.keyword}
+              onCheckedChange={(checked) => 
+                handleOptionsChange({ keyword: checked })
+              }
+            />
+            <Label htmlFor="keyword" className="text-sm cursor-pointer">
+              Keyword
+            </Label>
+          </div>
+          
+          {/* Model switches */}
+          {Object.entries(EMBEDDING_MODELS).map(([key, model]) => (
+            <div key={key} className="flex items-center space-x-2">
+              <Switch
+                id={key}
+                checked={searchOptions.models[key]}
+                onCheckedChange={(checked) => 
+                  handleOptionsChange({
+                    models: { ...searchOptions.models, [key]: checked }
+                  })
+                }
+              />
+              <Label htmlFor={key} className="text-sm cursor-pointer">
+                {model.name}
+              </Label>
+            </div>
+          ))}
+          
+          {/* Hybrid search switch */}
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="hybrid"
+              checked={searchOptions.hybrid}
+              onCheckedChange={(checked) => 
+                handleOptionsChange({ hybrid: checked })
+              }
+              disabled={!Object.values(searchOptions.models).some(v => v)}
+            />
+            <Label 
+              htmlFor="hybrid" 
+              className={`text-sm cursor-pointer ${
+                !Object.values(searchOptions.models).some(v => v) ? 'text-muted-foreground' : ''
+              }`}
+            >
+              Hybrid Search
+            </Label>
+          </div>
+        </div>
+        
+        {/* Second row: Visual descriptions and hybrid mode options */}
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Include visual descriptions checkbox */}
+          <span className="text-sm font-medium">Keyword Search Options:</span>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="includeDescriptions"
+              checked={searchOptions.includeDescriptions || false}
+              onCheckedChange={(checked) => 
+                handleOptionsChange({ includeDescriptions: checked as boolean })
+              }
+            />
+            <Label htmlFor="includeDescriptions" className="text-sm cursor-pointer">
+              Include AI Visual Descriptions
+            </Label>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Hybrid mode selector - only show when hybrid is enabled */}
+          {searchOptions.hybrid && Object.values(searchOptions.models).some(v => v) && (
+            <>
+              <span className="text-sm font-medium">Hybrid Search Options:</span>
+              <TooltipProvider>
+                <div className="flex items-center gap-2">
+                  <RadioGroup 
+                    value={searchOptions.hybridMode || 'image'} 
+                    onValueChange={(value) => handleOptionsChange({ hybridMode: value as HybridMode })}
+                    className="flex gap-4"
+                  >
+                    <div className="flex items-center space-x-1">
+                      <RadioGroupItem value="text" id="hybrid-text" />
+                      <Label htmlFor="hybrid-text" className="text-sm cursor-pointer">
+                        Text Embeddings
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <RadioGroupItem value="image" id="hybrid-image" />
+                      <Label htmlFor="hybrid-image" className="text-sm cursor-pointer">
+                        Image Embeddings
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <RadioGroupItem value="both" id="hybrid-both" />
+                      <Label htmlFor="hybrid-both" className="text-sm cursor-pointer">
+                        Text & Image Embeddings
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-xs text-sm">
+                        Choose which embeddings to combine with keyword search using Elasticsearch's RRF:
+                        <br />• Text: Keyword + text embeddings
+                        <br />• Image: Keyword + image embeddings (default)
+                        <br />• Both: Run both text and image hybrid searches
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
+              
+              {/* Balance slider */}
+              <div className="flex items-center gap-2">
+                <Label className="text-xs whitespace-nowrap">
+                  Keyword
+                </Label>
+                <Slider
+                  value={[searchOptions.hybridBalance ?? 0.5]}
+                  onValueChange={([value]) => handleOptionsChange({ hybridBalance: value })}
+                  max={1}
+                  min={0}
+                  step={0.1}
+                  className="w-32"
+                />
+                <Label className="text-xs whitespace-nowrap">
+                  Semantic
+                </Label>
+                <span className="text-xs min-w-[3ch] text-right">
+                  {Math.round((searchOptions.hybridBalance ?? 0.5) * 100)}%
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </form>
+  );
+}

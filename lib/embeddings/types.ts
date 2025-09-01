@@ -20,21 +20,21 @@ export interface EmbeddingError {
 }
 
 export const EMBEDDING_MODELS: Record<string, EmbeddingModel> = {
-  jina_embeddings_v4: {
-    key: 'jina_embeddings_v4',
-    name: 'Jina Embeddings v4',
-    dimension: 2048,
-    year: '2025',
-    notes: '🚀 Multimodal with text+image fusion',
-    supportsImage: true,
-    supportsInterleaved: true,
+  google_gemini_text: {
+    key: 'google_gemini_text',
+    name: 'Text Embeddings',
+    dimension: 768,
+    year: '2024',
+    notes: 'text-embedding-005',
+    supportsImage: false,
+    supportsInterleaved: false,
   },
   google_vertex_multimodal: {
     key: 'google_vertex_multimodal',
-    name: 'Google Vertex Multimodal',
+    name: 'Image Embeddings',
     dimension: 1408,
     year: '2024',
-    notes: '🆓 Free tier 1500 RPM!',
+    notes: 'multimodalembedding@001',
     supportsImage: true,
     supportsInterleaved: false,
   },

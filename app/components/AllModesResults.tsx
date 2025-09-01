@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Search, Brain, Zap } from 'lucide-react';
+import { Search, Brain, Zap, FileText, Image, Layers } from 'lucide-react';
 import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
 import { Artwork, SearchResponse } from '@/app/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -21,14 +21,14 @@ interface AllModesResultsProps {
 
 // Model metadata with URLs and descriptions
 const MODEL_INFO = {
-  jina_embeddings_v4: {
-    url: 'https://jina.ai/embeddings/',
-    description: 'jina-embeddings-v4',
-    year: '2025'
+  google_gemini_text: {
+    url: 'https://cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings',
+    description: 'Text semantic search with metadata + AI visual descriptions',
+    year: '2024'
   },
   google_vertex_multimodal: {
     url: 'https://cloud.google.com/vertex-ai/docs/generative-ai/embeddings/get-multimodal-embeddings',
-    description: 'multimodalembedding@001',
+    description: 'Visual similarity search',
     year: '2024'
   }
 } as const;
@@ -90,69 +90,69 @@ export default function AllModesResults({
     );
   }
 
-  // Get ordered models
-  const orderedModels = Object.keys(EMBEDDING_MODELS).sort((a, b) => {
-    const yearA = parseInt(EMBEDDING_MODELS[a as keyof typeof EMBEDDING_MODELS].year);
-    const yearB = parseInt(EMBEDDING_MODELS[b as keyof typeof EMBEDDING_MODELS].year);
-    return yearB - yearA; // Most recent first
-  });
-
   return (
     <div className="space-y-8">
-      {/* Fixed 4-column grid layout */}
+      {/* Fixed 4-column grid layout: ES text, Google Gemini text, Google visual, Hybrid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Keyword Search - Single Column */}
-        {results.keyword !== null && (
-          <SearchResultColumn
-              title="Keyword"
-              description="Native Elasticsearch"
-              icon={Search}
-              hits={results.keyword.hits}
-              gradientFrom="from-blue-500"
-              gradientTo="to-blue-600"
-              badgeColor="secondary"
-              onSelectArtwork={onSelectArtwork}
-            />
-          )}
+        {/* 1. Keyword Search (ES text only) */}
+        <SearchResultColumn
+          title="Keyword"
+          description="Text matching"
+          icon={FileText}
+          hits={results.keyword?.hits || []}
+          gradientFrom="from-blue-500"
+          gradientTo="to-blue-600"
+          badgeColor="bg-blue-700"
+          onSelectArtwork={onSelectArtwork}
+          responseTime={results.keyword?.took}
+          totalResults={results.keyword?.total}
+        />
 
-          {/* Visual Similarity - One column per model */}
-          {orderedModels.map((modelKey) => {
-            const model = EMBEDDING_MODELS[modelKey as keyof typeof EMBEDDING_MODELS];
-            const semanticResults = results.semantic[modelKey];
-            
-            // Skip if no results for this model
-            if (!semanticResults) return null;
-            
-            return (
-              <SearchResultColumn
-                key={`semantic-${modelKey}`}
-                title={model.name}
-                description={MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.description || model.notes}
-                icon={Brain}
-                hits={semanticResults.hits}
-                gradientFrom="from-purple-500"
-                gradientTo="to-purple-600"
-                badgeColor="bg-purple-700"
-                onSelectArtwork={onSelectArtwork}
-                modelUrl={MODEL_INFO[modelKey as keyof typeof MODEL_INFO]?.url}
-                showExternalLink={true}
-            />
-          );
-        })}
+        {/* 2. Google Gemini (Text embeddings with descriptions) */}
+        <SearchResultColumn
+          title={EMBEDDING_MODELS.google_gemini_text?.name || 'Google Gemini'}
+          description={MODEL_INFO.google_gemini_text?.description || 'Text semantic search'}
+          icon={FileText}
+          hits={results.semantic.google_gemini_text?.hits || []}
+          gradientFrom="from-indigo-500"
+          gradientTo="to-indigo-600"
+          badgeColor="bg-indigo-700"
+          onSelectArtwork={onSelectArtwork}
+          modelUrl={MODEL_INFO.google_gemini_text?.url}
+          showExternalLink={true}
+          responseTime={results.semantic.google_gemini_text?.took}
+          totalResults={results.semantic.google_gemini_text?.total}
+        />
 
-        {/* Hybrid Search - Single Column */}
-        {results.hybrid !== null && (
-          <SearchResultColumn
-            title="Hybrid"
-            description={results.hybrid ? EMBEDDING_MODELS[results.hybrid.model as keyof typeof EMBEDDING_MODELS]?.name : 'Not selected'}
-            icon={Zap}
-            hits={results.hybrid?.results?.hits || []}
-            gradientFrom="from-green-500"
-            gradientTo="to-green-600"
-            badgeColor="bg-green-700"
-            onSelectArtwork={onSelectArtwork}
-          />
-        )}
+        {/* 3. Google Vertex (Visual) */}
+        <SearchResultColumn
+          title={EMBEDDING_MODELS.google_vertex_multimodal?.name || 'Google Vertex'}
+          description={MODEL_INFO.google_vertex_multimodal?.description || 'Visual embeddings'}
+          icon={Image}
+          hits={results.semantic.google_vertex_multimodal?.hits || []}
+          gradientFrom="from-emerald-500"
+          gradientTo="to-emerald-600"
+          badgeColor="bg-emerald-700"
+          onSelectArtwork={onSelectArtwork}
+          modelUrl={MODEL_INFO.google_vertex_multimodal?.url}
+          showExternalLink={true}
+          responseTime={results.semantic.google_vertex_multimodal?.took}
+          totalResults={results.semantic.google_vertex_multimodal?.total}
+        />
+
+        {/* 4. Hybrid Search (combines keyword + semantic) */}
+        <SearchResultColumn
+          title="Hybrid"
+          description="Keyword + Semantic"
+          icon={Zap}
+          hits={results.hybrid?.results?.hits || []}
+          gradientFrom="from-amber-500"
+          gradientTo="to-amber-600"
+          badgeColor="bg-amber-700"
+          onSelectArtwork={onSelectArtwork}
+          responseTime={results.hybrid?.results?.took}
+          totalResults={results.hybrid?.results?.total}
+        />
       </div>
 
     </div>
