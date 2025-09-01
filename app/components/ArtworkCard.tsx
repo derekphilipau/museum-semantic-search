@@ -26,6 +26,9 @@ function ArtworkCard({
   const { metadata, image } = artwork;
   // Handle both full image objects and simple string URLs
   const imageUrl = typeof image === 'string' ? image : image.url;
+  
+  // Get institution name
+  const institutionName = metadata.collection === 'moma' ? 'MoMA' : '';
 
   // Compact version for multi-column layout
   if (compact) {
@@ -48,6 +51,12 @@ function ArtworkCard({
           
           {/* Content section - flex-grow to push score to bottom */}
           <div className="flex-grow flex flex-col">
+            {/* Institution */}
+            {institutionName && (
+              <div className="text-xs font-semibold text-muted-foreground mb-1">
+                {institutionName}
+              </div>
+            )}
             {/* Title */}
             <CardTitle className="text-sm mb-1 line-clamp-2 break-words">
               {metadata.title}
@@ -118,6 +127,12 @@ function ArtworkCard({
         
         {/* Content section - flex-grow to fill available space */}
         <div className="flex-grow flex flex-col">
+          {/* Institution */}
+          {institutionName && (
+            <div className="text-sm font-semibold text-muted-foreground mb-1">
+              {institutionName}
+            </div>
+          )}
           {/* Title */}
           <CardTitle className="text-base mb-1 line-clamp-2 break-words">
             {metadata.title}

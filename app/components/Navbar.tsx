@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Github } from 'lucide-react';
 
@@ -9,9 +8,9 @@ import { Github } from 'lucide-react';
 const GITHUB_REPO_URL = process.env.NEXT_PUBLIC_GITHUB_REPO_URL || 'https://github.com/yourusername/museum-semantic-search-next';
 
 export default function Navbar() {
-  const handleGitHubClick = useCallback(() => {
+  const handleGitHubClick = () => {
     window.open(GITHUB_REPO_URL, '_blank');
-  }, []);
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -20,7 +19,7 @@ export default function Navbar() {
           {/* Left side - Title and byline */}
           <Link href="/" className="flex items-center space-x-2">
             <div>
-              <h1 className="text-lg font-bold">MoMA Semantic Search</h1>
+              <h1 className="text-lg font-bold">Museum Semantic Search</h1>
               <p className="text-xs text-muted-foreground">
                 Explore art through AI-powered visual and textual similarity
               </p>

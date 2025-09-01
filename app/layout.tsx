@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MoMA Semantic Search",
-  description: "Explore the MoMA collection using semantic search - find artworks by meaning, visual similarity, and multimodal AI embeddings",
+  title: "Museum Semantic Search",
+  description: "Explore the artwork collections using semantic search - find artworks by meaning, visual similarity, and multimodal AI embeddings",
 };
 
 export default function RootLayout({

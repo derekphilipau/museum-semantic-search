@@ -24,7 +24,7 @@ async function parseSearchParams(searchParams: PageProps['searchParams']) {
   const hybrid = params.hybrid !== 'false';
   const hybridMode = (params.hybridMode as HybridMode) || 'image';
   const hybridBalance = params.hybridBalance ? parseFloat(params.hybridBalance as string) : 0.5;
-  const includeDescriptions = params.includeDescriptions === 'true';
+  const includeDescriptions = params.includeDescriptions !== 'false';
   
   // Parse models - if not specified, all models are enabled
   const modelsParam = params.models as string;
@@ -209,6 +209,7 @@ export default async function Home({ searchParams }: PageProps) {
     <div className="container mx-auto px-4 py-6">
       <div className="space-y-6">
         <SearchForm 
+          key={JSON.stringify({ query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions })} // Reset form when any URL param changes
           initialQuery={query}
           initialOptions={{ keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions }}
         />

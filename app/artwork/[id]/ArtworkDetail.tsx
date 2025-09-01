@@ -13,6 +13,9 @@ interface ArtworkDetailProps {
 export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
   const { metadata, image } = artwork;
   const imageUrl = typeof image === 'string' ? image : image.url;
+  
+  // Get institution name
+  const institutionName = metadata.collection === 'moma' ? 'MoMA' : '';
 
   return (
     <>
@@ -37,11 +40,21 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
             {/* Metadata on right */}
             <div className="md:col-span-2 space-y-3">
               <h1 className="text-2xl font-bold">{metadata.title}</h1>
+              {institutionName && (
+                <div className="text-lg font-medium text-muted-foreground">
+                  {institutionName}
+                </div>
+              )}
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                <div>
+                <div className="sm:col-span-2">
                   <span className="font-semibold">Artist:</span>{' '}
                   {metadata.artist || 'Unknown'}
+                  {metadata.artistBio && (
+                    <div className="text-sm text-muted-foreground mt-1">
+                      {metadata.artistBio}
+                    </div>
+                  )}
                 </div>
                 {metadata.date && (
                   <div>
@@ -59,12 +72,6 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
                   <div>
                     <span className="font-semibold">Classification:</span>{' '}
                     {metadata.classification}
-                  </div>
-                )}
-                {metadata.artistNationality && (
-                  <div>
-                    <span className="font-semibold">Nationality:</span>{' '}
-                    {metadata.artistNationality}
                   </div>
                 )}
                 {metadata.medium && (
@@ -86,13 +93,6 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
                   </div>
                 )}
               </div>
-              
-              {/* Artist bio if available */}
-              {metadata.artistBio && (
-                <div className="text-sm text-muted-foreground">
-                  {metadata.artistBio}
-                </div>
-              )}
 
               {/* Museum link */}
               {metadata.sourceUrl && (

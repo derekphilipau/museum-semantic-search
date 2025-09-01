@@ -56,9 +56,9 @@ function buildSearchParams(
     params.set('hybridBalance', options.hybridBalance.toString());
   }
   
-  // Add includeDescriptions parameter if true
-  if (options.includeDescriptions) {
-    params.set('includeDescriptions', 'true');
+  // Add includeDescriptions parameter - only set to false if explicitly disabled
+  if (options.includeDescriptions === false) {
+    params.set('includeDescriptions', 'false');
   }
   
   // Always include models parameter
@@ -186,7 +186,7 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
           <div className="flex items-center space-x-2">
             <Checkbox
               id="includeDescriptions"
-              checked={searchOptions.includeDescriptions || false}
+              checked={searchOptions.includeDescriptions !== false}
               onCheckedChange={(checked) => 
                 handleOptionsChange({ includeDescriptions: checked as boolean })
               }
