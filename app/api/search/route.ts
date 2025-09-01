@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ModelKey, EMBEDDING_MODELS } from '@/lib/embeddings';
+import { ModelKey, EMBEDDING_MODELS, generateUnifiedEmbeddings } from '@/lib/embeddings';
+import { extractSigLIP2Embedding, extractJinaV3Embedding } from '@/lib/embeddings/unified';
 import { 
   performKeywordSearch, 
-  performSemanticSearch, 
-  performHybridSearch,
-  getIndexStats,
-  INDEX_NAME 
+  performSemanticSearchWithEmbedding,
+  performHybridSearchWithEmbeddings,
+  getIndexStats
 } from '@/lib/elasticsearch/client';
-import { SearchResponse, SearchMode } from '@/app/types';
+import { SearchResponse } from '@/app/types';
 import { HybridMode } from '@/app/components/SearchForm';
 
 // Type definitions
@@ -72,6 +72,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get selected models
+    const selectedModels = Object.keys(EMBEDDING_MODELS).filter(
+      modelKey => options.models[modelKey]
+    ) as ModelKey[];
+
+    // Pre-fetch embeddings if ANY semantic search is needed
+    let embeddings: { siglip2?: number[]; jina_v3?: number[] } = {};
+    
+    if (selectedModels.length > 0 || options.hybrid) {
+      // Always fetch both embeddings in one call if we need any embeddings
+      try {
+        const unified = await generateUnifiedEmbeddings(query);
+        embeddings = {
+          siglip2: extractSigLIP2Embedding(unified).embedding,
+          jina_v3: extractJinaV3Embedding(unified).embedding
+        };
+      } catch (error) {
+        console.error('Failed to generate embeddings:', error);
+        // Continue with empty embeddings - searches will fail gracefully
+      }
+    }
+
     // Build search promises based on selected options
     const searchPromises: Promise<{ type: string; model?: string; results: SearchResponse }>[] = [];
 
@@ -87,20 +109,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Semantic searches for selected models
-    const selectedModels = Object.keys(EMBEDDING_MODELS).filter(
-      modelKey => options.models[modelKey]
-    ) as ModelKey[];
-
+    // Semantic searches using pre-computed embeddings
     for (const model of selectedModels) {
-      searchPromises.push(
-        performSemanticSearch(query, model, size)
-          .then(results => ({ type: 'semantic', model, results }))
-          .catch(error => {
-            console.error(`Semantic search failed for ${model}:`, error);
-            return { type: 'semantic', model, results: { took: 0, total: 0, hits: [] } };
-          })
-      );
+      const embedding = embeddings[model];
+      if (embedding) {
+        searchPromises.push(
+          performSemanticSearchWithEmbedding(embedding, model, size)
+            .then(results => ({ type: 'semantic', model, results }))
+            .catch(error => {
+              console.error(`Semantic search failed for ${model}:`, error);
+              return { type: 'semantic', model, results: { took: 0, total: 0, hits: [] } };
+            })
+        );
+      } else {
+        // No embedding available for this model
+        searchPromises.push(
+          Promise.resolve({ type: 'semantic', model, results: { took: 0, total: 0, hits: [] } })
+        );
+      }
     }
 
     // For hybrid search, we'll run separate searches and combine with normalization
@@ -166,11 +192,12 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      // Run hybrid search with native ES retrievers
+      // Run hybrid search with pre-computed embeddings
       if (modelsToUse) {
         try {
-          const hybridResults = await performHybridSearch(
-            query, 
+          const hybridResults = await performHybridSearchWithEmbeddings(
+            query,
+            embeddings,
             modelsToUse, 
             size, 
             options.includeDescriptions,

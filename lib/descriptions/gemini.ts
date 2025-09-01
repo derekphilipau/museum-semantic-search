@@ -17,9 +17,9 @@ let genAI: GoogleGenerativeAI | null = null;
 
 function getGeminiClient(): GoogleGenerativeAI {
   if (!genAI) {
-    const apiKey = process.env.GOOGLE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error('GOOGLE_GEMINI_API_KEY or GOOGLE_API_KEY not configured');
+      throw new Error('GOOGLE_GEMINI_API_KEY not configured');
     }
     genAI = new GoogleGenerativeAI(apiKey);
   }

@@ -42,3 +42,4 @@ next-env.d.ts
 
 data/
 public/images
+modal/__pycache__/

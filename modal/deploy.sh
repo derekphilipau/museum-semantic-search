@@ -1,34 +1,25 @@
 #!/bin/bash
-# Deploy script for Modal embedding service
 
-echo "Deploying Modal embedding service..."
-echo "=================================="
+echo "Deploying Museum Embeddings API to Modal..."
+echo "=========================================="
 
 # Check if modal is installed
 if ! command -v modal &> /dev/null; then
-    echo "Error: Modal CLI not found. Please install with: pip install modal"
+    echo "Error: Modal CLI not found. Install it with: pip install modal"
     exit 1
 fi
 
-# Check if authenticated
-if ! modal config show &> /dev/null; then
-    echo "Error: Not authenticated with Modal. Please run: modal setup"
-    exit 1
-fi
-
-# Deploy the service
-echo "Deploying embedding_api.py..."
+# Deploy the app
 modal deploy embedding_api.py
 
-# Show the deployment URL
 echo ""
-echo "Deployment complete! Your endpoints are:"
+echo "Deployment complete!"
 echo ""
-modal app list | grep museum-embeddings
-
+echo "To get your endpoint URL, run:"
+echo "  modal app list"
 echo ""
-echo "To add the URL to your .env.local file:"
-echo "MODAL_EMBEDDING_URL=https://[your-username]--museum-embeddings-embed-text.modal.run"
+echo "Then update your .env.local with:"
+echo "  MODAL_EMBEDDING_API_URL=https://your-username--museum-embeddings-embed-text.modal.run"
 echo ""
-echo "To test the deployment:"
-echo "python test_deployment.py https://[your-username]--museum-embeddings-embed-text.modal.run"
+echo "Test the health endpoint:"
+echo "  curl https://your-username--museum-embeddings-health.modal.run"

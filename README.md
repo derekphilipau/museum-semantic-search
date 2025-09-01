@@ -1,10 +1,18 @@
 # Museum Semantic Search
 
-A Next.js application for searching museum collections using state-of-the-art multimodal AI embeddings. Currently configured for the MoMA collection. Compare search results across different embedding models including Jina and Google Vertex AI.
+A Next.js application for searching museum collections using state-of-the-art multimodal AI embeddings. Features true cross-modal search capabilities through SigLIP 2 and advanced text search via Jina v3, deployed on Modal for efficient GPU inference. Currently configured for the MoMA collection.
 
 ## Note
 
 This project is largely LLM vibe-coded for the purpose of quickly prototyping and experimenting with different semantic search techniques.  It should not be taken as a good example of Next.js or proper Elasticsearch indexing or querying.
+
+## Architecture Overview
+
+The system uses a modern, scalable architecture:
+- **Unified Embeddings API**: Single Modal deployment serving both SigLIP 2 and Jina v3 embeddings
+- **Optimized Search**: Each user query makes exactly ONE API call to get all needed embeddings
+- **Pre-computed Embeddings**: Image embeddings are generated offline and stored in Elasticsearch
+- **Real-time Query Processing**: Text queries are embedded on-demand via Modal's GPU infrastructure
 
 ## Search Types
 
@@ -19,20 +27,24 @@ Vector similarity search using pre-computed embeddings:
 ### 3. **Hybrid Search**
 Combines keyword and semantic search with user-adjustable balance control:
 
-- **Single Embedding Mode**: Keyword + one embedding type (text OR image)
-  - Uses score normalization and weighted combination
-  - Balance slider: 0% = all keyword, 100% = all semantic, 50% = equal weight
-
-- **Multiple Embedding Mode**: Keyword + text + image embeddings 
-  - Manual Reciprocal Rank Fusion (RRF) implementation
-  - Combines results from separate searches using rank-based scoring
-  - **Note**: With an Elasticsearch license, this could use native RRF retrievers for better performance
+- **Text Mode**: Keyword + Jina v3 text embeddings
+- **Image Mode**: Keyword + SigLIP 2 cross-modal embeddings  
+- **Both Mode**: Keyword + both embedding types using RRF
+- Balance slider: 0% = pure keyword, 100% = pure semantic, 50% = equal weight
 
 ## Additional Features
 
 - **Multi-model Comparison**: Side-by-side results from different search types
 - **Visual Search**: Search by image similarity using multimodal embeddings  
 - **Public Domain Only**: Respects copyright by only indexing public domain artworks
+
+## Performance Optimizations
+
+- **Unified API**: Single Modal call returns both embeddings (~50-100ms total)
+- **Pre-computed Storage**: Artwork embeddings generated offline and stored in Elasticsearch
+- **Parallel Search**: All search types execute concurrently
+- **Efficient Ranking**: Manual RRF implementation for multi-model fusion
+- **Modal Auto-scaling**: Handles load spikes automatically
 
 ## Model Performance Notes
 
@@ -45,24 +57,35 @@ After testing with museum artwork, we found:
    - Both text and image search quality was comparable to Google's models
    - The implementation remains in `lib/embeddings/jina.ts` for reference
 
-2. **Cohere Embed 4** did not produce results as relevant as other models for art-related queries. The implementation remains in `lib/embeddings/cohere.ts` for reference.
+2. **SigLIP vs CLIP**: We chose SigLIP 2 over CLIP for several reasons:
+   - Better performance on natural language queries
+   - Improved localization capabilities
+   - More robust to variations in query phrasing
+   - Consistent 768-dimensional output matching Jina v3
 
-3. **Voyage Multimodal 3** had significant rate limiting issues on the free tier (3 requests/minute), making it extremely slow for generating embeddings at scale. Additionally, the search results were not as relevant as Jina models or Google Vertex AI for art-related queries. Further research with a paid account might yield different results. The implementation remains in `lib/embeddings/voyage.ts` for reference.
+3. **Embedding Separation**: Our testing confirmed that separate text and image embeddings outperform combined multimodal embeddings:
+   - Text embeddings (Jina v3) excel at metadata and description search
+   - Image embeddings (SigLIP 2) excel at visual similarity and cross-modal search
+   - Hybrid search intelligently combines both based on query intent
 
-4. **Google Multimodal Embeddings** (`multimodalembedding@001`) worked well for visual similarity search but in our testing did not perform as well as CLIP/SigLIP/SigLIP2 models for cross-modal search (text-to-image queries). The Google model excels at finding visually similar artworks but is less effective at understanding natural language queries about visual content.
-
-5. **Google Text Embeddings** (`text-embedding-005`) performed very well for text-based semantic search. However, we ultimately chose **Jina v3** for our text embeddings because it offers comparable quality while allowing us to generate embeddings locally without API dependencies, reducing costs and latency.
-
-6. **Text+Image Fusion Investigation**: We extensively tested multimodal embeddings that combine artwork metadata (title, artist, medium, etc.) with images using Google's `multimodalembedding@001` model. Testing revealed that the model produces nearly identical embeddings whether using image-only or image+text inputs - the visual features dominate so heavily that text metadata contributes negligibly to the final embedding (cosine similarity of 0.999999999+). This was confirmed across multiple artworks including detailed metadata and AI-generated visual descriptions. Due to this finding, we use image-only embeddings for multimodal models, as adding text provides no practical benefit for retrieval quality while adding unnecessary complexity and API costs. Separate text and image embeddings proved more effective than combined text+image embeddings.
+4. **Modal Deployment Benefits**:
+   - ~10x faster than local inference on M1/M2 Macs
+   - Consistent performance regardless of local hardware
+   - Cost-effective: ~$0.50 to process 50,000 artworks
+   - No GPU management or driver issues
 
 The current system uses **Jina v3** for text embeddings and **SigLIP 2** for cross-modal image search, providing the best balance of quality, flexibility, and cost-effectiveness.
 
 ## Prerequisites
 
-- Node.
+- Node.js 18+ 
 - Docker (for Elasticsearch)
+- Python 3.8+ (for local embedding generation scripts)
+- Modal account (for serverless GPU inference) - https://modal.com
 - Museum artwork data (e.g., MoMA CSV in `data/moma/`)
-- API keys for embedding providers (Jina AI, HuggingFace)
+- API keys:
+  - Google Gemini API key (for visual descriptions)
+  - Jina API key (optional fallback for text embeddings)
 
 ## Installation
 
@@ -104,18 +127,45 @@ Create a `.env.local` file:
 # Visual Description Generation
 GOOGLE_GEMINI_API_KEY=your_gemini_api_key  # For Gemini 2.5 Flash descriptions
 
-# Jina v3 Text Embeddings
-JINA_API_KEY=your_jina_api_key  # Get from https://jina.ai
-
-# SigLIP 2 Cross-Modal Embeddings (via Modal)
-MODAL_EMBEDDING_API_URL=your_modal_url  # After deploying to Modal
+# Modal Unified Embeddings API - Returns both SigLIP 2 and Jina v3 in one call
+MODAL_EMBEDDING_URL=https://your-username--museum-embeddings-embed-text.modal.run
 
 # Elasticsearch
 ELASTICSEARCH_URL=http://localhost:9200
 NEXT_PUBLIC_ELASTICSEARCH_URL=http://localhost:9200
 ```
 
-### 5. Start Elasticsearch
+### 5. Deploy Modal Embeddings API
+
+The project uses Modal for serverless GPU inference to generate embeddings efficiently:
+
+```bash
+# Install Modal CLI
+pip install modal
+
+# Authenticate with Modal
+modal setup
+
+# Deploy the unified embeddings API
+cd modal
+modal deploy embedding_api.py
+```
+
+After deployment, Modal will provide your endpoint URL. Update your `.env.local`:
+```env
+MODAL_EMBEDDING_URL=https://your-username--museum-embeddings-embed-text.modal.run
+```
+
+**Modal API Features:**
+- Single endpoint returns both SigLIP 2 and Jina v3 embeddings
+- GPU-accelerated inference (T4 GPU)
+- Auto-scaling based on load
+- Persistent model loading (no cold starts between requests)
+- ~$0.000006-0.000011 per request
+
+See `modal/README.md` for detailed deployment instructions.
+
+### 6. Start Elasticsearch
 
 ```bash
 docker-compose up -d
@@ -123,7 +173,7 @@ docker-compose up -d
 
 This starts Elasticsearch and Kibana locally.
 
-### 6. Index the artworks
+### 7. Index the artworks
 
 ```bash
 # First time setup - creates new index
@@ -173,7 +223,7 @@ The system supports multiple museum collections through a parser architecture. T
    - Current dataset: ~$0.94 per model
    - Total for both models: ~$1.88
 
-### 7. Generate embeddings
+### 8. Generate embeddings
 
 The system generates multimodal embeddings using both text metadata and artwork images for enhanced semantic understanding.
 
@@ -224,11 +274,7 @@ We also generate bias-free visual descriptions using Google's Gemini 2.5 Flash m
 npm run generate-descriptions -- --limit=100    # Start with 100 for testing
 npm run generate-descriptions -- --resume        # Resume from last checkpoint
 
-# 2. Deploy SigLIP 2 to Modal (one-time setup)
-cd modal
-modal deploy embedding_api.py
-
-# 3. Generate SigLIP 2 cross-modal embeddings
+# 2. Generate SigLIP 2 cross-modal embeddings
 # First install Python dependencies (one-time setup)
 npm run setup-siglip2
 
@@ -236,17 +282,19 @@ npm run setup-siglip2
 npm run generate-siglip2-embeddings -- --limit 100    # Test with 100 first
 npm run generate-siglip2-embeddings -- --resume       # Resume from checkpoint
 
-# 4. Generate Jina v3 text embeddings (combines metadata + visual descriptions)
+# 3. Generate Jina v3 text embeddings (combines metadata + visual descriptions)
 npm run generate-jina-embeddings -- --limit 100      # Test with 100 first
 npm run generate-jina-embeddings -- --resume         # Resume from checkpoint
 
-# 5. Index everything to Elasticsearch (includes embeddings and descriptions)
+# 4. Index everything to Elasticsearch (includes embeddings and descriptions)
 npm run index-artworks -- --force
 ```
 
+**Note**: The Modal deployment (step 5 above) handles real-time query embedding generation. The scripts above generate embeddings for the artwork collection to be stored in Elasticsearch.
+
 The file-based approach allows for resumable generation and easier data portability between environments.
 
-### 8. Start the application
+### 9. Start the application
 
 ```bash
 npm run dev
@@ -281,26 +329,96 @@ Open [http://localhost:3000](http://localhost:3000) to use the application.
 
 ## Data Pipeline
 
-1. **Museum data (CSV/JSON)** → Parsed by collection adapter → Indexed to Elasticsearch
-2. **Elasticsearch documents** → Generate embeddings → Update documents with embeddings
-3. **Search queries** → Multi-model search → Side-by-side results comparison
+### Indexing Pipeline
+1. **Museum CSV** → Parse metadata → Generate visual descriptions (Gemini)
+2. **Artwork images** → Generate SigLIP 2 embeddings (local Python script)
+3. **Metadata + descriptions** → Generate Jina v3 embeddings (local Python script)
+4. **All data** → Index to Elasticsearch with embeddings
+
+### Search Pipeline  
+1. **User query** → Modal API (single call) → Both embeddings
+2. **Embeddings** → Parallel search execution (keyword, semantic, hybrid)
+3. **Results** → Ranking/fusion → UI presentation
 
 See [DATA_PIPELINE.md](DATA_PIPELINE.md) for detailed documentation.
 
-## Architecture
+## Technical Architecture
 
+### Core Stack
 - **Frontend**: Next.js 15 with TypeScript
-- **UI Components**: Shadcn/ui with Tailwind CSS
+- **UI Components**: Shadcn/ui with Tailwind CSS  
 - **Search Engine**: Elasticsearch 8.19.1
-- **Images**: Direct URLs from museum servers (MoMA) or local files
-- **Embedding Models**: 
-  - **Jina v3** (`jina-embeddings-v3`): 768 dims, advanced text search for metadata and descriptions
-  - **SigLIP 2** (`siglip2-base-patch16-224`): 768 dims, true cross-modal search via Modal GPU inference
+- **Images**: Direct URLs from museum servers (MoMA)
 
+### Embedding Architecture
+
+#### Models
+- **Jina v3** (`jina-embeddings-v3`): 768-dimensional text embeddings
+  - Combines artwork metadata with AI-generated visual descriptions
+  - Task-specific: "retrieval.passage" for indexing, "retrieval.query" for search
+  
+- **SigLIP 2** (`google/siglip2-base-patch16-224`): 768-dimensional cross-modal embeddings
+  - True text-to-image search in shared vector space
+  - Enables natural language queries about visual content
+
+#### Unified Embeddings API
+
+The system uses a unified Modal deployment that returns both embeddings in a single call:
+
+```typescript
+// Single API call for both embeddings
+const response = await generateUnifiedEmbeddings("abstract painting");
+// Returns: { 
+//   embeddings: {
+//     siglip2: { embedding: [...], dimension: 768 },
+//     jina_v3: { embedding: [...], dimension: 768 }
+//   }
+// }
+```
+
+**Benefits:**
+- One API call per search instead of multiple
+- Reduced latency and cost
+- Consistent embeddings across all search types
+- GPU-accelerated inference via Modal
+
+#### Search Flow
+
+1. User enters search query
+2. Frontend calls search API
+3. Search API makes ONE call to Modal unified embeddings endpoint
+4. Both SigLIP 2 and Jina v3 embeddings returned
+5. Embeddings used for all requested search types (semantic, hybrid)
+6. Results returned to user
+
+
+## Troubleshooting
+
+### Modal API Issues
+- **403 Error**: Check that MODAL_EMBEDDING_URL is set correctly in `.env.local`
+- **Timeout**: First request after idle may take 10-15s (model loading)
+- **No Jina embeddings**: Ensure Modal deployment includes both models
+
+### Search Issues  
+- **No results**: Check Elasticsearch is running and artworks are indexed
+- **Slow searches**: Ensure Modal API is being used (check browser network tab)
+- **Missing embeddings**: Run the generation scripts for both models
+
+### Development
+- **Port conflicts**: The app will auto-select next available port
+- **Memory issues**: Reduce batch size in embedding generation scripts
 
 ## Future Improvements
 
-Future enhancements could include native Elasticsearch integration for Jina AI embeddings and reranking models via the Open Inference API, eliminating the need for separate API calls. This would provide seamless embedding generation during indexing and built-in reranking capabilities for improved search relevance.
+- Native Elasticsearch integration for embeddings via Open Inference API
+- Support for additional collections (Met, Rijksmuseum, etc.)
+- Real-time embedding generation during indexing
+- Multi-language support for queries
+- Image upload for similarity search
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 

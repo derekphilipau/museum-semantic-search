@@ -20,15 +20,6 @@ export interface EmbeddingError {
 }
 
 export const EMBEDDING_MODELS: Record<string, EmbeddingModel> = {
-  siglip2: {
-    key: 'siglip2',
-    name: 'SigLIP 2 Cross-Modal',
-    dimension: 768,
-    year: '2025',
-    notes: 'True text-to-image search v2',
-    supportsImage: true,
-    supportsInterleaved: false,
-  },
   jina_v3: {
     key: 'jina_v3',
     name: 'Jina v3 Text',
@@ -36,6 +27,15 @@ export const EMBEDDING_MODELS: Record<string, EmbeddingModel> = {
     year: '2024',
     notes: 'Advanced text embeddings with metadata + descriptions',
     supportsImage: false,
+    supportsInterleaved: false,
+  },
+  siglip2: {
+    key: 'siglip2',
+    name: 'SigLIP 2 Cross-Modal',
+    dimension: 768,
+    year: '2025',
+    notes: 'True text-to-image search v2',
+    supportsImage: true,
     supportsInterleaved: false,
   },
 };

@@ -1,10 +1,10 @@
 import { Suspense } from 'react';
 import { EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings/types';
-import { generateEmbedding } from '@/lib/embeddings';
+import { generateUnifiedEmbeddings, extractSigLIP2Embedding, extractJinaV3Embedding } from '@/lib/embeddings';
 import { 
   performKeywordSearch, 
-  performSemanticSearch, 
-  performHybridSearch,
+  performSemanticSearchWithEmbedding, 
+  performHybridSearchWithEmbeddings,
   getIndexStats 
 } from '@/lib/elasticsearch/client';
 import { SearchResponse } from '@/app/types';
@@ -47,15 +47,23 @@ async function SearchResults({ searchParams }: PageProps) {
     return null;
   }
 
-  // Pre-generate embeddings in parallel for all models
+  // Pre-fetch unified embeddings if any semantic search is needed
   const selectedModels = Object.entries(models)
     .filter(([_, enabled]) => enabled)
     .map(([key]) => key as ModelKey);
   
-  if (selectedModels.length > 0) {
-    await Promise.all(
-      selectedModels.map(model => generateEmbedding(query, model))
-    );
+  let embeddings: { siglip2?: number[]; jina_v3?: number[] } = {};
+  
+  if (selectedModels.length > 0 || hybrid) {
+    try {
+      const unified = await generateUnifiedEmbeddings(query);
+      embeddings = {
+        siglip2: extractSigLIP2Embedding(unified).embedding,
+        jina_v3: extractJinaV3Embedding(unified).embedding
+      };
+    } catch (error) {
+      console.error('Failed to generate embeddings:', error);
+    }
   }
 
   // Build search promises
@@ -69,12 +77,15 @@ async function SearchResults({ searchParams }: PageProps) {
     );
   }
 
-  // Semantic searches - always show individual semantic results
+  // Semantic searches using pre-computed embeddings
   for (const model of selectedModels) {
-    searchPromises.push(
-      performSemanticSearch(query, model)
-        .then(results => ({ type: 'semantic', model, results }))
-    );
+    const embedding = embeddings[model];
+    if (embedding) {
+      searchPromises.push(
+        performSemanticSearchWithEmbedding(embedding, model, 10)
+          .then(results => ({ type: 'semantic', model, results }))
+      );
+    }
   }
 
   // Hybrid search - use Elasticsearch's native hybrid search with RRF
@@ -106,7 +117,7 @@ async function SearchResults({ searchParams }: PageProps) {
     
     if (modelsToUse) {
       searchPromises.push(
-        performHybridSearch(query, modelsToUse, 10, includeDescriptions, hybridBalance)
+        performHybridSearchWithEmbeddings(query, embeddings, modelsToUse, 10, includeDescriptions, hybridBalance)
           .then(results => ({ 
             type: 'hybrid', 
             model: Array.isArray(modelsToUse) ? 'multi' : modelsToUse, 
