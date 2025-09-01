@@ -63,8 +63,15 @@ export interface Artwork {
   id: string;                    // Elasticsearch document ID
   metadata: ArtworkMetadata;
   image: ArtworkImage | string;  // Can be object or simple URL string
-  searchableText: string;        // Concatenated searchable fields
   embeddings: Record<string, number[]>;  // Model name -> embedding vector
+  visual_alt_text?: string;      // AI-generated alt text
+  visual_long_description?: string; // AI-generated detailed description
+  description_metadata?: {
+    model: string;
+    generated_at: string;
+    has_violations: boolean;
+    violations: string[];
+  };
 }
 
 export interface SearchHit {

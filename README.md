@@ -77,6 +77,9 @@ JINA_API_KEY=your_jina_api_key
 GOOGLE_CLOUD_API_KEY=your_google_api_key
 GOOGLE_CLOUD_PROJECT_ID=your_project_id
 
+# Visual Description Generation
+GOOGLE_GEMINI_API_KEY=your_gemini_api_key  # For Gemini 2.5 Flash descriptions
+
 # Elasticsearch
 ELASTICSEARCH_URL=http://localhost:9200
 NEXT_PUBLIC_ELASTICSEARCH_URL=http://localhost:9200
@@ -185,15 +188,29 @@ For text-only models (Jina v3):
 
 The searchable text includes all relevant metadata fields concatenated and normalized, providing rich context for the embedding models to understand both the visual and conceptual aspects of each artwork.
 
-**Option A: File-based workflow (Recommended for production)**
-```bash
-# Generate embeddings to files (resumable, portable)
-npm run generate-embeddings -- --model=jina_embeddings_v3      # Text-only
-npm run generate-embeddings -- --model=jina_embeddings_v4      # Text+Image
-npm run generate-embeddings -- --model=google_vertex_multimodal # Text+Image
+**Visual Descriptions with Gemini 2.5 Flash:**
+We also generate bias-free visual descriptions using Google's Gemini 2.5 Flash model, following Cooper Hewitt accessibility guidelines:
+- **Alt Text**: 15-word concise summary for accessibility
+- **Long Description**: Detailed 100-500 word description focusing purely on visual elements
+- **Zero Metadata Contamination**: No artist names, dates, or cultural attributions to avoid bias
+- **Objective Description**: Only describes what is visually present, no interpretations
 
-# Then index everything to Elasticsearch
+**Workflow (Recommended for production)**
+```bash
+# 1. Generate embeddings to files (resumable, portable)
+npm run generate-embeddings -- --model=jina_embeddings_v3      # Text-only
+npm run generate-embeddings -- --model=jina_embeddings_v4      # Image-only
+npm run generate-embeddings -- --model=google_vertex_multimodal # Image-only
+
+# 2. Generate visual descriptions with Gemini
+npm run generate-descriptions -- --limit=100    # Start with 100 for testing
+npm run generate-descriptions -- --resume        # Resume from last checkpoint
+
+# 3. Index everything to Elasticsearch
 npm run index-artworks -- --force
+
+# 4. Update with visual descriptions
+npm run update-descriptions
 ```
 
 The file-based approach allows for resumable generation and easier data portability between environments.
@@ -213,14 +230,17 @@ Open [http://localhost:3000](http://localhost:3000) to use the application.
 - `npm run index-artworks` - Index artworks into Elasticsearch
   - `--force` - Force recreate the index (WARNING: deletes all existing data)
   - `--limit=N` - Only index N artworks (useful for testing)
-- `npm run generate-embeddings` - Generate embeddings directly to Elasticsearch
-- `npm run generate-embeddings-to-file` - Generate embeddings to files (resumable)
+- `npm run generate-embeddings` - Generate embeddings to files (resumable)
   - `--model=MODEL` - Which model to generate (required)
-  - `--batch-size=N` - Embeddings per file (default: 1000)
+  - `--limit=N` - Only process N artworks
   - `--resume` - Continue from last checkpoint
-- `npm run index-with-embeddings` - Index artworks with pre-generated embeddings
-  - `--force` - Force recreate index
-  - `--limit=N` - Only index N artworks
+  - `--batch-size=N` - Save progress every N artworks (default: 10)
+- `npm run generate-descriptions` - Generate visual descriptions using Gemini 2.5 Flash
+  - `--limit=N` - Only process N artworks
+  - `--resume` - Continue from last checkpoint
+  - `--batch-size=N` - Save progress every N artworks (default: 10)
+- `npm run update-descriptions` - Update Elasticsearch with generated descriptions
+  - `--limit=N` - Only update N artworks
 - `npm run dev` - Start the development server
 - `npm run build` - Build for production
 - `npm run start` - Start production server

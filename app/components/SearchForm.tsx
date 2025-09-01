@@ -15,13 +15,14 @@ interface SearchFormProps {
     keyword: boolean;
     models: Record<string, boolean>;
     hybrid: boolean;
+    includeDescriptions?: boolean;
   };
 }
 
 // Helper to build URL search params
 function buildSearchParams(
   query: string,
-  options: { keyword: boolean; models: Record<string, boolean>; hybrid: boolean }
+  options: { keyword: boolean; models: Record<string, boolean>; hybrid: boolean; includeDescriptions?: boolean }
 ): string {
   const params = new URLSearchParams();
   
@@ -31,6 +32,11 @@ function buildSearchParams(
   
   params.set('keyword', options.keyword.toString());
   params.set('hybrid', options.hybrid.toString());
+  
+  // Add includeDescriptions parameter if true
+  if (options.includeDescriptions) {
+    params.set('includeDescriptions', 'true');
+  }
   
   // Always include models parameter
   const enabledModels = Object.entries(options.models)
@@ -138,6 +144,20 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
             }`}
           >
             Hybrid Search
+          </Label>
+        </div>
+        
+        {/* Include visual descriptions checkbox */}
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="includeDescriptions"
+            checked={searchOptions.includeDescriptions || false}
+            onCheckedChange={(checked) => 
+              handleOptionsChange({ includeDescriptions: checked as boolean })
+            }
+          />
+          <Label htmlFor="includeDescriptions" className="text-sm cursor-pointer">
+            Include Visual Descriptions
           </Label>
         </div>
       </div>

@@ -67,6 +67,15 @@ function ArtworkCard({
               {metadata.medium && (
                 <div className="line-clamp-1">{metadata.medium}</div>
               )}
+              {/* AI-generated alt text */}
+              {artwork.visual_alt_text && (
+                <div className="mt-1 pt-1 border-t">
+                  <span className="inline-flex items-center gap-1 text-xs">
+                    <span className="bg-muted px-1 py-0.5 rounded text-[10px] font-medium">AI</span>
+                    <span className="line-clamp-2 italic">{artwork.visual_alt_text}</span>
+                  </span>
+                </div>
+              )}
             </div>
           </div>
           
@@ -130,6 +139,15 @@ function ArtworkCard({
             )}
             {metadata.medium && (
               <div className="line-clamp-2 text-xs">{metadata.medium}</div>
+            )}
+            {/* AI-generated description */}
+            {artwork.visual_alt_text && (
+              <div className="mt-2 pt-2 border-t">
+                <div className="inline-flex items-start gap-1.5 text-xs">
+                  <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-medium mt-0.5">AI</span>
+                  <span className="line-clamp-3 italic text-muted-foreground">{artwork.visual_alt_text}</span>
+                </div>
+              </div>
             )}
           </div>
         </div>

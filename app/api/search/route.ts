@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Client } from '@elastic/elasticsearch';
-import { generateEmbedding, ModelKey, EMBEDDING_MODELS } from '@/lib/embeddings';
+import { ModelKey, EMBEDDING_MODELS } from '@/lib/embeddings';
+import { 
+  performKeywordSearch, 
+  performSemanticSearch, 
+  performHybridSearch,
+  getIndexStats,
+  INDEX_NAME 
+} from '@/lib/elasticsearch/client';
 import { SearchResponse, SearchMode } from '@/app/types';
-
-// Initialize Elasticsearch client
-const client = new Client({
-  node: process.env.ELASTICSEARCH_URL || 'http://localhost:9200',
-});
-
-const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || process.env.NEXT_PUBLIC_ELASTICSEARCH_INDEX || 'artworks_semantic';
 
 // Type definitions
 interface SearchRequest {
@@ -17,6 +16,7 @@ interface SearchRequest {
     keyword: boolean;
     models: Record<string, boolean>;
     hybrid: boolean;
+    includeDescriptions?: boolean;
   };
   size?: number;
 }
@@ -27,141 +27,6 @@ interface UnifiedSearchResponse {
   hybrid: { model: string; results: SearchResponse } | null;
 }
 
-// Build Elasticsearch query based on search mode
-async function buildSearchQuery(query: string, mode: SearchMode, model?: ModelKey) {
-  // Keyword search
-  if (mode === 'keyword') {
-    return {
-      bool: {
-        must: query ? [{
-          multi_match: {
-            query,
-            fields: [
-              'metadata.title^3',
-              'metadata.artist^2',
-              'metadata.classification^1.5',
-              'metadata.medium',
-              'metadata.date',
-              'metadata.artistNationality',
-              'metadata.department'
-            ],
-            type: 'best_fields',
-            fuzziness: 'AUTO'
-          }
-        }] : []
-      }
-    };
-  }
-
-  // Semantic search
-  if (mode === 'semantic' && model) {
-    if (!query) {
-      return { match_all: {} };
-    }
-
-    const embeddingResult = await generateEmbedding(query, model);
-    if (!embeddingResult || !embeddingResult.embedding) {
-      throw new Error('Failed to generate text embedding');
-    }
-
-    const fieldName = model;
-
-    return {
-      knn: {
-        field: `embeddings.${fieldName}`,
-        query_vector: embeddingResult.embedding,
-        k: 10,
-        num_candidates: 20
-      }
-    };
-  }
-
-  // Hybrid search
-  if (mode === 'hybrid' && model) {
-    if (!query) {
-      return { match_all: {} };
-    }
-
-    const embeddingResult = await generateEmbedding(query, model);
-    if (!embeddingResult || !embeddingResult.embedding) {
-      throw new Error('Failed to generate text embedding');
-    }
-
-    const fieldName = model;
-
-    return {
-      knn: {
-        field: `embeddings.${fieldName}`,
-        query_vector: embeddingResult.embedding,
-        k: 10,
-        num_candidates: 20
-      },
-      query: {
-        bool: {
-          must: [{
-            multi_match: {
-              query,
-              fields: [
-                'metadata.title^3',
-                'metadata.artist^2',
-                'metadata.classification^1.5',
-                'metadata.medium',
-                'metadata.date',
-                'metadata.artistNationality',
-                'metadata.department'
-              ],
-              type: 'best_fields',
-              fuzziness: 'AUTO'
-            }
-          }]
-        }
-      }
-    };
-  }
-
-  return { match_all: {} };
-}
-
-// Perform Elasticsearch search
-async function performSearch(query: string, mode: SearchMode, model?: ModelKey, size: number = 10): Promise<SearchResponse> {
-  try {
-    const queryConfig = await buildSearchQuery(query, mode, model);
-
-    // Build the search request body
-    const searchBody: any = {
-      size,
-      _source: ['id', 'metadata', 'image', 'searchableText']  // Exclude embeddings to reduce response size
-    };
-
-    // Handle different query structures based on search mode
-    if ('knn' in queryConfig) {
-      searchBody.knn = queryConfig.knn;
-      if (queryConfig.query) {
-        searchBody.query = queryConfig.query;
-      }
-    } else {
-      searchBody.query = queryConfig;
-    }
-
-    const response = await client.search({
-      index: INDEX_NAME,
-      body: searchBody
-    });
-
-    return {
-      took: response.took,
-      total: response.hits.total.value,
-      hits: response.hits.hits.map((hit: any) => ({
-        _id: hit._id,
-        _score: hit._score,
-        _source: hit._source
-      }))
-    };
-  } catch (error) {
-    console.error(`Search error for ${mode} mode:`, error);
-    throw error;
-  }
-}
 
 // Get allowed origins from environment or use defaults
 function getAllowedOrigins(): string[] {
@@ -209,7 +74,7 @@ export async function POST(request: NextRequest) {
     // Keyword search
     if (options.keyword) {
       searchPromises.push(
-        performSearch(query, 'keyword', undefined, size)
+        performKeywordSearch(query, size, options.includeDescriptions)
           .then(results => ({ type: 'keyword', results }))
           .catch(error => {
             console.error('Keyword search failed:', error);
@@ -225,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     for (const model of selectedModels) {
       searchPromises.push(
-        performSearch(query, 'semantic', model, size)
+        performSemanticSearch(query, model, size)
           .then(results => ({ type: 'semantic', model, results }))
           .catch(error => {
             console.error(`Semantic search failed for ${model}:`, error);
@@ -241,7 +106,7 @@ export async function POST(request: NextRequest) {
         : selectedModels[0];
       
       searchPromises.push(
-        performSearch(query, 'hybrid', hybridModel, size)
+        performHybridSearch(query, hybridModel, size, options.includeDescriptions)
           .then(results => ({ type: 'hybrid', model: hybridModel, results }))
           .catch(error => {
             console.error(`Hybrid search failed for ${hybridModel}:`, error);
@@ -255,7 +120,7 @@ export async function POST(request: NextRequest) {
     const searchResults = await Promise.all(searchPromises);
 
     // Get index stats (lightweight operation)
-    const statsPromise = client.indices.stats({ index: INDEX_NAME });
+    const indexStats = await getIndexStats();
 
     // Organize results
     const response: UnifiedSearchResponse = {
@@ -277,27 +142,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get index stats
-    const stats = await statsPromise;
-    const indexStats = stats._all.total;
-
-    // Helper to format bytes to human readable
-    const formatBytes = (bytes: number): string => {
-      if (bytes === 0) return '0 Bytes';
-      const k = 1024;
-      const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-    };
-
     // Add metadata to response
     const responseWithMetadata = {
       ...response,
       metadata: {
-        indexName: INDEX_NAME,
-        indexSize: indexStats.store.size_in_bytes,
-        indexSizeHuman: formatBytes(indexStats.store.size_in_bytes),
-        totalDocuments: indexStats.docs.count,
+        ...(indexStats || {}),
         timestamp: new Date().toISOString()
       }
     };

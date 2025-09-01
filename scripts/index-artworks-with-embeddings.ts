@@ -26,29 +26,23 @@ interface EmbeddingRecord {
   };
 }
 
-// Extract searchable text from metadata
-function extractSearchableText(metadata: any): string {
-  const fields = [
-    metadata.title,
-    metadata.artist,
-    metadata.date,
-    metadata.medium,
-    metadata.department,
-    metadata.classification,
-    metadata.culture,
-    metadata.period,
-    metadata.artistBio,
-    metadata.artistNationality,
-    metadata.creditLine
-  ];
-  
-  return fields
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
+interface DescriptionRecord {
+  artwork_id: string;
+  alt_text: string;
+  long_description: string;
+  has_violations: boolean;
+  violations: string[];
+  timestamp: string;
+  model: string;
+  metadata: {
+    title: string;
+    artist: string;
+    date: string;
+    medium: string;
+    collection: string;
+  };
 }
+
 
 // Load embeddings from JSONL file into a map
 async function loadEmbeddingsMap(filePath: string): Promise<Map<string, number[]>> {
@@ -82,9 +76,42 @@ async function loadEmbeddingsMap(filePath: string): Promise<Map<string, number[]
   return embeddingsMap;
 }
 
+// Load descriptions from JSONL file into a map
+async function loadDescriptionsMap(filePath: string): Promise<Map<string, DescriptionRecord>> {
+  const descriptionsMap = new Map<string, DescriptionRecord>();
+  
+  try {
+    await fs.access(filePath);
+  } catch {
+    console.log(`Descriptions file not found: ${filePath}`);
+    return descriptionsMap;
+  }
+  
+  const fileStream = createReadStream(filePath);
+  const rl = readline.createInterface({
+    input: fileStream,
+    crlfDelay: Infinity
+  });
+
+  let count = 0;
+  for await (const line of rl) {
+    try {
+      const record: DescriptionRecord = JSON.parse(line);
+      descriptionsMap.set(record.artwork_id, record);
+      count++;
+    } catch (error) {
+      console.warn('Failed to parse description record:', error);
+    }
+  }
+  
+  console.log(`Loaded ${count} descriptions from ${path.basename(filePath)}`);
+  return descriptionsMap;
+}
+
 async function indexArtworks(
   artworks: ParsedArtwork[],
   embeddings: Record<ModelKey, Map<string, number[]>>,
+  descriptions: Map<string, DescriptionRecord>,
   limit?: number
 ) {
   const batchSize = 100;
@@ -110,14 +137,28 @@ async function indexArtworks(
         }
       }
       
+      // Get description if available
+      const description = descriptions.get(artwork.metadata.id);
+      
       // Create the document
-      const doc = {
+      const doc: any = {
         id: artwork.metadata.id,
         metadata: artwork.metadata,
         image: artwork.image,
-        searchableText: extractSearchableText(artwork.metadata),
         embeddings: artworkEmbeddings
       };
+      
+      // Add visual descriptions if available
+      if (description) {
+        doc.visual_alt_text = description.alt_text;
+        doc.visual_long_description = description.long_description;
+        doc.description_metadata = {
+          model: description.model,
+          generated_at: description.timestamp,
+          has_violations: description.has_violations,
+          violations: description.violations
+        };
+      }
       
       bulkBody.push(
         { index: { _index: INDEX_NAME, _id: artwork.metadata.id } },
@@ -243,9 +284,16 @@ async function main() {
   }
   console.log(`\nTotal artworks with embeddings: ${artworksWithEmbeddings.size}`);
   
+  // Load descriptions
+  console.log('\nLoading visual descriptions...');
+  const descriptionsDir = path.join(process.cwd(), 'data', 'descriptions');
+  const descriptionsPath = path.join(descriptionsDir, 'gemini_2_5_flash', 'descriptions.jsonl');
+  const descriptions = await loadDescriptionsMap(descriptionsPath);
+  console.log(`✓ Loaded ${descriptions.size} visual descriptions`);
+  
   // Index artworks
   const startTime = Date.now();
-  const { indexed, failed } = await indexArtworks(artworks, embeddings, limit);
+  const { indexed, failed } = await indexArtworks(artworks, embeddings, descriptions, limit);
   const duration = (Date.now() - startTime) / 1000;
   
   console.log('\n\nSummary');

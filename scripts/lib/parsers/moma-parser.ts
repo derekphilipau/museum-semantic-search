@@ -133,13 +133,9 @@ export class MoMAParser extends BaseParser {
         thumbnailUrl: row.ImageURL.replace('1024x1024', '400x400'),
       };
       
-      // Create searchable text
-      const searchableText = this.createSearchableText(metadata);
-      
       artworks.push({
         metadata,
-        image,
-        searchableText
+        image
       });
     }
     

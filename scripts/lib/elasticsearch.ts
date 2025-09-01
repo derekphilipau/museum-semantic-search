@@ -67,9 +67,18 @@ export const INDEX_MAPPING = {
         type: 'object',
         enabled: false
       },
-      searchableText: { 
+      // Visual descriptions
+      visual_alt_text: { 
         type: 'text',
         analyzer: 'standard'
+      },
+      visual_long_description: { 
+        type: 'text',
+        analyzer: 'standard'
+      },
+      description_metadata: {
+        type: 'object',
+        enabled: false
       },
       embeddings: {
         properties: {

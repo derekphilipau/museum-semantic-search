@@ -31,9 +31,16 @@ export interface Artwork {
   id: string;
   metadata: ArtworkMetadata;
   image: ArtworkImage;
-  searchableText: string;
   boostedKeywords: string;
   embeddings: Record<string, number[]>;
+  visual_alt_text?: string;
+  visual_long_description?: string;
+  description_metadata?: {
+    model: string;
+    generated_at: string;
+    has_violations: boolean;
+    violations: string[];
+  };
 }
 
 export interface SearchHit {

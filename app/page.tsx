@@ -1,18 +1,16 @@
 import { Suspense } from 'react';
 import { EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings/types';
-import { Client } from '@elastic/elasticsearch';
 import { generateEmbedding } from '@/lib/embeddings';
+import { 
+  performKeywordSearch, 
+  performSemanticSearch, 
+  performHybridSearch,
+  getIndexStats 
+} from '@/lib/elasticsearch/client';
 import { SearchResponse } from '@/app/types';
 import SearchForm from './components/SearchForm';
 import SearchResultsWrapper from './components/SearchResultsWrapper';
 import { Skeleton } from '@/components/ui/skeleton';
-
-// Initialize Elasticsearch client
-const client = new Client({
-  node: process.env.ELASTICSEARCH_URL || 'http://localhost:9200',
-});
-
-const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || process.env.NEXT_PUBLIC_ELASTICSEARCH_INDEX || 'artworks_semantic';
 
 interface PageProps {
   searchParams: { [key: string]: string | string[] | undefined };
@@ -23,6 +21,7 @@ function parseSearchParams(searchParams: PageProps['searchParams']) {
   const query = (searchParams.q as string) || '';
   const keyword = searchParams.keyword !== 'false';
   const hybrid = searchParams.hybrid !== 'false';
+  const includeDescriptions = searchParams.includeDescriptions === 'true';
   
   // Parse models - if not specified, all models are enabled
   const modelsParam = searchParams.models as string;
@@ -33,110 +32,13 @@ function parseSearchParams(searchParams: PageProps['searchParams']) {
     [key]: enabledModels.includes(key)
   }), {} as Record<string, boolean>);
 
-  return { query, keyword, models, hybrid };
+  return { query, keyword, models, hybrid, includeDescriptions };
 }
 
-// Server-side search function
-async function performSearch(query: string, mode: string, model?: ModelKey): Promise<SearchResponse> {
-  try {
-    let searchBody: any = {
-      size: 10,
-      _source: {
-        excludes: ['embeddings']
-      }
-    };
-
-    if (mode === 'keyword') {
-      searchBody.query = {
-        bool: {
-          must: [{
-            multi_match: {
-              query,
-              fields: [
-                'metadata.title^3',
-                'metadata.artist^2',
-                'metadata.classification^1.5',
-                'metadata.medium',
-                'metadata.date',
-                'metadata.artistNationality',
-                'metadata.department'
-              ],
-              type: 'best_fields',
-              fuzziness: 'AUTO'
-            }
-          }]
-        }
-      };
-    } else if (mode === 'semantic' && model) {
-      const embeddingResult = await generateEmbedding(query, model);
-      if (!embeddingResult || !embeddingResult.embedding) {
-        throw new Error('Failed to generate embedding');
-      }
-
-      searchBody.knn = {
-        field: `embeddings.${model}`,
-        query_vector: embeddingResult.embedding,
-        k: 10,
-        num_candidates: 20
-      };
-    } else if (mode === 'hybrid' && model) {
-      const embeddingResult = await generateEmbedding(query, model);
-      if (!embeddingResult || !embeddingResult.embedding) {
-        throw new Error('Failed to generate embedding');
-      }
-
-      searchBody.knn = {
-        field: `embeddings.${model}`,
-        query_vector: embeddingResult.embedding,
-        k: 10,
-        num_candidates: 20
-      };
-      
-      searchBody.query = {
-        bool: {
-          must: [{
-            multi_match: {
-              query,
-              fields: [
-                'metadata.title^3',
-                'metadata.artist^2',
-                'metadata.classification^1.5',
-                'metadata.medium',
-                'metadata.date',
-                'metadata.artistNationality',
-                'metadata.department'
-              ],
-              type: 'best_fields',
-              fuzziness: 'AUTO'
-            }
-          }]
-        }
-      };
-    }
-
-    const response = await client.search({
-      index: INDEX_NAME,
-      body: searchBody
-    });
-
-    return {
-      took: response.took,
-      total: response.hits.total.value,
-      hits: response.hits.hits.map((hit: any) => ({
-        _id: hit._id,
-        _score: hit._score,
-        _source: hit._source
-      }))
-    };
-  } catch (error) {
-    console.error(`Search error for ${mode} mode:`, error);
-    return { took: 0, total: 0, hits: [] };
-  }
-}
 
 // Server component that performs search
 async function SearchResults({ searchParams }: PageProps) {
-  const { query, keyword, models, hybrid } = parseSearchParams(searchParams);
+  const { query, keyword, models, hybrid, includeDescriptions } = parseSearchParams(searchParams);
   
   if (!query) {
     return null;
@@ -159,7 +61,7 @@ async function SearchResults({ searchParams }: PageProps) {
   // Keyword search
   if (keyword) {
     searchPromises.push(
-      performSearch(query, 'keyword')
+      performKeywordSearch(query, 10, includeDescriptions)
         .then(results => ({ type: 'keyword', results }))
     );
   }
@@ -167,7 +69,7 @@ async function SearchResults({ searchParams }: PageProps) {
   // Semantic searches
   for (const model of selectedModels) {
     searchPromises.push(
-      performSearch(query, 'semantic', model)
+      performSemanticSearch(query, model)
         .then(results => ({ type: 'semantic', model, results }))
     );
   }
@@ -179,7 +81,7 @@ async function SearchResults({ searchParams }: PageProps) {
       : selectedModels[0];
     
     searchPromises.push(
-      performSearch(query, 'hybrid', hybridModel)
+      performHybridSearch(query, hybridModel, 10, includeDescriptions)
         .then(results => ({ type: 'hybrid', model: hybridModel, results }))
     );
   }
@@ -190,20 +92,11 @@ async function SearchResults({ searchParams }: PageProps) {
   // Execute all searches in parallel and get index stats
   const [searchResults, indexStats] = await Promise.all([
     Promise.all(searchPromises),
-    client.indices.stats({ index: INDEX_NAME })
+    getIndexStats()
   ]);
 
   // Calculate total query time
   const totalQueryTime = Date.now() - queryStartTime;
-
-  // Helper to format bytes to human readable
-  const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-  };
 
   // Organize results
   const results = {
@@ -211,10 +104,7 @@ async function SearchResults({ searchParams }: PageProps) {
     semantic: {} as Record<string, SearchResponse>,
     hybrid: null as { model: string; results: SearchResponse } | null,
     metadata: {
-      indexName: INDEX_NAME,
-      indexSize: indexStats._all.total.store.size_in_bytes,
-      indexSizeHuman: formatBytes(indexStats._all.total.store.size_in_bytes),
-      totalDocuments: indexStats._all.total.docs.count,
+      ...(indexStats || {}),
       timestamp: new Date().toISOString(),
       totalQueryTime
     }
@@ -242,14 +132,14 @@ async function SearchResults({ searchParams }: PageProps) {
 }
 
 export default function Home({ searchParams }: PageProps) {
-  const { query, keyword, models, hybrid } = parseSearchParams(searchParams);
+  const { query, keyword, models, hybrid, includeDescriptions } = parseSearchParams(searchParams);
 
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="space-y-6">
         <SearchForm 
           initialQuery={query}
-          initialOptions={{ keyword, models, hybrid }}
+          initialOptions={{ keyword, models, hybrid, includeDescriptions }}
         />
         
         <Suspense 

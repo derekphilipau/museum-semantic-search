@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const ES_URL = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
-const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || process.env.NEXT_PUBLIC_ELASTICSEARCH_INDEX || 'artworks_semantic';
+import { getArtworkById } from '@/lib/elasticsearch/client';
 
 // Cache duration for artwork data (1 hour)
 const CACHE_DURATION = 3600;
@@ -22,25 +20,14 @@ export async function GET(
     }
 
     // Fetch artwork from Elasticsearch by document ID
-    const response = await fetch(`${ES_URL}/${INDEX_NAME}/_doc/${artworkId}?_source_excludes=embeddings`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch artwork');
-    }
-
-    const result = await response.json();
+    const artwork = await getArtworkById(artworkId);
     
-    if (!result.found) {
+    if (!artwork) {
       return NextResponse.json(
         { error: 'Artwork not found' },
         { status: 404 }
       );
     }
-
-    const artwork = result._source;
     
     // Return with cache headers
     return NextResponse.json(artwork, {
