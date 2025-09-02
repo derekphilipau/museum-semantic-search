@@ -9,8 +9,11 @@ from elasticsearch import Elasticsearch
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv('.env.local')
-load_dotenv('.env')
+import sys
+from pathlib import Path
+root_dir = Path(__file__).parent.parent.parent
+load_dotenv(root_dir / '.env.local')
+load_dotenv(root_dir / '.env')
 
 def get_elasticsearch_client():
     """
@@ -29,7 +32,7 @@ def get_elasticsearch_client():
             api_key=api_key,
             request_timeout=30
         )
-    elif api_key and 'elastic.co' in es_url:
+    elif api_key and ('elastic.co' in es_url or 'elastic-cloud.com' in es_url):
         # Elastic Cloud with URL (alternative setup)
         print(f"Connecting to Elastic Cloud URL: {es_url}")
         return Elasticsearch(

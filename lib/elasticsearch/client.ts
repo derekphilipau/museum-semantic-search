@@ -6,40 +6,49 @@ import { SearchResponse } from '@/app/types';
 let client: Client | null = null;
 
 export function getElasticsearchClient(): Client {
-  if (!client) {
-    const esUrl = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
-    const apiKey = process.env.ELASTICSEARCH_API_KEY;
-    const cloudId = process.env.ELASTICSEARCH_CLOUD_ID;
-    
-    // Check if we're using Elastic Cloud
-    if (cloudId && apiKey) {
-      // Elastic Cloud configuration
-      client = new Client({
-        cloud: {
-          id: cloudId
-        },
-        auth: {
-          apiKey: apiKey
-        }
-      });
-    } else if (apiKey && esUrl.includes('elastic.co')) {
-      // Elastic Cloud with URL (alternative setup)
-      client = new Client({
-        node: esUrl,
-        auth: {
-          apiKey: apiKey
-        }
-      });
-    } else {
-      // Local Elasticsearch (no auth required)
-      client = new Client({
-        node: esUrl
-      });
-    }
-    
-    console.log(`Elasticsearch client initialized: ${cloudId ? 'Cloud' : esUrl}`);
+  const esUrl = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
+  const apiKey = process.env.ELASTICSEARCH_API_KEY;
+  const cloudId = process.env.ELASTICSEARCH_CLOUD_ID;
+  
+  console.log('Initializing Elasticsearch client:', {
+    url: esUrl,
+    hasApiKey: !!apiKey,
+    apiKeyPrefix: apiKey ? apiKey.substring(0, 10) + '...' : 'none',
+    hasCloudId: !!cloudId,
+    urlIncludes: esUrl.includes('elastic-cloud.com'),
+    nodeEnv: process.env.NODE_ENV
+  });
+  
+  // Check if we're using Elastic Cloud
+  let newClient: Client;
+  
+  if (cloudId && apiKey) {
+    // Elastic Cloud configuration
+    newClient = new Client({
+      cloud: {
+        id: cloudId
+      },
+      auth: {
+        apiKey: apiKey
+      }
+    });
+  } else if (apiKey && (esUrl.includes('elastic.co') || esUrl.includes('elastic-cloud.com'))) {
+    // Elastic Cloud with URL (alternative setup)
+    newClient = new Client({
+      node: esUrl,
+      auth: {
+        apiKey: apiKey
+      }
+    });
+  } else {
+    // Local Elasticsearch (no auth required)
+    newClient = new Client({
+      node: esUrl
+    });
   }
-  return client;
+  
+  console.log(`Elasticsearch client initialized: ${cloudId ? 'Cloud' : esUrl}`);
+  return newClient;
 }
 
 export const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || 

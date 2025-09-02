@@ -1,17 +1,22 @@
 #!/usr/bin/env node
-import { loadEnvConfig } from '@next/env';
-import * as fs from 'fs/promises';
 import * as path from 'path';
+
+// Load environment variables FIRST before any other imports
+const projectDir = path.join(__dirname, '..');
+process.env.NODE_ENV = process.env.NODE_ENV || 'development';
+
+// Manually load env vars
+import { loadEnvConfig } from '@next/env';
+loadEnvConfig(projectDir, false); // false = don't log
+
+// Now import everything else
+import * as fs from 'fs/promises';
 import { createReadStream } from 'fs';
 import * as readline from 'readline';
 import { MoMAParser } from './lib/parsers/moma-parser';
 import { ParsedArtwork } from './lib/parsers/types';
 import { esClient, INDEX_NAME, INDEX_MAPPING } from './lib/elasticsearch';
 import { ModelKey, EMBEDDING_MODELS } from '../lib/embeddings/types';
-
-// Load environment variables
-const projectDir = path.join(__dirname, '..');
-loadEnvConfig(projectDir);
 
 interface EmbeddingRecord {
   artwork_id: string;
@@ -206,8 +211,13 @@ async function indexArtworks(
 async function main() {
   const args = process.argv.slice(2);
   const forceRecreate = args.includes('--force');
-  const limitArg = args.find(arg => arg.startsWith('--limit='));
-  const limit = limitArg ? parseInt(limitArg.split('=')[1]) : undefined;
+  
+  // Parse --limit with space separator (like other scripts)
+  let limit: number | undefined;
+  const limitIndex = args.indexOf('--limit');
+  if (limitIndex !== -1 && args[limitIndex + 1]) {
+    limit = parseInt(args[limitIndex + 1]);
+  }
   
   console.log('MoMA Artwork Indexing with Pre-computed Embeddings');
   console.log('=================================================');

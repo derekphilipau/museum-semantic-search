@@ -136,8 +136,8 @@ The current system uses **Jina v3** for text embeddings and **SigLIP 2** for cro
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/museum-semantic-search-next.git
-cd museum-semantic-search-next
+git clone https://github.com/yourusername/museum-semantic-search.git
+cd museum-semantic-search
 npm install
 ```
 
@@ -244,7 +244,7 @@ The client will automatically detect and use cloud credentials when available.
 
 ```bash
 # First time setup - creates new index
-npm run index-artworks --force --limit=100
+npm run index-artworks -- --force --limit 100
 
 # Subsequent runs - preserves existing data
 npm run index-artworks
@@ -371,11 +371,10 @@ Open [http://localhost:3000](http://localhost:3000) to use the application.
 
 ## Scripts
 
-- `npm run index-artworks` - Index artworks from museum data
-  - `--collection=NAME` - Specify collection to index (e.g., moma)
 - `npm run index-artworks` - Index artworks into Elasticsearch
   - `--force` - Force recreate the index (WARNING: deletes all existing data)
-  - `--limit=N` - Only index N artworks (useful for testing)
+  - `--limit N` - Only index N artworks (useful for testing)
+  - `--collection NAME` - Specify collection to index (e.g., moma)
 - `npm run generate-siglip2-embeddings` - Generate SigLIP 2 cross-modal embeddings
   - `--limit=N` - Only process N artworks
   - `--resume` - Continue from last checkpoint

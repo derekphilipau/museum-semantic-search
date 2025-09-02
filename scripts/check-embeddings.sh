@@ -6,7 +6,7 @@ echo "================================"
 models=("siglip2" "jina_v3")
 
 for model in "${models[@]}"; do
-    file="/Users/dau/Projects/Github/met-semantic-search-next/data/embeddings/$model/embeddings.jsonl"
+    file="/Users/dau/Projects/Github/museum-semantic-search/data/embeddings/$model/embeddings.jsonl"
     if [ -f "$file" ]; then
         count=$(wc -l < "$file")
         echo "$model: $count embeddings"
@@ -16,4 +16,4 @@ for model in "${models[@]}"; do
 done
 
 echo ""
-echo "Total image files: $(ls /Users/dau/Projects/Github/met-semantic-search-next/data/images/huggingface/*.jpg 2>/dev/null | wc -l)"
+echo "Total image files: $(ls /Users/dau/Projects/Github/museum-semantic-search/data/images/huggingface/*.jpg 2>/dev/null | wc -l)"
