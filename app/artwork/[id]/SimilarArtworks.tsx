@@ -3,7 +3,7 @@
 import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
 import { SearchResponse } from '@/app/types';
 import SearchResultColumn from '@/app/components/SearchResultColumn';
-import { Brain, Sparkles, FileText, Image, Database } from 'lucide-react';
+import { Sparkles, FileText, Image, Database } from 'lucide-react';
 
 interface SimilarArtworksProps {
   similarArtworks: Record<string, SearchResponse>;
@@ -48,7 +48,6 @@ export default function SimilarArtworks({ similarArtworks }: SimilarArtworksProp
           gradientFrom="from-orange-500"
           gradientTo="to-orange-600"
           badgeColor="bg-orange-700"
-          onSelectArtwork={() => {}}
           responseTime={similarArtworks.metadata.took}
           totalResults={similarArtworks.metadata.total}
         />
@@ -65,7 +64,6 @@ export default function SimilarArtworks({ similarArtworks }: SimilarArtworksProp
           gradientFrom="from-blue-500"
           gradientTo="to-blue-600"
           badgeColor="bg-blue-700"
-          onSelectArtwork={() => {}}
           responseTime={similarArtworks.jina_v3.took}
           totalResults={similarArtworks.jina_v3.total}
         />
@@ -82,7 +80,6 @@ export default function SimilarArtworks({ similarArtworks }: SimilarArtworksProp
           gradientFrom="from-purple-500"
           gradientTo="to-purple-600"
           badgeColor="bg-purple-700"
-          onSelectArtwork={() => {}}
           responseTime={similarArtworks.siglip2.took}
           totalResults={similarArtworks.siglip2.total}
         />
@@ -99,7 +96,6 @@ export default function SimilarArtworks({ similarArtworks }: SimilarArtworksProp
           gradientFrom="from-green-500"
           gradientTo="to-green-600"
           badgeColor="bg-green-700"
-          onSelectArtwork={() => {}}
           responseTime={similarArtworks.combined.took}
           totalResults={similarArtworks.combined.total}
         />

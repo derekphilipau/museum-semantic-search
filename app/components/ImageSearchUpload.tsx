@@ -110,6 +110,7 @@ export default function ImageSearchUpload({ onImageSelect, className }: ImageSea
       {preview ? (
         <div className="relative">
           <div className="relative h-24 w-full rounded-md overflow-hidden bg-muted">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={preview}
               alt="Search image"

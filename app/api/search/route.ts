@@ -7,7 +7,7 @@ import {
   performHybridSearchWithEmbeddings,
   getIndexStats
 } from '@/lib/elasticsearch/client';
-import { SearchResponse } from '@/app/types';
+import { SearchResponse, ESSearchQuery, ESHybridQuery } from '@/app/types';
 import { HybridMode } from '@/app/components/SearchForm';
 
 // Type definitions
@@ -80,6 +80,17 @@ export async function POST(request: NextRequest) {
     // Pre-fetch embeddings if ANY semantic search is needed
     let embeddings: { siglip2?: number[]; jina_v3?: number[] } = {};
     
+    // Initialize ES queries for metadata
+    const esQueries: {
+      keyword?: ESSearchQuery;
+      semantic: Record<string, ESSearchQuery>;
+      hybrid?: ESHybridQuery;
+    } = {
+      keyword: undefined,
+      semantic: {},
+      hybrid: undefined
+    };
+    
     if (selectedModels.length > 0 || options.hybrid) {
       // Always fetch both embeddings in one call if we need any embeddings
       try {
@@ -111,7 +122,7 @@ export async function POST(request: NextRequest) {
 
     // Semantic searches using pre-computed embeddings
     for (const model of selectedModels) {
-      const embedding = embeddings[model];
+      const embedding = embeddings[model as keyof typeof embeddings];
       if (embedding) {
         searchPromises.push(
           performSemanticSearchWithEmbedding(embedding, model, size)
@@ -212,32 +223,25 @@ export async function POST(request: NextRequest) {
           
           // Extract ES query info
           if ('esQuery' in hybridResults) {
-            esQueries.hybrid = (hybridResults as any).esQuery;
-            delete (hybridResults as any).esQuery;
+            esQueries.hybrid = (hybridResults as SearchResponse & { esQuery?: ESHybridQuery }).esQuery;
+            delete (hybridResults as SearchResponse & { esQuery?: ESHybridQuery }).esQuery;
           }
         } catch (error) {
           console.error('Hybrid search error:', error);
         }
       }
     }
-
-    // Collect ES queries for metadata
-    const esQueries: any = {
-      keyword: undefined,
-      semantic: {},
-      hybrid: undefined
-    };
     
     // Extract ES queries from responses
     if (response.keyword && 'esQuery' in response.keyword) {
-      esQueries.keyword = (response.keyword as any).esQuery;
-      delete (response.keyword as any).esQuery;
+      esQueries.keyword = (response.keyword as SearchResponse & { esQuery?: ESSearchQuery }).esQuery;
+      delete (response.keyword as SearchResponse & { esQuery?: ESSearchQuery }).esQuery;
     }
     
     for (const model in response.semantic) {
       if ('esQuery' in response.semantic[model]) {
-        esQueries.semantic[model] = (response.semantic[model] as any).esQuery;
-        delete (response.semantic[model] as any).esQuery;
+        esQueries.semantic[model] = (response.semantic[model] as SearchResponse & { esQuery?: ESSearchQuery }).esQuery!;
+        delete (response.semantic[model] as SearchResponse & { esQuery?: ESSearchQuery }).esQuery;
       }
     }
     
@@ -260,7 +264,7 @@ export async function POST(request: NextRequest) {
     
     const errorMessage = error instanceof Error ? error.message : 'Search failed';
     const statusCode = error instanceof Error && 'statusCode' in error ? 
-      (error as any).statusCode : 500;
+      (error as Error & { statusCode?: number }).statusCode || 500 : 500;
     
     return NextResponse.json(
       { error: errorMessage },

@@ -7,7 +7,7 @@ import {
   performHybridSearchWithEmbeddings,
   getIndexStats 
 } from '@/lib/elasticsearch/client';
-import { SearchResponse } from '@/app/types';
+import { SearchResponse, ESSearchQuery, ESHybridQuery } from '@/app/types';
 import SearchForm, { HybridMode } from './components/SearchForm';
 import SearchResultsWrapper from './components/SearchResultsWrapper';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -49,7 +49,7 @@ async function SearchResults({ searchParams }: PageProps) {
 
   // Pre-fetch unified embeddings if any semantic search is needed
   const selectedModels = Object.entries(models)
-    .filter(([_, enabled]) => enabled)
+    .filter(([, enabled]) => enabled)
     .map(([key]) => key as ModelKey);
   
   let embeddings: { siglip2?: number[]; jina_v3?: number[] } = {};
@@ -79,7 +79,7 @@ async function SearchResults({ searchParams }: PageProps) {
 
   // Semantic searches using pre-computed embeddings
   for (const model of selectedModels) {
-    const embedding = embeddings[model];
+    const embedding = embeddings[model as keyof typeof embeddings];
     if (embedding) {
       searchPromises.push(
         performSemanticSearchWithEmbedding(embedding, model, 20)
@@ -149,9 +149,9 @@ async function SearchResults({ searchParams }: PageProps) {
       timestamp: new Date().toISOString(),
       totalQueryTime,
       esQueries: {
-        keyword: undefined as any,
-        semantic: {} as Record<string, any>,
-        hybrid: undefined as any
+        keyword: undefined as ESSearchQuery | undefined,
+        semantic: {} as Record<string, ESSearchQuery>,
+        hybrid: undefined as ESHybridQuery | undefined
       }
     }
   };
@@ -162,13 +162,13 @@ async function SearchResults({ searchParams }: PageProps) {
       results.keyword = result.results;
       // Extract ES query if available
       if ('esQuery' in result.results && results.metadata.esQueries) {
-        results.metadata.esQueries.keyword = (result.results as any).esQuery;
+        results.metadata.esQueries.keyword = (result.results as SearchResponse & { esQuery?: ESSearchQuery }).esQuery;
       }
     } else if (result.type === 'semantic' && result.model) {
       results.semantic[result.model] = result.results;
       // Extract ES query if available
       if ('esQuery' in result.results && results.metadata.esQueries) {
-        results.metadata.esQueries.semantic[result.model] = (result.results as any).esQuery;
+        results.metadata.esQueries.semantic[result.model] = (result.results as SearchResponse & { esQuery?: ESSearchQuery }).esQuery!;
       }
     } else if (result.type === 'hybrid' && result.model) {
       results.hybrid = {
@@ -178,18 +178,18 @@ async function SearchResults({ searchParams }: PageProps) {
       };
       // Extract ES query if available
       if ('esQuery' in result.results && results.metadata.esQueries) {
-        results.metadata.esQueries.hybrid = (result.results as any).esQuery;
+        results.metadata.esQueries.hybrid = (result.results as SearchResponse & { esQuery?: ESHybridQuery }).esQuery;
       }
     }
   }
   
   // Clean up esQuery properties from response objects
   if (results.keyword && 'esQuery' in results.keyword) {
-    delete (results.keyword as any).esQuery;
+    delete (results.keyword as SearchResponse & { esQuery?: ESSearchQuery }).esQuery;
   }
   for (const model in results.semantic) {
     if ('esQuery' in results.semantic[model]) {
-      delete (results.semantic[model] as any).esQuery;
+      delete (results.semantic[model] as SearchResponse & { esQuery?: ESSearchQuery }).esQuery;
     }
   }
   

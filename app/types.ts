@@ -45,7 +45,7 @@ export interface ArtworkMetadata {
   onView?: boolean;              // Currently on display
   
   // Additional metadata as key-value pairs for flexibility
-  additionalData?: Record<string, any>;
+  additionalData?: Record<string, string | number | boolean | null>;
 }
 
 export interface ArtworkImage {
@@ -86,17 +86,75 @@ export interface SearchResponse {
   hits: SearchHit[];
 }
 
+// Elasticsearch query types
+export interface ESMultiMatchQuery {
+  multi_match: {
+    query: string;
+    fields: string[];
+    type: string;
+    fuzziness?: string;
+  };
+}
+
+export interface ESKnnQuery {
+  field: string;
+  query_vector: number[] | string;
+  k: number;
+  num_candidates: number;
+}
+
+export interface ESSearchQuery {
+  size: number;
+  _source?: {
+    excludes?: string[];
+  };
+  query?: {
+    bool?: {
+      must?: Array<ESMultiMatchQuery | Record<string, unknown>>;
+      should?: Array<Record<string, unknown>>;
+      must_not?: Array<Record<string, unknown>>;
+      minimum_should_match?: number;
+    };
+  };
+  knn?: ESKnnQuery;
+}
+
+export interface ESHybridQuery {
+  note: string;
+  balance: number;
+  k: number;
+  weights: {
+    keyword: {
+      raw: number;
+      normalized: number;
+    };
+    semantic: {
+      raw: number;
+      normalized: number;
+      perModel?: number;
+    };
+  };
+  model?: string;
+  models?: string[];
+  keywordQuery?: ESSearchQuery;
+  semanticQuery?: ESSearchQuery;
+  semanticQueries?: Array<{
+    model: string;
+    query: ESSearchQuery;
+  }>;
+}
+
 export interface SearchMetadata {
   indexName?: string;
-  indexSize: number;
-  indexSizeHuman: string;
-  totalDocuments: number;
+  indexSize?: number;
+  indexSizeHuman?: string;
+  totalDocuments?: number;
   timestamp: string;
   totalQueryTime?: number;
   esQueries?: {
-    keyword?: any;
-    semantic?: Record<string, any>;
-    hybrid?: any;
+    keyword?: ESSearchQuery;
+    semantic?: Record<string, ESSearchQuery>;
+    hybrid?: ESHybridQuery;
   };
 }
 

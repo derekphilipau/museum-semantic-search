@@ -48,92 +48,92 @@ export const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || process.env.NEXT_PU
 export const INDEX_MAPPING = {
   mappings: {
     properties: {
-      id: { type: 'keyword' },
+      id: { type: 'keyword' as const },
       metadata: {
         properties: {
           // Core fields
-          id: { type: 'keyword' },
-          title: { type: 'text', analyzer: 'standard' },
-          artist: { type: 'text', analyzer: 'standard' },
-          date: { type: 'text' },
-          medium: { type: 'text' },
-          dimensions: { type: 'text' },
-          creditLine: { type: 'text' },
+          id: { type: 'keyword' as const },
+          title: { type: 'text' as const, analyzer: 'standard' },
+          artist: { type: 'text' as const, analyzer: 'standard' },
+          date: { type: 'text' as const },
+          medium: { type: 'text' as const },
+          dimensions: { type: 'text' as const },
+          creditLine: { type: 'text' as const },
           
           // Collection info
-          collection: { type: 'keyword' },
-          collectionId: { type: 'keyword' },
-          sourceUrl: { type: 'keyword' },
+          collection: { type: 'keyword' as const },
+          collectionId: { type: 'keyword' as const },
+          sourceUrl: { type: 'keyword' as const },
           
           // Additional common fields
-          department: { type: 'keyword' },
-          classification: { type: 'keyword' },
-          culture: { type: 'keyword' },
-          period: { type: 'keyword' },
-          dynasty: { type: 'keyword' },
+          department: { type: 'keyword' as const },
+          classification: { type: 'keyword' as const },
+          culture: { type: 'keyword' as const },
+          period: { type: 'keyword' as const },
+          dynasty: { type: 'keyword' as const },
           
           // Artist info
-          artistBio: { type: 'text' },
-          artistNationality: { type: 'keyword' },
-          artistBeginDate: { type: 'integer' },
-          artistEndDate: { type: 'integer' },
-          artistGender: { type: 'keyword' },
+          artistBio: { type: 'text' as const },
+          artistNationality: { type: 'keyword' as const },
+          artistBeginDate: { type: 'integer' as const },
+          artistEndDate: { type: 'integer' as const },
+          artistGender: { type: 'keyword' as const },
           
           // Dates
-          dateBegin: { type: 'integer' },
-          dateEnd: { type: 'integer' },
+          dateBegin: { type: 'integer' as const },
+          dateEnd: { type: 'integer' as const },
           
           // Physical properties
-          width: { type: 'float' },
-          height: { type: 'float' },
-          depth: { type: 'float' },
-          diameter: { type: 'float' },
-          weight: { type: 'float' },
+          width: { type: 'float' as const },
+          height: { type: 'float' as const },
+          depth: { type: 'float' as const },
+          diameter: { type: 'float' as const },
+          weight: { type: 'float' as const },
           
           // Status flags
-          isHighlight: { type: 'boolean' },
-          isPublicDomain: { type: 'boolean' },
-          onView: { type: 'boolean' },
+          isHighlight: { type: 'boolean' as const },
+          isPublicDomain: { type: 'boolean' as const },
+          onView: { type: 'boolean' as const },
           
           // Flexible additional data
-          additionalData: { type: 'object', enabled: false }
+          additionalData: { type: 'object' as const, enabled: false }
         },
       },
       image: { 
-        type: 'object',
+        type: 'object' as const,
         enabled: false
       },
       // Visual descriptions
       visual_alt_text: { 
-        type: 'text',
+        type: 'text' as const,
         analyzer: 'standard'
       },
       visual_long_description: { 
-        type: 'text',
+        type: 'text' as const,
         analyzer: 'standard'
       },
       description_metadata: {
-        type: 'object',
+        type: 'object' as const,
         enabled: false
       },
       embeddings: {
         properties: {
           // Cross-modal embedding models
           siglip2: {
-            type: 'dense_vector',
+            type: 'dense_vector' as const,
             dims: 768,
             index: true,
-            similarity: 'cosine',
+            similarity: 'cosine' as const,
           },
           // Enhanced text embeddings
           jina_v3: {
-            type: 'dense_vector',
+            type: 'dense_vector' as const,
             dims: 768,
             index: true,
-            similarity: 'cosine',
+            similarity: 'cosine' as const,
           },
         },
       },
     },
   },
-};
+} as const;

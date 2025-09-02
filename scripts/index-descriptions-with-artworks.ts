@@ -71,7 +71,10 @@ async function updateWithDescriptions(forceRecreate: boolean = false, limit?: nu
     console.log(`Found ${artworks.length} artworks`);
     
     // Filter to only those with images
-    artworks = artworks.filter(a => a.image?.url);
+    artworks = artworks.filter(a => {
+      const imageUrl = typeof a.image === 'string' ? a.image : a.image?.url;
+      return !!imageUrl;
+    });
     console.log(`With images: ${artworks.length}`);
     
     if (limit) {

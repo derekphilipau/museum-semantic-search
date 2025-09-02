@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     
     const errorMessage = error instanceof Error ? error.message : 'Image search failed';
     const statusCode = error instanceof Error && 'statusCode' in error ? 
-      (error as any).statusCode : 500;
+      (error as Error & { statusCode: number }).statusCode : 500;
     
     return NextResponse.json(
       { error: errorMessage },

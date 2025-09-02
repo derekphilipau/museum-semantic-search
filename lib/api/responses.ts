@@ -17,7 +17,7 @@ export function handleApiError(error: unknown): NextResponse {
   if (error instanceof Error) {
     // Check if error has a status code
     const statusCode = 'statusCode' in error ? 
-      (error as any).statusCode : 500;
+      (error as Error & { statusCode?: number }).statusCode || 500 : 500;
     
     return errorResponse(error.message, statusCode);
   }

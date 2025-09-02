@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import { Search, Brain, Zap, FileText, Image, Layers, ImageIcon } from 'lucide-react';
+import { Zap, FileText, ImageIcon } from 'lucide-react';
 import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
-import { Artwork, SearchResponse } from '@/app/types';
+import { SearchResponse } from '@/app/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import SearchResultColumn from './SearchResultColumn';
@@ -16,7 +16,6 @@ interface AllModesResultsProps {
     hybrid: { model: string; results: SearchResponse } | null;
   };
   loading: boolean;
-  onSelectArtwork: (artwork: Artwork) => void;
 }
 
 // Model metadata with URLs and descriptions
@@ -36,8 +35,7 @@ const MODEL_INFO = {
 export default function AllModesResults({ 
   query,
   results, 
-  loading,
-  onSelectArtwork 
+  loading
 }: AllModesResultsProps) {
   
   if (loading) {
@@ -103,7 +101,6 @@ export default function AllModesResults({
           gradientFrom="from-blue-500"
           gradientTo="to-blue-600"
           badgeColor="bg-blue-700"
-          onSelectArtwork={onSelectArtwork}
           responseTime={results.keyword?.took}
           totalResults={results.keyword?.total}
         />
@@ -117,7 +114,6 @@ export default function AllModesResults({
           gradientFrom="from-orange-500"
           gradientTo="to-orange-600"
           badgeColor="bg-orange-700"
-          onSelectArtwork={onSelectArtwork}
           modelUrl={MODEL_INFO.jina_v3?.url}
           showExternalLink={true}
           responseTime={results.semantic.jina_v3?.took}
@@ -133,7 +129,6 @@ export default function AllModesResults({
           gradientFrom="from-purple-500"
           gradientTo="to-purple-600"
           badgeColor="bg-purple-700"
-          onSelectArtwork={onSelectArtwork}
           modelUrl={MODEL_INFO.siglip2?.url}
           showExternalLink={true}
           responseTime={results.semantic.siglip2?.took}
@@ -149,7 +144,6 @@ export default function AllModesResults({
           gradientFrom="from-amber-500"
           gradientTo="to-amber-600"
           badgeColor="bg-amber-700"
-          onSelectArtwork={onSelectArtwork}
           responseTime={results.hybrid?.results?.took}
           totalResults={results.hybrid?.results?.total}
         />

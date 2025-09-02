@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getElasticsearchClient, INDEX_NAME, findSimilarArtworks, findCombinedSimilarArtworks, findMetadataSimilarArtworks } from '@/lib/elasticsearch/client';
 
 interface PageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 // Server function to fetch artwork details
@@ -21,9 +21,7 @@ async function getArtwork(id: string): Promise<Artwork | null> {
     const result = await client.get({
       index: INDEX_NAME,
       id,
-      _source: {
-        excludes: ['embeddings']
-      }
+      _source_excludes: ['embeddings']
     });
 
     if (!result.found) {
@@ -48,7 +46,7 @@ async function getSimilarArtworks(artwork: Artwork): Promise<Record<string, Sear
       try {
         const result = await findSimilarArtworks(artwork.metadata.id, modelKey, 12);
         return { model: modelKey, result };
-      } catch (error) {
+      } catch {
         console.log(`No ${modelKey} embeddings for artwork ${artwork.metadata.id}`);
         return { model: modelKey, result: { took: 0, total: 0, hits: [] } };
       }
@@ -98,7 +96,8 @@ async function getSimilarArtworks(artwork: Artwork): Promise<Record<string, Sear
 
 // Generate metadata for SEO
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const artwork = await getArtwork(params.id);
+  const { id } = await params;
+  const artwork = await getArtwork(id);
   
   if (!artwork) {
     return {
@@ -114,7 +113,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     openGraph: {
       title: metadata.title,
       description: `by ${metadata.artist || 'Unknown Artist'}`,
-      images: artwork.image?.url ? [artwork.image.url] : [],
+      images: typeof artwork.image === 'string' ? [artwork.image] : artwork.image?.url ? [artwork.image.url] : [],
     },
   };
 }
@@ -136,7 +135,8 @@ async function SimilarArtworksSection({ artwork }: { artwork: Artwork }) {
 }
 
 export default async function ArtworkDetailPage({ params }: PageProps) {
-  const artwork = await getArtwork(params.id);
+  const { id } = await params;
+  const artwork = await getArtwork(id);
   
   if (!artwork) {
     notFound();

@@ -8,8 +8,8 @@ const MAX_RESULTS = 100;
 const DEFAULT_RESULTS = 10;
 
 // Type guard for model validation
-function isValidModel(model: any): model is ModelKey {
-  return model in EMBEDDING_MODELS;
+function isValidModel(model: unknown): model is ModelKey {
+  return typeof model === 'string' && model in EMBEDDING_MODELS;
 }
 
 export async function POST(request: NextRequest) {

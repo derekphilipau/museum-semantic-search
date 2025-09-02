@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Info, Image as ImageIcon } from 'lucide-react';
 import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
+import { SearchResponse } from '@/app/types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,7 +21,6 @@ import {
 import ImageSearchUpload from './ImageSearchUpload';
 import SearchResultsWrapper from './SearchResultsWrapper';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { generateImageEmbedding, extractImageSigLIP2Embedding } from '@/lib/embeddings/image';
 
 export type HybridMode = 'text' | 'image' | 'both';
 
@@ -78,7 +78,7 @@ function buildSearchParams(
 
 interface ImageSearchState {
   isSearching: boolean;
-  results: any | null;
+  results: SearchResponse | null;
   error: string | null;
 }
 
@@ -374,7 +374,11 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
       <div id="search-results" className="mt-6">
         <SearchResultsWrapper
           query="Image Search"
-          results={imageSearchState.results}
+          results={{
+            keyword: null,
+            semantic: { siglip2: imageSearchState.results },
+            hybrid: null
+          }}
         />
       </div>
     )}

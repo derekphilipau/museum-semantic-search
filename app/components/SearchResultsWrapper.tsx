@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { SearchResponse, Artwork, SearchMetadata } from '@/app/types';
+import { SearchResponse, SearchMetadata, ESHybridQuery } from '@/app/types';
 import AllModesResults from './AllModesResults';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,9 +26,6 @@ interface SearchResultsWrapperProps {
 export default function SearchResultsWrapper({ query, results }: SearchResultsWrapperProps) {
   const [queryDialogOpen, setQueryDialogOpen] = useState(false);
   
-  const handleSelectArtwork = (artwork: Artwork) => {
-    // Navigation is handled by Link components in ArtworkCard
-  };
 
   return (
     <div className="space-y-4">
@@ -37,8 +34,12 @@ export default function SearchResultsWrapper({ query, results }: SearchResultsWr
           {results.metadata.indexName && (
             <span>Index: {results.metadata.indexName}</span>
           )}
-          <span>Size: {results.metadata.indexSizeHuman}</span>
-          <span>Documents: {results.metadata.totalDocuments.toLocaleString()}</span>
+          {results.metadata.indexSizeHuman && (
+            <span>Size: {results.metadata.indexSizeHuman}</span>
+          )}
+          {results.metadata.totalDocuments && (
+            <span>Documents: {results.metadata.totalDocuments.toLocaleString()}</span>
+          )}
           {results.metadata.totalQueryTime && (
             <span>Total time: {results.metadata.totalQueryTime}ms</span>
           )}
@@ -48,10 +49,10 @@ export default function SearchResultsWrapper({ query, results }: SearchResultsWr
                 <span>ES Keyword: ✓</span>
               )}
               {Object.keys(results.metadata.esQueries.semantic || {}).length > 0 && (
-                <span>ES Semantic: {Object.keys(results.metadata.esQueries.semantic).length} model(s)</span>
+                <span>ES Semantic: {Object.keys(results.metadata.esQueries.semantic || {}).length} model(s)</span>
               )}
               {results.metadata.esQueries.hybrid && (
-                <span>ES Hybrid: {typeof results.metadata.esQueries.hybrid === 'object' && 'mode' in results.metadata.esQueries.hybrid ? results.metadata.esQueries.hybrid.mode : 'RRF'}</span>
+                <span>ES Hybrid: {typeof results.metadata.esQueries.hybrid === 'object' && 'model' in results.metadata.esQueries.hybrid ? (results.metadata.esQueries.hybrid as ESHybridQuery).model : 'RRF'}</span>
               )}
               <Dialog open={queryDialogOpen} onOpenChange={setQueryDialogOpen}>
                 <DialogTrigger asChild>
@@ -78,7 +79,7 @@ export default function SearchResultsWrapper({ query, results }: SearchResultsWr
                     {Object.keys(results.metadata.esQueries.semantic || {}).length > 0 && (
                       <div>
                         <h3 className="text-sm font-semibold mb-2">Semantic Search Queries</h3>
-                        {Object.entries(results.metadata.esQueries.semantic).map(([model, query]) => (
+                        {Object.entries(results.metadata.esQueries.semantic || {}).map(([model, query]) => (
                           <div key={model} className="mb-3">
                             <h4 className="text-xs font-medium mb-1 text-gray-600">{model}</h4>
                             <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto text-xs">
@@ -107,7 +108,6 @@ export default function SearchResultsWrapper({ query, results }: SearchResultsWr
         query={query}
         results={results}
         loading={false}
-        onSelectArtwork={handleSelectArtwork}
       />
     </div>
   );

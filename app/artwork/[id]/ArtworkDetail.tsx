@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { ExternalLink, ArrowLeft } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Artwork } from '@/app/types';

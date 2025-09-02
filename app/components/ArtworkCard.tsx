@@ -12,7 +12,6 @@ interface ArtworkCardProps {
   showScore?: boolean;
   rank?: number;
   compact?: boolean;
-  onCompareClick?: () => void;
 }
 
 function ArtworkCard({
@@ -21,7 +20,6 @@ function ArtworkCard({
   showScore = false,
   rank,
   compact = false,
-  onCompareClick,
 }: ArtworkCardProps) {
   const { metadata, image } = artwork;
   // Handle both full image objects and simple string URLs
@@ -33,7 +31,7 @@ function ArtworkCard({
   // Compact version for multi-column layout
   if (compact) {
     return (
-      <Link href={`/artwork/${metadata.id}`} className="block h-full">
+      <Link href={`/artwork/${artwork.id}`} className="block h-full">
         <Card 
           className="overflow-hidden cursor-pointer hover:shadow-lg transition-all w-full h-full flex flex-col p-2"
         >
@@ -105,7 +103,7 @@ function ArtworkCard({
 
   // Full version
   return (
-    <Link href={`/artwork/${metadata.objectId}`} className="block h-full">
+    <Link href={`/artwork/${artwork.id}`} className="block h-full">
       <Card 
         className="overflow-hidden cursor-pointer hover:shadow-lg transition-all h-full flex flex-col"
       >

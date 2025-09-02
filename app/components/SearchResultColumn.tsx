@@ -4,7 +4,7 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import ArtworkCard from './ArtworkCard';
-import { SearchHit, Artwork } from '@/app/types';
+import { SearchHit } from '@/app/types';
 import { LucideIcon, ExternalLinkIcon } from 'lucide-react';
 
 interface SearchResultColumnProps {
@@ -15,7 +15,6 @@ interface SearchResultColumnProps {
   gradientFrom: string;
   gradientTo: string;
   badgeColor?: string;
-  onSelectArtwork: (artwork: Artwork) => void;
   modelUrl?: string;
   showExternalLink?: boolean;
   responseTime?: number;
@@ -30,7 +29,6 @@ function SearchResultColumn({
   gradientFrom,
   gradientTo,
   badgeColor,
-  onSelectArtwork,
   modelUrl,
   showExternalLink = false,
   responseTime,
@@ -98,7 +96,6 @@ function SearchResultColumn({
                 <ArtworkCard 
                   artwork={hit._source} 
                   score={hit._score}
-                  onCompareClick={() => onSelectArtwork(hit._source)}
                   compact
                   showScore={true}
                 />

@@ -45,7 +45,7 @@ const descriptionSchema = {
       description: 'Detailed 100-300 word description of the image'
     }
   },
-  required: ['altText', 'longDescription'],
+  required: ['altText', 'longDescription'] as string[],
 };
 
 export async function generateVisualDescription(
@@ -57,7 +57,8 @@ export async function generateVisualDescription(
       model: 'gemini-2.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
-        responseSchema: descriptionSchema,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        responseSchema: descriptionSchema as any,
         temperature: 0.1, // Low temperature for consistency
         topK: 1,
         topP: 0.8,
@@ -114,9 +115,10 @@ export async function generateVisualDescription(
       model: 'gemini-2.5-flash',
       timestamp: new Date().toISOString(),
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Gemini API error:', error);
-    throw new Error(`Failed to generate description: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to generate description: ${errorMessage}`);
   }
 }
 

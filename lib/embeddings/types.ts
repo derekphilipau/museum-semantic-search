@@ -19,6 +19,25 @@ export interface EmbeddingError {
   details?: string;
 }
 
+export interface UnifiedEmbeddingResponse {
+  text: string | null;
+  embeddings: {
+    jina_v3?: {
+      embedding: number[];
+      dimension: number;
+      processing_time: number;
+    };
+    siglip2?: {
+      embedding: number[];
+      dimension: number;
+      processing_time: number;
+    };
+  };
+  total_processing_time: number;
+  device: string;
+  input_type: string;
+}
+
 export const EMBEDDING_MODELS: Record<string, EmbeddingModel> = {
   jina_v3: {
     key: 'jina_v3',

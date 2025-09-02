@@ -6,10 +6,10 @@ const CACHE_DURATION = 3600;
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const artworkId = params.id;
+    const { id: artworkId } = await params;
     
     // Validate artwork ID
     if (!artworkId) {
@@ -33,7 +33,7 @@ export async function GET(
     return NextResponse.json(artwork, {
       headers: {
         'Cache-Control': `public, max-age=${CACHE_DURATION}, s-maxage=${CACHE_DURATION}`,
-        'ETag': `"${artworkId}-${artwork.metadata?.lastUpdate || 'static'}"`,
+        'ETag': `"${artworkId}-static"`,
       }
     });
 

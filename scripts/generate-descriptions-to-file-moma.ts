@@ -91,7 +91,7 @@ async function processArtwork(
   writer: any
 ): Promise<{ processed: number; skipped: number; failed: number; violations: number }> {
   try {
-    const imageUrl = artwork.image?.url;
+    const imageUrl = typeof artwork.image === 'string' ? artwork.image : artwork.image?.url;
     
     if (!imageUrl) {
       console.log(`  No image URL for ${artwork.metadata.id}`);
@@ -222,7 +222,10 @@ async function main() {
     console.log(`Found ${artworks.length} artworks total`);
     
     // Filter to only those with images
-    artworks = artworks.filter(a => a.image?.url);
+    artworks = artworks.filter(a => {
+      const imageUrl = typeof a.image === 'string' ? a.image : a.image?.url;
+      return !!imageUrl;
+    });
     console.log(`With images: ${artworks.length}`);
   } catch (error) {
     console.error('Failed to parse CSV:', error);

@@ -3,7 +3,11 @@ import * as path from 'path';
 
 // Load environment variables FIRST before any other imports
 const projectDir = path.join(__dirname, '..');
-process.env.NODE_ENV = process.env.NODE_ENV || 'development';
+// Set NODE_ENV if not already set
+if (!process.env.NODE_ENV) {
+  // @ts-expect-error - NODE_ENV is readonly but we need to set it
+  process.env.NODE_ENV = 'development';
+}
 
 // Manually load env vars
 import { loadEnvConfig } from '@next/env';
@@ -188,7 +192,7 @@ async function indexArtworks(
         // Log specific errors
         bulkResponse.items.forEach((item: any, idx: number) => {
           if (item.index?.error) {
-            console.error(`Failed to index ${batch[idx].id}:`, item.index.error);
+            console.error(`Failed to index ${batch[idx].metadata.id}:`, item.index.error);
           }
         });
       } else {
@@ -250,7 +254,7 @@ async function main() {
   console.log(`\nCreating index ${INDEX_NAME}...`);
   await esClient.indices.create({
     index: INDEX_NAME,
-    body: INDEX_MAPPING
+    ...INDEX_MAPPING
   });
   console.log('✓ Index created');
   
