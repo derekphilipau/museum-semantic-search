@@ -38,6 +38,44 @@ Combines keyword and semantic search with user-adjustable balance control:
 - **Both Mode**: Keyword + both embedding types using RRF
 - Balance slider: 0% = pure keyword, 100% = pure semantic, 50% = equal weight
 
+### 4. **Image Search**
+Upload an image to find visually similar artworks using SigLIP 2 embeddings.
+
+## Similar Artworks Algorithms
+
+The artwork detail pages display similar artworks using four different algorithms:
+
+### 1. **Metadata Similarity** (Elasticsearch-based)
+Finds artworks with similar structured metadata using art historical principles:
+- **Artist** (weight: 10) - Same artist indicates strong connection
+- **Date/Period** (weight: 7) - Temporal proximity using Gaussian decay (±25 years)
+- **Medium** (weight: 6) - Similar materials and techniques
+- **Classification** (weight: 5) - Same artwork type (painting, sculpture, etc.)
+- **Department** (weight: 4) - Museum curatorial groupings
+- **Culture/Nationality** (weight: 4) - Cultural and geographic connections
+- **Dimensions** (weight: 3) - Similar physical scale (±20% tolerance)
+- **Period/Dynasty** (weight: 3) - Art historical movements
+
+### 2. **Jina v3 Text Similarity**
+Uses 768-dimensional text embeddings to find semantically similar artworks based on:
+- Artwork metadata (title, artist, date, medium)
+- AI-generated visual descriptions
+- Contextual understanding of art terminology
+
+### 3. **SigLIP 2 Visual Similarity**
+Uses 768-dimensional cross-modal embeddings to find visually similar artworks:
+- Analyzes visual features like composition, color, style
+- Works across different media and periods
+- Captures visual patterns independent of metadata
+
+### 4. **Combined Similarity**
+Intelligently fuses all three similarity types using weighted Reciprocal Rank Fusion (RRF):
+- **35%** Jina v3 text embeddings - semantic understanding
+- **35%** SigLIP 2 visual embeddings - visual appearance
+- **30%** Elasticsearch metadata - art historical context
+
+This provides the most comprehensive similarity ranking by considering what the artwork depicts, how it looks, and its place in art history.
+
 ## Additional Features
 
 - **Multi-model Comparison**: Side-by-side results from different search types
@@ -136,9 +174,17 @@ GOOGLE_GEMINI_API_KEY=your_gemini_api_key  # For Gemini 2.5 Flash descriptions
 # Modal Unified Embeddings API - Returns both SigLIP 2 and Jina v3 in one call
 MODAL_EMBEDDING_URL=https://your-username--museum-embeddings-embed-text.modal.run
 
-# Elasticsearch
+# Elasticsearch Configuration
+# Option 1: Local Elasticsearch (default)
 ELASTICSEARCH_URL=http://localhost:9200
-NEXT_PUBLIC_ELASTICSEARCH_URL=http://localhost:9200
+
+# Option 2: Elastic Cloud - use either Cloud ID or URL
+# ELASTICSEARCH_CLOUD_ID=your-deployment:base64string
+# ELASTICSEARCH_URL=https://your-deployment.es.elastic.co:9243
+# ELASTICSEARCH_API_KEY=your-api-key
+
+# Index name (optional, defaults to 'artworks_semantic')
+# ELASTICSEARCH_INDEX=artworks_semantic
 ```
 
 ### 5. Deploy Modal Embeddings API
@@ -171,13 +217,28 @@ MODAL_EMBEDDING_URL=https://your-username--museum-embeddings-embed-text.modal.ru
 
 See `modal/README.md` for detailed deployment instructions.
 
-### 6. Start Elasticsearch
+### 6. Set up Elasticsearch
+
+#### Option A: Local Elasticsearch (Development)
 
 ```bash
 docker-compose up -d
 ```
 
-This starts Elasticsearch and Kibana locally.
+This starts Elasticsearch and Kibana locally on ports 9200 and 5601.
+
+#### Option B: Elastic Cloud (Production)
+
+1. Create an Elastic Cloud deployment at https://cloud.elastic.co
+2. Get your Cloud ID and create an API key
+3. Update `.env.local`:
+
+```env
+ELASTICSEARCH_CLOUD_ID=your-deployment:base64string
+ELASTICSEARCH_API_KEY=your-api-key
+```
+
+The client will automatically detect and use cloud credentials when available.
 
 ### 7. Index the artworks
 

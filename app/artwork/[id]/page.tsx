@@ -8,14 +8,7 @@ import SimilarArtworks from './SimilarArtworks';
 import ArtworkDetail from './ArtworkDetail';
 import ScrollToTop from '@/app/components/ScrollToTop';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Client } from '@elastic/elasticsearch';
-
-// Initialize Elasticsearch client
-const client = new Client({
-  node: process.env.ELASTICSEARCH_URL || 'http://localhost:9200',
-});
-
-const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || process.env.NEXT_PUBLIC_ELASTICSEARCH_INDEX || 'artworks_semantic';
+import { getElasticsearchClient, INDEX_NAME, findSimilarArtworks, findCombinedSimilarArtworks, findMetadataSimilarArtworks } from '@/lib/elasticsearch/client';
 
 interface PageProps {
   params: { id: string };
@@ -24,6 +17,7 @@ interface PageProps {
 // Server function to fetch artwork details
 async function getArtwork(id: string): Promise<Artwork | null> {
   try {
+    const client = getElasticsearchClient();
     const result = await client.get({
       index: INDEX_NAME,
       id,
@@ -48,78 +42,53 @@ async function getSimilarArtworks(artwork: Artwork): Promise<Record<string, Sear
   const results: Record<string, SearchResponse> = {};
   
   try {
-    // First, we need to get the embeddings for this artwork
-    const embeddingResult = await client.get({
-      index: INDEX_NAME,
-      id: artwork.metadata.id,
-      _source: {
-        includes: ['embeddings']
-      }
-    });
-
-    if (!embeddingResult.found) {
-      return results;
-    }
-
-    const embeddings = (embeddingResult._source as any).embeddings;
-    if (!embeddings) {
-      return results;
-    }
-
-    // Search for similar artworks for each model that has embeddings
-    const searchPromises = Object.entries(embeddings).map(async ([modelKey, embedding]) => {
-      if (!embedding || !Array.isArray(embedding)) {
-        return null;
-      }
-
+    // Get similar artworks for each individual model
+    const modelKeys = Object.keys(EMBEDDING_MODELS) as ModelKey[];
+    const individualSearchPromises = modelKeys.map(async (modelKey) => {
       try {
-        const searchResult = await client.search({
-          index: INDEX_NAME,
-          body: {
-            knn: {
-              field: `embeddings.${modelKey}`,
-              query_vector: embedding as number[],
-              k: 13, // +1 to exclude the source artwork
-              num_candidates: 50
-            },
-            size: 13,
-            _source: {
-              excludes: ['embeddings']
-            }
-          }
-        });
-
-        // Filter out the source artwork from results
-        const filteredHits = searchResult.hits.hits.filter(
-          (hit: any) => hit._id !== artwork.metadata.id
-        );
-
-        return {
-          model: modelKey,
-          results: {
-            took: searchResult.took,
-            total: filteredHits.length,
-            hits: filteredHits.slice(0, 12).map((hit: any) => ({
-              _id: hit._id,
-              _score: hit._score,
-              _source: hit._source
-            }))
-          }
-        };
+        const result = await findSimilarArtworks(artwork.metadata.id, modelKey, 12);
+        return { model: modelKey, result };
       } catch (error) {
-        console.error(`Error searching similar artworks for ${modelKey}:`, error);
-        return null;
+        console.log(`No ${modelKey} embeddings for artwork ${artwork.metadata.id}`);
+        return { model: modelKey, result: { took: 0, total: 0, hits: [] } };
       }
     });
 
-    const searchResults = await Promise.all(searchPromises);
+    // Also get combined similarity results (now includes metadata)
+    const combinedPromise = findCombinedSimilarArtworks(
+      artwork.metadata.id, 
+      modelKeys,
+      12,
+      { jina_v3: 0.35, siglip2: 0.35, metadata: 0.3 } // Balanced weights across all similarity types
+    ).catch(error => {
+      console.log(`Combined similarity search failed for artwork ${artwork.metadata.id}:`, error);
+      return { took: 0, total: 0, hits: [] };
+    });
     
-    searchResults.forEach((result) => {
-      if (result && result.model) {
-        results[result.model] = result.results;
-      }
+    // Also get metadata-based similarity
+    const metadataPromise = findMetadataSimilarArtworks(
+      artwork.metadata.id,
+      12
+    ).catch(error => {
+      console.log(`Metadata similarity search failed for artwork ${artwork.metadata.id}:`, error);
+      return { took: 0, total: 0, hits: [] };
     });
 
+    // Execute all searches in parallel
+    const [individualResults, combinedResult, metadataResult] = await Promise.all([
+      Promise.all(individualSearchPromises),
+      combinedPromise,
+      metadataPromise
+    ]);
+
+    // Process individual model results
+    individualResults.forEach(({ model, result }) => {
+      results[model] = result;
+    });
+
+    // Add combined and metadata results
+    results['combined'] = combinedResult;
+    results['metadata'] = metadataResult;
   } catch (error) {
     console.error('Error fetching similar artworks:', error);
   }

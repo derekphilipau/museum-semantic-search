@@ -7,9 +7,37 @@ let client: Client | null = null;
 
 export function getElasticsearchClient(): Client {
   if (!client) {
-    client = new Client({
-      node: process.env.ELASTICSEARCH_URL || 'http://localhost:9200',
-    });
+    const esUrl = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
+    const apiKey = process.env.ELASTICSEARCH_API_KEY;
+    const cloudId = process.env.ELASTICSEARCH_CLOUD_ID;
+    
+    // Check if we're using Elastic Cloud
+    if (cloudId && apiKey) {
+      // Elastic Cloud configuration
+      client = new Client({
+        cloud: {
+          id: cloudId
+        },
+        auth: {
+          apiKey: apiKey
+        }
+      });
+    } else if (apiKey && esUrl.includes('elastic.co')) {
+      // Elastic Cloud with URL (alternative setup)
+      client = new Client({
+        node: esUrl,
+        auth: {
+          apiKey: apiKey
+        }
+      });
+    } else {
+      // Local Elasticsearch (no auth required)
+      client = new Client({
+        node: esUrl
+      });
+    }
+    
+    console.log(`Elasticsearch client initialized: ${cloudId ? 'Cloud' : esUrl}`);
   }
   return client;
 }
@@ -407,7 +435,8 @@ export async function findSimilarArtworks(
 
     const embedding = artwork._source?.embeddings?.[model];
     if (!embedding) {
-      throw new Error(`No ${model} embedding found for artwork ${artworkId}`);
+      console.log(`No ${model} embedding found for artwork ${artworkId}`);
+      return { took: 0, total: 0, hits: [] };
     }
 
     // Search for similar artworks
@@ -441,6 +470,385 @@ export async function findSimilarArtworks(
     };
   } catch (error) {
     console.error(`Similar artworks search error for ${model}:`, error);
+    return { took: 0, total: 0, hits: [] };
+  }
+}
+
+// Metadata-based similarity search using Elasticsearch fields
+export async function findMetadataSimilarArtworks(
+  artworkId: string,
+  size: number = 20
+): Promise<SearchResponse & { esQuery?: any }> {
+  try {
+    const client = getElasticsearchClient();
+    
+    // First get the source artwork
+    const sourceArtwork = await client.get({
+      index: INDEX_NAME,
+      id: artworkId,
+    });
+
+    const metadata = sourceArtwork._source?.metadata;
+    if (!metadata) {
+      throw new Error(`No metadata found for artwork ${artworkId}`);
+    }
+
+    // Build a complex query based on metadata similarity
+    // Weights based on art historical importance
+    const shouldClauses: any[] = [];
+    
+    // 1. Artist - Highest weight (same artist = very similar)
+    if (metadata.artist && metadata.artist !== 'Unknown') {
+      shouldClauses.push({
+        match: {
+          'metadata.artist': {
+            query: metadata.artist,
+            boost: 10
+          }
+        }
+      });
+    }
+    
+    // 2. Date range - Very important (works from same period)
+    if (metadata.dateBegin || metadata.dateEnd) {
+      const centerYear = metadata.dateBegin && metadata.dateEnd 
+        ? Math.round((metadata.dateBegin + metadata.dateEnd) / 2)
+        : metadata.dateBegin || metadata.dateEnd;
+      
+      // Gaussian decay function: full score within 10 years, decaying over 50 years
+      shouldClauses.push({
+        function_score: {
+          functions: [{
+            gauss: {
+              'metadata.dateBegin': {
+                origin: centerYear,
+                scale: 25,  // 25 years is the "scale" where score = 0.5
+                decay: 0.5
+              }
+            }
+          }],
+          boost: 7
+        }
+      });
+    }
+    
+    // 3. Medium - Important (same materials/technique)
+    if (metadata.medium) {
+      shouldClauses.push({
+        match: {
+          'metadata.medium': {
+            query: metadata.medium,
+            boost: 6,
+            fuzziness: 'AUTO'
+          }
+        }
+      });
+    }
+    
+    // 4. Classification - Important (painting, sculpture, etc.)
+    if (metadata.classification) {
+      shouldClauses.push({
+        term: {
+          'metadata.classification': {
+            value: metadata.classification,
+            boost: 5
+          }
+        }
+      });
+    }
+    
+    // 5. Department - Moderately important
+    if (metadata.department) {
+      shouldClauses.push({
+        term: {
+          'metadata.department': {
+            value: metadata.department,
+            boost: 4
+          }
+        }
+      });
+    }
+    
+    // 6. Culture/Nationality - Moderately important
+    if (metadata.culture) {
+      shouldClauses.push({
+        term: {
+          'metadata.culture': {
+            value: metadata.culture,
+            boost: 4
+          }
+        }
+      });
+    }
+    
+    if (metadata.artistNationality) {
+      shouldClauses.push({
+        term: {
+          'metadata.artistNationality': {
+            value: metadata.artistNationality,
+            boost: 4
+          }
+        }
+      });
+    }
+    
+    // 7. Dimensions - Less important but relevant (similar scale)
+    if (metadata.width && metadata.height) {
+      // Similar dimensions (within 20%)
+      shouldClauses.push({
+        bool: {
+          must: [
+            {
+              range: {
+                'metadata.width': {
+                  gte: metadata.width * 0.8,
+                  lte: metadata.width * 1.2
+                }
+              }
+            },
+            {
+              range: {
+                'metadata.height': {
+                  gte: metadata.height * 0.8,
+                  lte: metadata.height * 1.2
+                }
+              }
+            }
+          ],
+          boost: 3
+        }
+      });
+    }
+    
+    // 8. Period/Dynasty - Less important
+    if (metadata.period) {
+      shouldClauses.push({
+        term: {
+          'metadata.period': {
+            value: metadata.period,
+            boost: 3
+          }
+        }
+      });
+    }
+    
+    if (metadata.dynasty) {
+      shouldClauses.push({
+        term: {
+          'metadata.dynasty': {
+            value: metadata.dynasty,
+            boost: 3
+          }
+        }
+      });
+    }
+    
+    // If no metadata fields could be used for similarity, return empty results
+    if (shouldClauses.length === 0) {
+      console.log(`No usable metadata fields for similarity search on artwork ${artworkId}`);
+      return { took: 0, total: 0, hits: [] };
+    }
+
+    // Execute the search
+    const searchBody = {
+      size: size + 1, // +1 to exclude self
+      _source: {
+        excludes: ['embeddings']
+      },
+      query: {
+        bool: {
+          should: shouldClauses,
+          must_not: [
+            { term: { _id: artworkId } } // Exclude the source artwork
+          ],
+          minimum_should_match: 1
+        }
+      }
+    };
+
+    const response = await client.search({
+      index: INDEX_NAME,
+      body: searchBody
+    });
+
+    return {
+      took: response.took,
+      total: response.hits.total.value,
+      hits: response.hits.hits.slice(0, size).map((hit: any) => ({
+        _id: hit._id,
+        _score: hit._score,
+        _source: hit._source
+      })),
+      esQuery: {
+        note: 'Metadata-based similarity using art historical principles',
+        sourceArtwork: {
+          id: artworkId,
+          artist: metadata.artist,
+          date: `${metadata.dateBegin || '?'}-${metadata.dateEnd || '?'}`,
+          medium: metadata.medium,
+          classification: metadata.classification
+        },
+        query: searchBody
+      }
+    };
+  } catch (error) {
+    console.error('Metadata similarity search error:', error);
+    return { took: 0, total: 0, hits: [] };
+  }
+}
+
+// Combined similarity search using multiple embeddings and metadata
+export async function findCombinedSimilarArtworks(
+  artworkId: string,
+  models: ModelKey[],
+  size: number = 20,
+  weights?: Record<ModelKey | 'metadata', number>
+): Promise<SearchResponse & { esQuery?: any }> {
+  try {
+    const client = getElasticsearchClient();
+    
+    // First get the artwork's embeddings
+    const artwork = await client.get({
+      index: INDEX_NAME,
+      id: artworkId,
+    });
+
+    const embeddings = artwork._source?.embeddings;
+    if (!embeddings) {
+      console.log(`No embeddings found for artwork ${artworkId}`);
+      return { took: 0, total: 0, hits: [] };
+    }
+
+    // Check which requested models have embeddings
+    const availableModels = models.filter(model => embeddings[model]);
+    if (availableModels.length === 0) {
+      console.log(`No embeddings found for requested models: ${models.join(', ')} for artwork ${artworkId}`);
+      return { took: 0, total: 0, hits: [] };
+    }
+
+    // Default equal weights if not specified
+    // Include metadata weight (default 0.3 to give embeddings more influence)
+    const defaultWeights = {
+      ...availableModels.reduce((acc, model) => ({
+        ...acc,
+        [model]: 0.35 // 35% each for 2 embeddings
+      }), {} as Record<ModelKey, number>),
+      metadata: 0.3 // 30% for metadata
+    };
+    const modelWeights = weights || defaultWeights;
+
+    // Run parallel searches for each model + metadata search
+    const searchPromises: Promise<any>[] = [];
+    
+    // Embedding searches
+    availableModels.forEach(model => {
+      searchPromises.push(
+        client.search({
+          index: INDEX_NAME,
+          body: {
+            size: size * 2, // Get more results for better fusion
+            _source: {
+              excludes: ['embeddings']
+            },
+            knn: {
+              field: `embeddings.${model}`,
+              query_vector: embeddings[model],
+              k: size * 2,
+              num_candidates: size * 4
+            }
+          }
+        })
+      );
+    });
+    
+    // Add metadata similarity search
+    searchPromises.push(
+      findMetadataSimilarArtworks(artworkId, size * 2)
+        .then(result => ({
+          hits: {
+            hits: result.hits.map(hit => ({
+              _id: hit._id,
+              _score: hit._score,
+              _source: hit._source
+            }))
+          },
+          took: result.took
+        }))
+    );
+
+    const results = await Promise.all(searchPromises);
+    
+    // Combine results using weighted RRF
+    const documentScores = new Map<string, { hit: any, combinedScore: number, sources: string[] }>();
+    const k = 20; // RRF constant for more aggressive ranking
+    
+    // Process results from each embedding model
+    availableModels.forEach((model, modelIndex) => {
+      const modelWeight = modelWeights[model] || defaultWeights[model];
+      const searchResult = results[modelIndex];
+      
+      searchResult.hits.hits.forEach((hit: any, rank: number) => {
+        // Skip the source artwork
+        if (hit._id === artworkId) return;
+        
+        const rrfScore = modelWeight * (1 / (k + rank + 1));
+        
+        if (documentScores.has(hit._id)) {
+          const existing = documentScores.get(hit._id)!;
+          existing.combinedScore += rrfScore;
+          existing.sources.push(model);
+        } else {
+          documentScores.set(hit._id, { hit, combinedScore: rrfScore, sources: [model] });
+        }
+      });
+    });
+    
+    // Process metadata similarity results
+    const metadataWeight = modelWeights.metadata || defaultWeights.metadata;
+    const metadataResult = results[results.length - 1]; // Last result is metadata
+    
+    metadataResult.hits.hits.forEach((hit: any, rank: number) => {
+      // Skip the source artwork
+      if (hit._id === artworkId) return;
+      
+      const rrfScore = metadataWeight * (1 / (k + rank + 1));
+      
+      if (documentScores.has(hit._id)) {
+        const existing = documentScores.get(hit._id)!;
+        existing.combinedScore += rrfScore;
+        existing.sources.push('metadata');
+      } else {
+        documentScores.set(hit._id, { hit, combinedScore: rrfScore, sources: ['metadata'] });
+      }
+    });
+    
+    // Sort by combined score and take top N
+    const sortedHits = Array.from(documentScores.values())
+      .sort((a, b) => b.combinedScore - a.combinedScore)
+      .slice(0, size)
+      .map(({ hit, combinedScore, sources }) => ({
+        _id: hit._id,
+        _score: combinedScore,
+        _source: hit._source,
+        // Include source info in metadata for debugging
+        _metadata: { sources }
+      }));
+    
+    return {
+      took: Math.max(...results.map(r => r.took || 0)),
+      total: sortedHits.length,
+      hits: sortedHits,
+      esQuery: {
+        note: 'Combined similarity search with embeddings and metadata using RRF',
+        models: availableModels,
+        includesMetadata: true,
+        weights: modelWeights,
+        k,
+        sourceArtworkId: artworkId
+      }
+    };
+  } catch (error) {
+    console.error('Combined similar artworks search error:', error);
     return { took: 0, total: 0, hits: [] };
   }
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Search, Brain, Zap, FileText, Image, Layers } from 'lucide-react';
+import { Search, Brain, Zap, FileText, Image, Layers, ImageIcon } from 'lucide-react';
 import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
 import { Artwork, SearchResponse } from '@/app/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -97,7 +97,7 @@ export default function AllModesResults({
         {/* 1. Keyword Search (ES text only) */}
         <SearchResultColumn
           title="Keyword"
-          description="Text matching"
+          description="Elasticsearch Text matching"
           icon={FileText}
           hits={results.keyword?.hits || []}
           gradientFrom="from-blue-500"
@@ -128,7 +128,7 @@ export default function AllModesResults({
         <SearchResultColumn
           title={EMBEDDING_MODELS.siglip2?.name || 'SigLIP 2'}
           description={MODEL_INFO.siglip2?.description || 'Cross-modal search'}
-          icon={Layers}
+          icon={ImageIcon}
           hits={results.semantic.siglip2?.hits || []}
           gradientFrom="from-purple-500"
           gradientTo="to-purple-600"
