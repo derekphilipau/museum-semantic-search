@@ -89,6 +89,28 @@ This provides the most comprehensive similarity ranking by considering what the 
 - **Parallel Search**: All search types execute concurrently
 - **Efficient Ranking**: Manual RRF implementation for multi-model fusion
 - **Modal Auto-scaling**: Handles load spikes automatically
+- **Smart Caching**: Query embeddings cached to reduce API calls and costs
+
+### Embedding Cache
+
+The system includes a hybrid caching strategy to minimize Modal API calls:
+
+1. **Local Development**: Uses in-memory cache (no setup required)
+   - Stores up to 1,000 recent queries
+   - Zero latency for repeated searches
+   - Resets on server restart
+
+2. **Production (Vercel)**: Uses Vercel KV Redis store
+   - 3,000 free requests/day
+   - 256MB free storage
+   - 7-day TTL for cached embeddings
+   - Setup: Connect Vercel KV in your Vercel dashboard
+
+3. **Cache Benefits**:
+   - Instant results for repeated queries
+   - Significantly reduced Modal API costs
+   - Better user experience during development
+   - Automatic fallback if cache unavailable
 
 ## Model Performance Notes
 
@@ -185,6 +207,11 @@ ELASTICSEARCH_URL=http://localhost:9200
 
 # Index name (optional, defaults to 'artworks_semantic')
 # ELASTICSEARCH_INDEX=artworks_semantic
+
+# Vercel KV (optional) - For caching embeddings
+# Automatically set when you connect Vercel KV to your project
+# KV_REST_API_URL=https://...
+# KV_REST_API_TOKEN=...
 ```
 
 ### 5. Deploy Modal Embeddings API

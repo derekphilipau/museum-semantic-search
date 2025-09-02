@@ -8,16 +8,7 @@ export function getElasticsearchClient(): Client {
   const esUrl = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
   const apiKey = process.env.ELASTICSEARCH_API_KEY;
   const cloudId = process.env.ELASTICSEARCH_CLOUD_ID;
-  
-  console.log('Initializing Elasticsearch client:', {
-    url: esUrl,
-    hasApiKey: !!apiKey,
-    apiKeyPrefix: apiKey ? apiKey.substring(0, 10) + '...' : 'none',
-    hasCloudId: !!cloudId,
-    urlIncludes: esUrl.includes('elastic-cloud.com'),
-    nodeEnv: process.env.NODE_ENV
-  });
-  
+    
   // Check if we're using Elastic Cloud
   let newClient: Client;
   
@@ -46,7 +37,6 @@ export function getElasticsearchClient(): Client {
     });
   }
   
-  console.log(`Elasticsearch client initialized: ${cloudId ? 'Cloud' : esUrl}`);
   return newClient;
 }
 

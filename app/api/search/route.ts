@@ -9,6 +9,7 @@ import {
 } from '@/lib/elasticsearch/client';
 import { SearchResponse, ESSearchQuery, ESHybridQuery } from '@/app/types';
 import { HybridMode } from '@/app/components/SearchForm';
+import { getCachedEmbeddings, setCachedEmbeddings, getCacheStats } from '@/lib/embeddings/cache';
 
 // Type definitions
 interface SearchRequest {
@@ -28,6 +29,12 @@ interface UnifiedSearchResponse {
   keyword: SearchResponse | null;
   semantic: Record<string, SearchResponse>;
   hybrid: { model: string; results: SearchResponse; mode?: HybridMode } | null;
+  metadata?: {
+    cache: {
+      hit: boolean;
+      key?: string;
+    };
+  };
 }
 
 
@@ -79,6 +86,7 @@ export async function POST(request: NextRequest) {
 
     // Pre-fetch embeddings if ANY semantic search is needed
     let embeddings: { siglip2?: number[]; jina_v3?: number[] } = {};
+    let cacheHit = false;
     
     // Initialize ES queries for metadata
     const esQueries: {
@@ -92,16 +100,30 @@ export async function POST(request: NextRequest) {
     };
     
     if (selectedModels.length > 0 || options.hybrid) {
-      // Always fetch both embeddings in one call if we need any embeddings
-      try {
-        const unified = await generateUnifiedEmbeddings(query);
+      // Check cache first
+      const cached = await getCachedEmbeddings(query);
+      
+      if (cached) {
         embeddings = {
-          siglip2: extractSigLIP2Embedding(unified).embedding,
-          jina_v3: extractJinaV3Embedding(unified).embedding
+          siglip2: cached.siglip2,
+          jina_v3: cached.jina_v3
         };
-      } catch (error) {
-        console.error('Failed to generate embeddings:', error);
-        // Continue with empty embeddings - searches will fail gracefully
+        cacheHit = true;
+      } else {
+        // Generate new embeddings if not cached
+        try {
+          const unified = await generateUnifiedEmbeddings(query);
+          embeddings = {
+            siglip2: extractSigLIP2Embedding(unified).embedding,
+            jina_v3: extractJinaV3Embedding(unified).embedding
+          };
+          
+          // Cache the embeddings
+          await setCachedEmbeddings(query, embeddings);
+        } catch (error) {
+          console.error('Failed to generate embeddings:', error);
+          // Continue with empty embeddings - searches will fail gracefully
+        }
       }
     }
 
@@ -252,7 +274,15 @@ export async function POST(request: NextRequest) {
       metadata: {
         ...(indexStats || {}),
         timestamp: new Date().toISOString(),
-        esQueries
+        esQueries,
+        cache: {
+          hit: cacheHit,
+          // Only include cache info if embeddings were needed
+          ...(selectedModels.length > 0 || options.hybrid ? {
+            query: query,
+            embeddingsUsed: cacheHit ? 'cached' : 'generated'
+          } : {})
+        }
       }
     };
 

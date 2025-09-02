@@ -66,6 +66,7 @@ export interface Artwork {
   embeddings: Record<string, number[]>;  // Model name -> embedding vector
   visual_alt_text?: string;      // AI-generated alt text
   visual_long_description?: string; // AI-generated detailed description
+  visual_emoji_summary?: string; // AI-generated emoji summary (2-8 emojis)
   description_metadata?: {
     model: string;
     generated_at: string;
