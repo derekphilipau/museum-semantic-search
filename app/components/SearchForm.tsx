@@ -277,7 +277,7 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
         {/* Second row: Visual descriptions and hybrid mode options */}
         <div className="flex flex-wrap items-center gap-4">
           {/* Include visual descriptions checkbox */}
-          <span className="text-sm font-medium">Keyword & Text Embedding Options:</span>
+          <span className="text-sm font-medium">Keyword Options:</span>
           <div className="flex items-center space-x-2">
             <Checkbox
               id="includeDescriptions"

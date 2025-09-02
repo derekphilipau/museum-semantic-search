@@ -112,6 +112,10 @@ export const INDEX_MAPPING = {
         type: 'text' as const,
         analyzer: 'standard'
       },
+      visual_emoji_summary: {
+        type: 'keyword' as const,  // keyword for exact matching
+        index: false  // No need to search on emojis
+      },
       description_metadata: {
         type: 'object' as const,
         enabled: false

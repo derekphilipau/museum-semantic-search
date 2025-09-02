@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Artwork } from '@/app/types';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
+import { getCollectionShortName } from '@/app/lib/collections';
 
 interface ArtworkCardProps {
   artwork: Artwork;
@@ -21,12 +22,17 @@ function ArtworkCard({
   rank,
   compact = false,
 }: ArtworkCardProps) {
+  // Add safety check for artwork data
+  if (!artwork || !artwork.metadata) {
+    return null;
+  }
+  
   const { metadata, image } = artwork;
   // Handle both full image objects and simple string URLs
-  const imageUrl = typeof image === 'string' ? image : image.url;
+  const imageUrl = typeof image === 'string' ? image : image?.url;
   
   // Get institution name
-  const institutionName = metadata.collection === 'moma' ? 'MoMA' : '';
+  const institutionName = metadata.collection ? getCollectionShortName(metadata.collection) : '';
 
   // Compact version for multi-column layout
   if (compact) {

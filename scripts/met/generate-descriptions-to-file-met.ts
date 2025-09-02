@@ -3,12 +3,13 @@ import { loadEnvConfig } from '@next/env';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createWriteStream } from 'fs';
-import { MoMAParser } from './lib/parsers/moma-parser';
-import { generateVisualDescription, validatePureDescription } from '../lib/descriptions/gemini';
-import { ParsedArtwork } from './lib/parsers/types';
+import { MetParser } from '../lib/parsers/met-parser';
+import { generateVisualDescription, validatePureDescription } from '../../lib/descriptions/gemini';
+import { ParsedArtwork } from '../lib/parsers/types';
+const emojiRegex = require('emoji-regex');
 
 // Load environment variables
-const projectDir = path.join(__dirname, '..');
+const projectDir = path.join(__dirname, '../..');
 loadEnvConfig(projectDir);
 
 interface Progress {
@@ -25,6 +26,7 @@ interface DescriptionRecord {
   artwork_id: string;
   alt_text: string;
   long_description: string;
+  emoji_summary: string;
   has_violations: boolean;
   violations: string[];
   timestamp: string;
@@ -145,10 +147,26 @@ async function processArtwork(
           console.log(`  ⚠️  Metadata violations detected: ${allViolations.join(', ')}`);
         }
         
+        // Normalize emoji summary: remove commas, spaces, and filter out non-emoji characters
+        let normalizedEmojiSummary = result.descriptions.emojiSummary;
+        
+        // Remove commas and extra spaces
+        normalizedEmojiSummary = normalizedEmojiSummary.replace(/,/g, '').replace(/\s+/g, '');
+        
+        // Use emoji-regex package to accurately match all emoji
+        const regex = emojiRegex();
+        const emojis = normalizedEmojiSummary.match(regex);
+        normalizedEmojiSummary = emojis ? emojis.join('') : '';
+        
+        if (normalizedEmojiSummary !== result.descriptions.emojiSummary) {
+          console.log(`  📝 Normalized emojis: "${result.descriptions.emojiSummary}" → "${normalizedEmojiSummary}"`);
+        }
+        
         const record: DescriptionRecord = {
           artwork_id: artwork.metadata.id,
           alt_text: result.descriptions.altText,
           long_description: result.descriptions.longDescription,
+          emoji_summary: normalizedEmojiSummary,
           has_violations: hasViolations,
           violations: allViolations,
           timestamp: result.timestamp,
@@ -191,17 +209,18 @@ async function processArtwork(
 async function main() {
   const args = process.argv.slice(2);
   const limitArg = args.find(arg => arg.startsWith('--limit='));
-  const resume = args.includes('--resume');
+  const force = args.includes('--force');
   const batchSizeArg = args.find(arg => arg.startsWith('--batch-size='));
   
   const limit = limitArg ? parseInt(limitArg.split('=')[1]) : undefined;
   const batchSize = batchSizeArg ? parseInt(batchSizeArg.split('=')[1]) : 10;
+  const resume = !force; // Resume by default unless --force is used
   
-  console.log('MoMA Artwork Visual Description Generation');
+  console.log('Met Artwork Visual Description Generation');
   console.log('=========================================');
   console.log(`Model: Gemini 2.5 Flash`);
   console.log(`Limit: ${limit || 'all'}`);
-  console.log(`Resume: ${resume}`);
+  console.log(`Mode: ${force ? 'Force (overwrite)' : 'Resume (default)'}`);
   console.log(`Save progress every: ${batchSize} artworks`);
   
   // Check API key
@@ -211,29 +230,24 @@ async function main() {
     process.exit(1);
   }
   
-  // Parse MoMA CSV
-  const parser = new MoMAParser();
-  const csvPath = path.join(process.cwd(), 'data', 'moma', 'Artworks_50k.csv');
+  // Parse Met CSV
+  const parser = new MetParser();
+  const csvPath = path.join(process.cwd(), 'data', 'met', 'MetObjects.csv');
   
-  console.log('\nParsing MoMA CSV...');
+  console.log('\nParsing Met CSV...');
+  
   let artworks: ParsedArtwork[];
   try {
-    artworks = await parser.parseFile(csvPath);
-    console.log(`Found ${artworks.length} artworks total`);
-    
-    // Filter to only those with images
-    artworks = artworks.filter(a => {
-      const imageUrl = typeof a.image === 'string' ? a.image : a.image?.url;
-      return !!imageUrl;
-    });
-    console.log(`With images: ${artworks.length}`);
+    // Pass limit to parser to avoid loading all paintings
+    artworks = await parser.parseFile(csvPath, limit);
+    console.log(`Found ${artworks.length} paintings with images`);
   } catch (error) {
     console.error('Failed to parse CSV:', error);
     process.exit(1);
   }
   
   // Setup output directory
-  const outputDir = path.join(process.cwd(), 'data', 'descriptions', 'gemini_2_5_flash');
+  const outputDir = path.join(process.cwd(), 'data', 'met', 'descriptions', 'gemini_2_5_flash');
   await ensureDirectoryExists(outputDir);
   
   const outputPath = path.join(outputDir, 'descriptions.jsonl');
@@ -325,23 +339,23 @@ async function main() {
 // Add usage function
 function showUsage() {
   console.log(`
-Generate visual descriptions from MoMA artworks using Gemini 2.5 Flash
+Generate visual descriptions from Met artworks using Gemini 2.5 Flash
 
 Usage:
-  npm run generate-descriptions [options]
+  npm run generate-descriptions-met [options]
 
 Options:
   --limit=N         Limit to N artworks (optional)
-  --resume          Resume from last checkpoint (optional)
+  --force           Start fresh, overwriting existing progress (default: resume)
   --batch-size=N    Save progress every N artworks (default: 10)
 
 Output:
-  data/descriptions/gemini_2_5_flash/descriptions.jsonl
-  data/descriptions/gemini_2_5_flash/progress.json
+  data/met/descriptions/gemini_2_5_flash/descriptions.jsonl
+  data/met/descriptions/gemini_2_5_flash/progress.json
 
 Example:
-  npm run generate-descriptions -- --limit=100
-  npm run generate-descriptions -- --resume
+  npm run generate-descriptions-met -- --limit=100       # Resume by default
+  npm run generate-descriptions-met -- --force --limit=10  # Start fresh
 `);
 }
 

@@ -4,6 +4,7 @@ import * as fs from 'fs/promises';
 export interface VisualDescription {
   altText: string;
   longDescription: string;
+  emojiSummary: string;
 }
 
 export interface DescriptionResult {
@@ -26,11 +27,35 @@ function getGeminiClient(): GoogleGenerativeAI {
   return genAI;
 }
 
-const COOPER_HEWITT_PROMPT = `Generate accessibility descriptions for this artwork image.
+const COOPER_HEWITT_PROMPT = `Generate museum-quality accessibility descriptions for this artwork image.
 
-ALT TEXT: 10-20 words summarizing the essential visual content.
+GENERAL RULES (apply to all descriptions):
+- Describe only what is visible, not interpretations or symbolism
+- For people: describe appearance without assumptions about identity
+- Avoid geographic/cultural labels unless describing specific visible features
+- Do not assume geographic origin (e.g. East Asian)
+- Use clear, common language (avoid technical jargon)
+- Never mention metadata (artist, date) unless visible in the image
+- Focus on the artwork's visual content, not the physical condition or mounting of the piece
 
-LONG DESCRIPTION: 100-300 words describing visual elements, colors, composition, and spatial relationships. Use neutral language without interpretations or metadata.`;
+ALT TEXT (10-20 words):
+- One concise phrase capturing the essential visual content
+- Start with the most important element
+- No ending punctuation
+
+LONG DESCRIPTION (100-300 words):
+- Progress from general to specific details
+- Follow spatial logic (top-to-bottom, left-to-right, or center-outward)
+- Include: colors (common names), composition, sizes, spatial relationships
+- Transcribe any visible text exactly
+
+EMOJI SUMMARY (2-8 emojis):
+- Select emojis that would help someone quickly understand what they'd see
+- Main visual elements in order of importance
+- ONE emoji per subject (🧔 not 👨+🧔 for bearded man) or group of subjects
+- Focus only on content in the artwork, never include display emojis like 🏛️⚱🎨🖼️
+- Avoid color-only emojis like 💛,🔴,🟦 unless color is the primary subject
+- Choose specific over generic (🌲🌊⛰️ not 🏞️)`;
 
 // Define the JSON schema for structured response
 const descriptionSchema = {
@@ -38,14 +63,20 @@ const descriptionSchema = {
   properties: {
     altText: {
       type: SchemaType.STRING,
-      description: '10-20 word description of the image'
+      description: '10-20 word objective summary of visual content, no metadata unless visible in image'
     },
     longDescription: {
       type: SchemaType.STRING,
-      description: 'Detailed 100-300 word description of the image'
+      description: '100-300 word neutral visual description without interpretation or assumed meaning'
+    },
+    emojiSummary: {
+      type: SchemaType.STRING,
+      description: '2-8 emojis for the main visual elements that define this artwork. Order by importance. One emoji per concept. Avoid color-only emojis unless depicting actual colored objects.',
+      minLength: 2,
+      maxLength: 32  // Emojis can be multi-byte, allowing for up to 8
     }
   },
-  required: ['altText', 'longDescription'] as string[],
+  required: ['altText', 'longDescription', 'emojiSummary'] as string[],
 };
 
 export async function generateVisualDescription(
@@ -100,7 +131,7 @@ export async function generateVisualDescription(
     }
 
     // Validate the response
-    if (!descriptions.altText || !descriptions.longDescription) {
+    if (!descriptions.altText || !descriptions.longDescription || !descriptions.emojiSummary) {
       throw new Error('Missing required fields in response');
     }
 

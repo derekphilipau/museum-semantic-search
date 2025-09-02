@@ -5,6 +5,7 @@ import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Artwork } from '@/app/types';
+import { getCollectionShortName } from '@/app/lib/collections';
 
 interface ArtworkDetailProps {
   artwork: Artwork;
@@ -15,7 +16,7 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
   const imageUrl = typeof image === 'string' ? image : image.url;
   
   // Get institution name
-  const institutionName = metadata.collection === 'moma' ? 'MoMA' : '';
+  const institutionName = metadata.collection ? getCollectionShortName(metadata.collection) : '';
 
   return (
     <>
