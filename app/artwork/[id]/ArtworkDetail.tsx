@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Artwork } from '@/app/types';
 import { getCollectionShortName } from '@/app/lib/collections';
+import { Badge } from '@/components/ui/badge';
 
 interface ArtworkDetailProps {
   artwork: Artwork;
@@ -103,7 +104,7 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
                   asChild
                 >
                   <a href={metadata.sourceUrl} target="_blank" rel="noopener noreferrer">
-                    View on {metadata.collection === 'moma' ? 'MoMA' : 'Museum'} Website
+                    View on {institutionName || 'Museum'} Website
                     <ExternalLink className="w-4 h-4 ml-2" />
                   </a>
                 </Button>
@@ -114,14 +115,21 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
       </Card>
 
       {/* AI-generated descriptions */}
-      {(artwork.visual_alt_text || artwork.visual_long_description) && (
+      {(artwork.visual_alt_text || artwork.visual_long_description || artwork.visual_emoji_summary) && (
         <Card className="mb-6">
           <CardContent className="">
             <div className="space-y-4">
               <div className="flex items-center gap-2 mb-3">
                 <h2 className="text-lg font-semibold">Visual Descriptions</h2>
-                <span className="bg-muted px-2 py-1 rounded text-xs font-medium">AI Generated</span>
+                <Badge variant="secondary" className="text-base font-medium text-muted-foreground">AI Generated</Badge>
               </div>
+              
+              {artwork.visual_emoji_summary && (
+                <div>
+                  <h3 className="font-semibold text-sm mb-1">Visual Summary</h3>
+                  <p className="text-3xl">{artwork.visual_emoji_summary}</p>
+                </div>
+              )}
               
               {artwork.visual_alt_text && (
                 <div>
