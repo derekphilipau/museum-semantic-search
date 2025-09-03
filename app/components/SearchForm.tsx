@@ -195,14 +195,15 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search artworks (try 'abstract', 'picasso', 'print', 'collage')"
-              className="flex-1"
+              className="flex-1 text-lg md:text-xl h-10"
             />
             <Button 
               type="submit" 
               disabled={!query.trim()}
               size="default"
+              className="text-lg md:text-xl h-10"
             >
-              <Search className="w-4 h-4 mr-2" />
+              <Search className="size-5" />
               Search
             </Button>
           </div>
