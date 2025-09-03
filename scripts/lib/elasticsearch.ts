@@ -114,7 +114,11 @@ export const INDEX_MAPPING = {
       },
       visual_emoji_summary: {
         type: 'keyword' as const,  // keyword for exact matching
-        index: false  // No need to search on emojis
+        index: true  // Enable search on emoji string
+      },
+      visual_emoji_array: {
+        type: 'keyword' as const,  // Array of individual emojis
+        index: true
       },
       description_metadata: {
         type: 'object' as const,

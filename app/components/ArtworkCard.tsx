@@ -7,6 +7,7 @@ import { Artwork } from '@/app/types';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { getCollectionShortName } from '@/app/lib/collections';
 import { Badge } from '@/components/ui/badge';
+import ClickableEmojis from './ClickableEmojis';
 
 interface ArtworkCardProps {
   artwork: Artwork;
@@ -88,7 +89,7 @@ function ArtworkCard({
                 <div className="mt-1 pt-1 border-t">
                   <div className="flex items-center gap-1.5">
                     <Badge variant="secondary" className="size-5 text-xs font-medium text-muted-foreground">AI</Badge>
-                    <span className="text-2xl leading-none">{artwork.visual_emoji_summary}</span>
+                    <ClickableEmojis emojis={artwork.visual_emoji_summary} size="xl" />
                   </div>
                 </div>
               )}
@@ -176,7 +177,7 @@ function ArtworkCard({
               <div className="mt-2 pt-2 border-t">
                 <div className="flex items-center gap-2">
                   <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-medium">AI</span>
-                  <span className="text-lg leading-none">{artwork.visual_emoji_summary}</span>
+                  <ClickableEmojis emojis={artwork.visual_emoji_summary} size="lg" />
                 </div>
               </div>
             )}

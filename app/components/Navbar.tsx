@@ -17,13 +17,11 @@ export default function Navbar() {
       <div className="container mx-auto px-4 md:px-6">
         <div className="flex h-14 items-center justify-between">
           {/* Left side - Title and byline */}
-          <Link href="/" className="flex items-center space-x-2">
-            <div>
-              <h1 className="text-lg font-bold">Museum Semantic Search</h1>
-              <p className="text-xs text-muted-foreground">
-                Explore art through AI-powered visual and textual similarity
-              </p>
-            </div>
+          <Link href="/" className="flex flex-col">
+            <h1 className="text-lg font-bold">Museum Semantic Search</h1>
+            <p className="text-xs text-muted-foreground">
+              Explore art through AI-powered visual and textual similarity
+            </p>
           </Link>
           
           {/* Right side - GitHub button */}

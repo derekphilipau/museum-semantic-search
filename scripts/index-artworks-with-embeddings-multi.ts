@@ -199,6 +199,14 @@ async function indexArtworks(
         doc.visual_alt_text = description.alt_text;
         doc.visual_long_description = description.long_description;
         doc.visual_emoji_summary = description.emoji_summary;
+        
+        // Parse emojis into array for better search
+        if (description.emoji_summary) {
+          // Extract individual emojis using Unicode property escapes
+          const emojiMatches = description.emoji_summary.match(/\p{Emoji}/gu);
+          doc.visual_emoji_array = emojiMatches || [];
+        }
+        
         doc.description_metadata = {
           model: description.model,
           generated_at: description.timestamp,

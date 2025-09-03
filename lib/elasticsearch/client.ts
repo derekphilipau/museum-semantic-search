@@ -113,6 +113,62 @@ export async function performKeywordSearch(
 }
 
 
+// Helper function to perform emoji search
+export async function performEmojiSearch(
+  emojis: string[],
+  size: number = 20
+): Promise<SearchResponse & { esQuery?: ESSearchQuery }> {
+  try {
+    const client = getElasticsearchClient();
+    
+    // Create query based on number of emojis
+    const query = emojis.length === 1
+      ? {
+          // Single emoji: find any artwork containing it
+          term: {
+            visual_emoji_array: emojis[0]
+          }
+        }
+      : {
+          // Multiple emojis: find artworks containing ALL
+          bool: {
+            must: emojis.map(emoji => ({
+              term: {
+                visual_emoji_array: emoji
+              }
+            }))
+          }
+        };
+    
+    const searchBody = {
+      size,
+      _source: {
+        excludes: ['embeddings']
+      },
+      query
+    };
+
+    const response = await client.search({
+      index: INDEX_NAME,
+      ...searchBody
+    });
+
+    return {
+      took: response.took,
+      total: (response.hits.total as { value: number }).value,
+      hits: (response.hits.hits as ESResponse['hits']['hits']).map((hit: ESResponse['hits']['hits'][0]) => ({
+        _id: hit._id,
+        _score: hit._score || 0,
+        _source: hit._source
+      })),
+      esQuery: searchBody
+    };
+  } catch (error) {
+    console.error('Emoji search error:', error);
+    return { took: 0, total: 0, hits: [] };
+  }
+}
+
 // Helper function to perform semantic search with pre-computed embedding
 export async function performSemanticSearchWithEmbedding(
   embedding: number[],
@@ -916,6 +972,40 @@ export async function getArtworkById(id: string): Promise<Artwork | null> {
   } catch (error) {
     console.error(`Error getting artwork ${id}:`, error);
     return null;
+  }
+}
+
+// Get all unique emojis in the collection
+export async function getAllEmojis(): Promise<{ emoji: string; count: number }[]> {
+  try {
+    const client = getElasticsearchClient();
+    
+    const response = await client.search({
+      index: INDEX_NAME,
+      size: 0,
+      aggs: {
+        unique_emojis: {
+          terms: {
+            field: 'visual_emoji_array',
+            size: 1000  // Get up to 1000 unique emojis
+          }
+        }
+      }
+    });
+
+    // Type guard to check if the aggregation has buckets
+    const agg = response.aggregations?.unique_emojis;
+    const buckets = (agg && 'buckets' in agg) ? 
+      (agg.buckets as Array<{ key: string; doc_count: number }>) : 
+      [];
+    
+    return buckets.map(bucket => ({
+      emoji: bucket.key,
+      count: bucket.doc_count
+    }));
+  } catch (error) {
+    console.error('Error fetching emojis:', error);
+    return [];
   }
 }
 

@@ -210,8 +210,6 @@ export class MetParser extends BaseParser {
         culture: row.Culture || '',
         period: row.Period || '',
         dynasty: row.Dynasty || '',
-        reign: row.Reign || '',
-        portfolio: row.Portfolio || '',
         
         // Artist info
         artistBio: row['Artist Display Bio'] || '',
@@ -219,16 +217,6 @@ export class MetParser extends BaseParser {
         artistBeginDate: artistBegin,
         artistEndDate: artistEnd,
         artistGender: row['Artist Gender'] || '',
-        artistRole: row['Artist Role'] || '',
-        
-        // Geographic info
-        city: row.City || '',
-        state: row.State || '',
-        county: row.County || '',
-        country: row.Country || '',
-        region: row.Region || '',
-        subregion: row.Subregion || '',
-        locale: row.Locale || '',
         
         // Dates
         dateBegin,
@@ -242,7 +230,7 @@ export class MetParser extends BaseParser {
         // Additional Met-specific data
         additionalData: {
           objectNumber: row['Object Number'],
-          accessionYear: row.AccessionYear ? parseInt(row.AccessionYear) : undefined,
+          accessionYear: row.AccessionYear ? parseInt(row.AccessionYear) : null,
           objectName: row['Object Name'],
           isTimelineWork: row['Is Timeline Work']?.toLowerCase() === 'true',
           galleryNumber: row['Gallery Number'],
@@ -250,7 +238,18 @@ export class MetParser extends BaseParser {
           artistWikidata: row['Artist Wikidata URL'],
           objectWikidata: row['Object Wikidata URL'],
           rightsAndReproduction: row['Rights and Reproduction'],
-          tags: row.Tags ? row.Tags.split('|').map(t => t.trim()).filter(t => t) : []
+          tags: row.Tags ? row.Tags.split('|').map(t => t.trim()).filter(t => t).join(', ') : '',
+          // Fields not in base ArtworkMetadata
+          reign: row.Reign || '',
+          portfolio: row.Portfolio || '',
+          artistRole: row['Artist Role'] || '',
+          city: row.City || '',
+          state: row.State || '',
+          county: row.County || '',
+          country: row.Country || '',
+          region: row.Region || '',
+          subregion: row.Subregion || '',
+          locale: row.Locale || ''
         }
       };
       

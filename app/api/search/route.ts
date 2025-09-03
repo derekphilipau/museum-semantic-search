@@ -5,11 +5,12 @@ import {
   performKeywordSearch, 
   performSemanticSearchWithEmbedding,
   performHybridSearchWithEmbeddings,
+  performEmojiSearch,
   getIndexStats
 } from '@/lib/elasticsearch/client';
 import { SearchResponse, ESSearchQuery, ESHybridQuery } from '@/app/types';
 import { HybridMode } from '@/app/components/SearchForm';
-import { getCachedEmbeddings, setCachedEmbeddings, getCacheStats } from '@/lib/embeddings/cache';
+import { getCachedEmbeddings, setCachedEmbeddings } from '@/lib/embeddings/cache';
 
 // Type definitions
 interface SearchRequest {
@@ -21,6 +22,7 @@ interface SearchRequest {
     hybridMode?: HybridMode;
     hybridBalance?: number;
     includeDescriptions?: boolean;
+    emoji?: boolean;
   };
   size?: number;
 }
@@ -118,8 +120,13 @@ export async function POST(request: NextRequest) {
             jina_v3: extractJinaV3Embedding(unified).embedding
           };
           
-          // Cache the embeddings
-          await setCachedEmbeddings(query, embeddings);
+          // Cache the embeddings only if both are present
+          if (embeddings.siglip2 && embeddings.jina_v3) {
+            await setCachedEmbeddings(query, { 
+              siglip2: embeddings.siglip2, 
+              jina_v3: embeddings.jina_v3 
+            });
+          }
         } catch (error) {
           console.error('Failed to generate embeddings:', error);
           // Continue with empty embeddings - searches will fail gracefully
@@ -130,16 +137,34 @@ export async function POST(request: NextRequest) {
     // Build search promises based on selected options
     const searchPromises: Promise<{ type: string; model?: string; results: SearchResponse }>[] = [];
 
-    // Keyword search
+    // Keyword search - check if it's an emoji-only query
     if (options.keyword) {
-      searchPromises.push(
-        performKeywordSearch(query, size, options.includeDescriptions)
-          .then(results => ({ type: 'keyword', results }))
-          .catch(error => {
-            console.error('Keyword search failed:', error);
-            return { type: 'keyword', results: { took: 0, total: 0, hits: [] } };
-          })
-      );
+      // Check if query contains only emojis
+      const queryEmojis = query.match(/\p{Emoji}/gu) || [];
+      const queryWithoutEmojis = query.replace(/\p{Emoji}/gu, '').trim();
+      const isEmojiOnlyQuery = queryEmojis.length > 0 && queryWithoutEmojis === '' && options.emoji;
+      
+      if (isEmojiOnlyQuery) {
+        // For emoji-only queries, use emoji search but return as keyword
+        searchPromises.push(
+          performEmojiSearch(queryEmojis, size)
+            .then(results => ({ type: 'keyword', results }))
+            .catch(error => {
+              console.error('Emoji search failed:', error);
+              return { type: 'keyword', results: { took: 0, total: 0, hits: [] } };
+            })
+        );
+      } else {
+        // Regular keyword search
+        searchPromises.push(
+          performKeywordSearch(query, size, options.includeDescriptions)
+            .then(results => ({ type: 'keyword', results }))
+            .catch(error => {
+              console.error('Keyword search failed:', error);
+              return { type: 'keyword', results: { took: 0, total: 0, hits: [] } };
+            })
+        );
+      }
     }
 
     // Semantic searches using pre-computed embeddings
@@ -161,6 +186,7 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
 
     // For hybrid search, we'll run separate searches and combine with normalization
     // We don't add hybrid to searchPromises as we'll handle it separately after all searches complete

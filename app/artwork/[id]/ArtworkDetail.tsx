@@ -7,6 +7,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Artwork } from '@/app/types';
 import { getCollectionShortName } from '@/app/lib/collections';
 import { Badge } from '@/components/ui/badge';
+import ClickableEmojis from '@/app/components/ClickableEmojis';
+import PromptCollapsible from '@/app/components/PromptCollapsible';
 
 interface ArtworkDetailProps {
   artwork: Artwork;
@@ -48,14 +50,14 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
                 </div>
               )}
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                 <div className="sm:col-span-2">
                   <span className="font-semibold">Artist:</span>{' '}
                   {metadata.artist || 'Unknown'}
                   {metadata.artistBio && (
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {metadata.artistBio}
-                    </div>
+                    <span className="text-sm text-muted-foreground ml-1">
+                      ({metadata.artistBio})
+                    </span>
                   )}
                 </div>
                 {metadata.date && (
@@ -127,7 +129,7 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
               {artwork.visual_emoji_summary && (
                 <div>
                   <h3 className="font-semibold text-sm mb-1">Visual Summary</h3>
-                  <p className="text-3xl">{artwork.visual_emoji_summary}</p>
+                  <ClickableEmojis emojis={artwork.visual_emoji_summary} size="3xl" />
                 </div>
               )}
               
@@ -155,6 +157,8 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
                   )}
                 </div>
               )}
+              
+              <PromptCollapsible />
             </div>
           </CardContent>
         </Card>

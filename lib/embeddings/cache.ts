@@ -100,7 +100,9 @@ export async function setCachedEmbeddings(
       // Implement simple LRU by removing oldest entries if cache is too large
       if (memoryCache.size >= MAX_MEMORY_CACHE_SIZE) {
         const firstKey = memoryCache.keys().next().value;
-        memoryCache.delete(firstKey);
+        if (firstKey !== undefined) {
+          memoryCache.delete(firstKey);
+        }
       }
       memoryCache.set(key, data);
       console.log(`[Cache] Stored in memory for query: "${query}" (size: ${memoryCache.size})`);
