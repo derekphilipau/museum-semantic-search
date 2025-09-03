@@ -40,9 +40,7 @@ export function getElasticsearchClient(): Client {
   return newClient;
 }
 
-export const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || 
-                          process.env.NEXT_PUBLIC_ELASTICSEARCH_INDEX || 
-                          'artworks_semantic';
+export const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || 'artworks_semantic';
 
 // Search functions by type
 
@@ -980,6 +978,26 @@ export async function getAllEmojis(): Promise<{ emoji: string; count: number }[]
   try {
     const client = getElasticsearchClient();
     
+    console.log('Fetching emojis from index:', INDEX_NAME);
+    
+    // First check if any documents have the visual_emoji_array field
+    const checkField = await client.search({
+      index: INDEX_NAME,
+      size: 1,
+      query: {
+        exists: {
+          field: 'visual_emoji_array'
+        }
+      },
+      _source: ['visual_emoji_array']
+    });
+    
+    console.log('Documents with visual_emoji_array:', (checkField.hits.total as { value: number }).value);
+    
+    if (checkField.hits.hits.length > 0) {
+      console.log('Sample visual_emoji_array:', checkField.hits.hits[0]._source);
+    }
+    
     const response = await client.search({
       index: INDEX_NAME,
       size: 0,
@@ -993,11 +1011,15 @@ export async function getAllEmojis(): Promise<{ emoji: string; count: number }[]
       }
     });
 
+    console.log('Aggregation response:', JSON.stringify(response.aggregations, null, 2));
+
     // Type guard to check if the aggregation has buckets
     const agg = response.aggregations?.unique_emojis;
     const buckets = (agg && 'buckets' in agg) ? 
       (agg.buckets as Array<{ key: string; doc_count: number }>) : 
       [];
+    
+    console.log(`Found ${buckets.length} unique emojis`);
     
     return buckets.map(bucket => ({
       emoji: bucket.key,
@@ -1005,6 +1027,10 @@ export async function getAllEmojis(): Promise<{ emoji: string; count: number }[]
     }));
   } catch (error) {
     console.error('Error fetching emojis:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     return [];
   }
 }

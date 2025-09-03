@@ -11,7 +11,14 @@ if (!process.env.NODE_ENV) {
 
 // Manually load env vars
 import { loadEnvConfig } from '@next/env';
-loadEnvConfig(projectDir, false); // false = don't log
+const { combinedEnv } = loadEnvConfig(projectDir, false); // false = don't log
+
+// Debug: Check if env vars were loaded
+console.log('Environment variables loaded:', {
+  ELASTICSEARCH_URL: process.env.ELASTICSEARCH_URL?.substring(0, 30) + '...',
+  ELASTICSEARCH_API_KEY: process.env.ELASTICSEARCH_API_KEY ? 'SET' : 'NOT SET',
+  ELASTICSEARCH_INDEX: process.env.ELASTICSEARCH_INDEX
+});
 
 // Now import everything else
 import * as fs from 'fs/promises';
@@ -20,7 +27,7 @@ import * as readline from 'readline';
 import { MoMAParser } from './lib/parsers/moma-parser';
 import { MetParser } from './lib/parsers/met-parser';
 import { BaseParser, ParsedArtwork } from './lib/parsers/types';
-import { esClient, INDEX_NAME, INDEX_MAPPING } from './lib/elasticsearch';
+import { createElasticsearchClient, INDEX_NAME, INDEX_MAPPING } from './lib/elasticsearch';
 import { ModelKey, EMBEDDING_MODELS } from '../lib/embeddings/types';
 
 interface EmbeddingRecord {
@@ -135,7 +142,7 @@ async function loadDescriptionsMap(filePath: string): Promise<Map<string, Descri
   return descriptions;
 }
 
-async function createIndex(forceRecreate: boolean = false) {
+async function createIndex(esClient: any, forceRecreate: boolean = false) {
   const exists = await esClient.indices.exists({ index: INDEX_NAME });
   
   if (exists) {
@@ -158,6 +165,7 @@ async function createIndex(forceRecreate: boolean = false) {
 }
 
 async function indexArtworks(
+  esClient: any,
   artworks: ParsedArtwork[], 
   embeddings: { [key in ModelKey]?: Map<string, EmbeddingRecord> },
   descriptions: Map<string, DescriptionRecord>
@@ -300,6 +308,9 @@ async function main() {
   console.log(`Force recreate: ${forceRecreate}`);
   console.log(`Limit: ${limit || 'all'}`);
   
+  // Create Elasticsearch client AFTER env vars are loaded
+  const esClient = createElasticsearchClient();
+  
   // Check connection
   try {
     const health = await esClient.cluster.health();
@@ -312,7 +323,7 @@ async function main() {
   }
   
   // Create or check index
-  const indexCreated = await createIndex(forceRecreate);
+  const indexCreated = await createIndex(esClient, forceRecreate);
   if (!indexCreated && !forceRecreate) {
     console.log('\nExiting. No changes made.');
     return;
@@ -386,7 +397,7 @@ async function main() {
   
   // Index artworks
   console.log('\nIndexing artworks...');
-  const { indexed, failed } = await indexArtworks(artworks, embeddings, descriptions);
+  const { indexed, failed } = await indexArtworks(esClient, artworks, embeddings, descriptions);
   
   console.log('\n✅ Indexing complete!');
   console.log(`   Indexed: ${indexed}`);

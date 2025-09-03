@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ChevronDown } from 'lucide-react';
 
 interface EmojiItem {
   emoji: string;
@@ -26,7 +25,17 @@ export default function EmojiPalette() {
   const fetchEmojis = async () => {
     try {
       const response = await fetch('/api/emojis');
+      
+      if (!response.ok) {
+        console.error('Failed to fetch emojis:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        setLoading(false);
+        return;
+      }
+      
       const data = await response.json();
+      console.log('Emoji data received:', data);
       setEmojis(data.emojis || []);
     } catch (error) {
       console.error('Failed to fetch emojis:', error);

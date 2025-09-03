@@ -1,48 +1,59 @@
 import { Client } from '@elastic/elasticsearch';
 
-const ES_URL = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
-const API_KEY = process.env.ELASTICSEARCH_API_KEY;
-const CLOUD_ID = process.env.ELASTICSEARCH_CLOUD_ID;
+// Create a function to get the client so env vars are loaded first
+let _esClient: Client | null = null;
 
-// Create client with proper authentication
-let clientConfig: any = {};
+export function createElasticsearchClient(): Client {
+  if (_esClient) {
+    return _esClient;
+  }
 
-if (CLOUD_ID && API_KEY) {
-  // Elastic Cloud configuration with Cloud ID
-  clientConfig = {
-    cloud: {
-      id: CLOUD_ID
-    },
-    auth: {
-      apiKey: API_KEY
-    }
-  };
-} else if (API_KEY && (ES_URL.includes('elastic.co') || ES_URL.includes('elastic-cloud.com'))) {
-  // Elastic Cloud with URL
-  clientConfig = {
-    node: ES_URL,
-    auth: {
-      apiKey: API_KEY
-    }
-  };
-} else {
-  // Local Elasticsearch
-  clientConfig = {
-    node: ES_URL
-  };
+  const ES_URL = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
+  const API_KEY = process.env.ELASTICSEARCH_API_KEY;
+  const CLOUD_ID = process.env.ELASTICSEARCH_CLOUD_ID;
+
+  // Create client with proper authentication
+  let clientConfig: any = {};
+
+  if (CLOUD_ID && API_KEY) {
+    // Elastic Cloud configuration with Cloud ID
+    clientConfig = {
+      cloud: {
+        id: CLOUD_ID
+      },
+      auth: {
+        apiKey: API_KEY
+      }
+    };
+  } else if (API_KEY && (ES_URL.includes('elastic.co') || ES_URL.includes('elastic-cloud.com'))) {
+    // Elastic Cloud with URL
+    clientConfig = {
+      node: ES_URL,
+      auth: {
+        apiKey: API_KEY
+      }
+    };
+  } else {
+    // Local Elasticsearch
+    clientConfig = {
+      node: ES_URL
+    };
+  }
+
+  _esClient = new Client(clientConfig);
+
+  // Log connection details for debugging
+  console.log('Elasticsearch script client config:', {
+    url: ES_URL,
+    hasApiKey: !!API_KEY,
+    hasCloudId: !!CLOUD_ID,
+    usingCloud: !!API_KEY && (ES_URL.includes('elastic.co') || ES_URL.includes('elastic-cloud.com'))
+  });
+
+  return _esClient;
 }
 
-export const esClient = new Client(clientConfig);
-
-// Log connection details for debugging
-console.log('Elasticsearch script client config:', {
-  url: ES_URL,
-  hasApiKey: !!API_KEY,
-  hasCloudId: !!CLOUD_ID,
-  usingCloud: !!API_KEY && (ES_URL.includes('elastic.co') || ES_URL.includes('elastic-cloud.com'))
-});
-
-export const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || process.env.NEXT_PUBLIC_ELASTICSEARCH_INDEX || 'artworks_semantic';
+export const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || 'artworks_semantic';
 
 // Index mapping for artworks with embeddings
 export const INDEX_MAPPING = {

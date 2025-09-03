@@ -11,12 +11,23 @@ import * as readline from 'readline';
 const projectDir = path.join(__dirname, '..');
 loadEnvConfig(projectDir);
 
-// Elasticsearch client
-const client = new Client({
-  node: process.env.ELASTICSEARCH_URL || 'http://localhost:9200',
-});
+// Elasticsearch client with proper authentication
+const ES_URL = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
+const API_KEY = process.env.ELASTICSEARCH_API_KEY;
 
-const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || process.env.NEXT_PUBLIC_ELASTICSEARCH_INDEX || 'artworks_semantic';
+let clientConfig: any = {
+  node: ES_URL
+};
+
+if (API_KEY && (ES_URL.includes('elastic.co') || ES_URL.includes('elastic-cloud.com'))) {
+  clientConfig.auth = {
+    apiKey: API_KEY
+  };
+}
+
+const client = new Client(clientConfig);
+
+const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || 'artworks_semantic';
 
 interface DescriptionRecord {
   artwork_id: string;
