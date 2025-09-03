@@ -5,32 +5,63 @@ from typing import Optional, Dict, Any
 
 app = modal.App("museum-embeddings")
 
-image = modal.Image.debian_slim().pip_install(
-    "fastapi",  # Required for web endpoints
-    "transformers>=4.44.0",
-    "torch>=2.0.0",
-    "accelerate>=0.25.0",
-    "pillow>=10.0.0",
-    "einops>=0.7.0",  # Required for Jina
+# Optimize image with model weights baked in
+def download_models():
+    """Download models during image build to avoid runtime downloads"""
+    from transformers import AutoModel, AutoProcessor
+    import torch
+    
+    # Pre-download both models
+    print("Pre-downloading SigLIP2...")
+    AutoProcessor.from_pretrained("google/siglip2-base-patch16-224")
+    AutoModel.from_pretrained("google/siglip2-base-patch16-224")
+    
+    print("Pre-downloading Jina v3...")
+    AutoModel.from_pretrained('jinaai/jina-embeddings-v3', trust_remote_code=True)
+    
+    print("Models downloaded successfully")
+
+# Create optimized image with models pre-downloaded
+image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install(
+        "fastapi",
+        "transformers>=4.44.0",
+        "torch>=2.0.0",
+        "accelerate>=0.25.0",
+        "pillow>=10.0.0",
+        "einops>=0.7.0",
+        "huggingface-hub>=0.19.0",
+        "safetensors>=0.4.0",  # For faster model loading
+    )
+    .run_function(download_models)  # Download models during image build
 )
 
 # Use a class to persist models between requests
 @app.cls(
     image=image,
     gpu="t4",
-    memory=12288,  # Increased for both models
-    scaledown_window=300,  # Keep warm for 5 minutes
-    max_containers=10,  # Handle up to 10 concurrent requests
+    scaledown_window=600,  # Keep warm for 10 minutes
+    max_containers=10,
 )
 class EmbeddingModel:
-    @modal.enter()
+    @modal.enter()  # Don't snapshot GPU state
     def setup(self):
         """Load both models once when container starts"""
         import torch
         from transformers import AutoModel, AutoProcessor
         import time
+        import os
+        
+        # Set up environment for optimal performance
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Avoid tokenizer warnings
         
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        # Enable CUDA optimizations
+        if self.device == "cuda":
+            torch.backends.cudnn.benchmark = True
+            torch.backends.cuda.matmul.allow_tf32 = True
         
         # Load SigLIP2 for cross-modal search
         start_time = time.time()

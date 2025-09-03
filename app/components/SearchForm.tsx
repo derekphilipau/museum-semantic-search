@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Info, Image as ImageIcon } from 'lucide-react';
+import emojiRegex from 'emoji-regex';
 import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
 import { SearchResponse } from '@/app/types';
 import { Input } from '@/components/ui/input';
@@ -112,8 +113,9 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
       if (!query.trim()) return;
       
       // Check if query contains only emojis
-      const queryEmojis = query.match(/\p{Emoji}/gu) || [];
-      const queryWithoutEmojis = query.replace(/\p{Emoji}/gu, '').trim();
+      const regex = emojiRegex();
+      const queryEmojis = query.match(regex) || [];
+      const queryWithoutEmojis = query.replace(regex, '').trim();
       const isOnlyEmojis = queryEmojis.length > 0 && queryWithoutEmojis === '';
       
       // Build params with emoji flag if query contains only emojis

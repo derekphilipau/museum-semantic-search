@@ -29,11 +29,6 @@ export default function SearchResultsWrapper({ query, results }: SearchResultsWr
 
   return (
     <div className="space-y-2">
-      <span className="text-xs italic text-muted-foreground">
-        Initial search may be delayed up to 30 seconds due to server cold start.
-        Due to costs, this project only contains <a href="https://github.com/metmuseum/openaccess" target="_blank" rel="noopener noreferrer" className="underline">Open Access Met Museum Paintings</a>.
-      </span>
-
       {results.metadata && (
         <div className="text-xs text-gray-500 flex flex-wrap gap-4">
           {results.metadata.indexName && (

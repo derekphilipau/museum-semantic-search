@@ -1,7 +1,15 @@
 #!/bin/bash
 
-echo "Deploying Museum Embeddings API to Modal..."
-echo "=========================================="
+# Deploy the Modal embedding API with performance optimizations
+
+echo "Deploying Modal embedding API..."
+echo ""
+echo "Features enabled:"
+echo "  ✓ Pre-downloaded models in Docker image"
+echo "  ✓ GPU optimizations (CUDA, TF32)"
+echo "  ✓ 10-minute idle timeout"
+echo "  ✓ Scales to zero when idle (cost-effective POC)"
+echo ""
 
 # Check if modal is installed
 if ! command -v modal &> /dev/null; then
@@ -9,17 +17,11 @@ if ! command -v modal &> /dev/null; then
     exit 1
 fi
 
-# Deploy the app
-modal deploy embedding_api.py
+# Deploy the API
+modal deploy modal/embedding_api.py
 
 echo ""
 echo "Deployment complete!"
 echo ""
-echo "To get your endpoint URL, run:"
-echo "  modal app list"
-echo ""
-echo "Then update your .env.local with:"
-echo "  MODAL_EMBEDDING_API_URL=https://your-username--museum-embeddings-embed-text.modal.run"
-echo ""
-echo "Test the health endpoint:"
-echo "  curl https://your-username--museum-embeddings-health.modal.run"
+echo "Note: Container will scale to zero when idle to minimize costs."
+echo "First request after idle will have ~5-10s cold start."
