@@ -2,10 +2,10 @@ export interface EmbeddingModel {
   key: string;
   name: string;
   dimension: number;
-  year: string;
-  notes: string;
   supportsImage: boolean;
   supportsInterleaved: boolean;
+  url: string;
+  description: string;
 }
 
 export interface EmbeddingResponse {
@@ -41,21 +41,21 @@ export interface UnifiedEmbeddingResponse {
 export const EMBEDDING_MODELS: Record<string, EmbeddingModel> = {
   jina_v3: {
     key: 'jina_v3',
-    name: 'Jina v3 Text',
+    name: 'Text Embeddings',
     dimension: 768,
-    year: '2024',
-    notes: 'Text embeddings for metadata + AI descriptions',
     supportsImage: false,
     supportsInterleaved: false,
+    url: 'https://jina.ai/embeddings/',
+    description: 'Jina v3 (metadata + AI descriptions)',
   },
   siglip2: {
     key: 'siglip2',
-    name: 'SigLIP 2',
+    name: 'Image Embeddings',
     dimension: 768,
-    year: '2025',
-    notes: 'Text-to-image search v2',
     supportsImage: true,
     supportsInterleaved: false,
+    url: 'https://huggingface.co/google/siglip2-base-patch16-224',
+    description: 'SigLIP 2 Text-to-image search',
   },
 };
 

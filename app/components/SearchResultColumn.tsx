@@ -59,16 +59,18 @@ function SearchResultColumn({
             </div>
           </div>
           {hits.length > 0 && (
-            <div className="flex gap-3 text-xs">
-              <div className="font-medium">{hits.length} results</div>
-              {totalResults && totalResults > hits.length && (
-                <div className="text-white/80">of {totalResults.toLocaleString()}</div>
-              )}
-              {responseTime !== undefined && (
-                <div className="text-white/80">{responseTime}ms</div>
-              )}
+            <div className="flex flex-col items-center text-xs gap-1">
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium">{hits.length} results</span>
+                {totalResults && totalResults > hits.length && (
+                  <span className="text-white/80">of {totalResults.toLocaleString()}</span>
+                )}
+                {responseTime !== undefined && (
+                  <span className="text-white/80">({responseTime}ms)</span>
+                )}
+              </div>
               {hits[0]?._score && (
-                <div className="text-white/80">score: {hits[0]._score.toFixed(2)}</div>
+                <div className="text-white/80">Top score: {hits[0]._score.toFixed(2)}</div>
               )}
             </div>
           )}

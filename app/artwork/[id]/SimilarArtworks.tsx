@@ -58,7 +58,7 @@ export default function SimilarArtworks({ similarArtworks }: SimilarArtworksProp
         <SearchResultColumn
           key="jina_v3"
           title={EMBEDDING_MODELS.jina_v3.name}
-          description={EMBEDDING_MODELS.jina_v3.notes}
+          description={EMBEDDING_MODELS.jina_v3.description}
           icon={FileText}
           hits={similarArtworks.jina_v3.hits || []}
           gradientFrom="from-blue-500"
@@ -74,7 +74,7 @@ export default function SimilarArtworks({ similarArtworks }: SimilarArtworksProp
         <SearchResultColumn
           key="siglip2"
           title={EMBEDDING_MODELS.siglip2.name}
-          description={EMBEDDING_MODELS.siglip2.notes}
+          description={EMBEDDING_MODELS.siglip2.description}
           icon={Image}
           hits={similarArtworks.siglip2.hits || []}
           gradientFrom="from-purple-500"

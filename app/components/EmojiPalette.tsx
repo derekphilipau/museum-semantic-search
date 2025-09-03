@@ -93,7 +93,7 @@ export default function EmojiPalette() {
     <div className="w-full">
       <TooltipProvider delayDuration={200}>
         <div className="space-y-2">
-          <div className="flex flex-wrap gap-1 items-center">
+          <div className="flex flex-wrap gap-0 items-center">
             <div className="text-sm font-medium">
               {emojis.length} Emojis:
             </div>

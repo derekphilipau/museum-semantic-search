@@ -306,9 +306,6 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
             />
             <Label htmlFor="includeDescriptions" className="text-sm cursor-pointer">
               Include AI Visual Descriptions
-              <span className="italic text-muted-foreground">
-                Due to costs, only ~3500 artworks have AI-generated descriptions
-              </span>
             </Label>
           </div>
         </div>

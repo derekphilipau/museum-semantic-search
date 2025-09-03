@@ -18,20 +18,6 @@ interface AllModesResultsProps {
   loading: boolean;
 }
 
-// Model metadata with URLs and descriptions
-const MODEL_INFO = {
-  siglip2: {
-    url: 'https://huggingface.co/google/siglip2-base-patch16-224',
-    description: 'Cross-modal text-to-image search',
-    year: '2025'
-  },
-  jina_v3: {
-    url: 'https://jina.ai/embeddings/',
-    description: 'Advanced text search with metadata + descriptions',
-    year: '2024'
-  }
-} as const;
-
 export default function AllModesResults({ 
   query,
   results, 
@@ -108,13 +94,13 @@ export default function AllModesResults({
         {/* 2. Jina v3 (Enhanced text embeddings) */}
         <SearchResultColumn
           title={EMBEDDING_MODELS.jina_v3?.name || 'Jina v3'}
-          description={MODEL_INFO.jina_v3?.description || 'Enhanced text search'}
+          description={EMBEDDING_MODELS.jina_v3?.description || 'Enhanced text search'}
           icon={FileText}
           hits={results.semantic.jina_v3?.hits || []}
           gradientFrom="from-orange-500"
           gradientTo="to-orange-600"
           badgeColor="bg-orange-700"
-          modelUrl={MODEL_INFO.jina_v3?.url}
+          modelUrl={EMBEDDING_MODELS.jina_v3?.url}
           showExternalLink={true}
           responseTime={results.semantic.jina_v3?.took}
           totalResults={results.semantic.jina_v3?.total}
@@ -123,13 +109,13 @@ export default function AllModesResults({
         {/* 3. SigLIP 2 (Cross-modal) */}
         <SearchResultColumn
           title={EMBEDDING_MODELS.siglip2?.name || 'SigLIP 2'}
-          description={MODEL_INFO.siglip2?.description || 'Cross-modal search'}
+          description={EMBEDDING_MODELS.siglip2?.description || 'Cross-modal search'}
           icon={ImageIcon}
           hits={results.semantic.siglip2?.hits || []}
           gradientFrom="from-purple-500"
           gradientTo="to-purple-600"
           badgeColor="bg-purple-700"
-          modelUrl={MODEL_INFO.siglip2?.url}
+          modelUrl={EMBEDDING_MODELS.siglip2?.url}
           showExternalLink={true}
           responseTime={results.semantic.siglip2?.took}
           totalResults={results.semantic.siglip2?.total}

@@ -227,7 +227,7 @@ export default async function Home({ searchParams }: PageProps) {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      <div className="space-y-6">
+      <div className="space-y-3">
         <SearchForm 
           key={JSON.stringify({ query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, emoji })} // Reset form when any URL param changes
           initialQuery={query}
