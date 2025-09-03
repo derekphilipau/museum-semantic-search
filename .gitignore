@@ -42,5 +42,6 @@ next-env.d.ts
 
 tmp/
 data/
+!data/met/descriptions/gemini_2_5_flash/descriptions.jsonl
 public/images
 modal/__pycache__/
