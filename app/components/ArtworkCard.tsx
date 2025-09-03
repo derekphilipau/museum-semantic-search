@@ -5,6 +5,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Artwork } from '@/app/types';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
+import { getCollectionShortName } from '@/app/lib/collections';
+import { Badge } from '@/components/ui/badge';
+import ClickableEmojis from './ClickableEmojis';
 
 interface ArtworkCardProps {
   artwork: Artwork;
@@ -21,12 +24,17 @@ function ArtworkCard({
   rank,
   compact = false,
 }: ArtworkCardProps) {
+  // Add safety check for artwork data
+  if (!artwork || !artwork.metadata) {
+    return null;
+  }
+  
   const { metadata, image } = artwork;
   // Handle both full image objects and simple string URLs
-  const imageUrl = typeof image === 'string' ? image : image.url;
+  const imageUrl = typeof image === 'string' ? image : image?.url;
   
   // Get institution name
-  const institutionName = metadata.collection === 'moma' ? 'MoMA' : '';
+  const institutionName = metadata.collection ? getCollectionShortName(metadata.collection) : '';
 
   // Compact version for multi-column layout
   if (compact) {
@@ -76,11 +84,20 @@ function ArtworkCard({
               {metadata.medium && (
                 <div className="line-clamp-1">{metadata.medium}</div>
               )}
+              {/* AI-generated emoji summary */}
+              {artwork.visual_emoji_summary && (
+                <div className="mt-1 pt-1 border-t">
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="secondary" className="size-5 text-xs font-medium text-muted-foreground">AI</Badge>
+                    <ClickableEmojis emojis={artwork.visual_emoji_summary} size="xl" />
+                  </div>
+                </div>
+              )}
               {/* AI-generated alt text */}
               {artwork.visual_alt_text && (
-                <div className="mt-1 pt-1 border-t">
+                <div className="mt-1">
                   <span className="inline-flex items-center gap-1 text-xs">
-                    <span className="bg-muted px-1 py-0.5 rounded text-[10px] font-medium">AI</span>
+                    <Badge variant="secondary" className="size-5 text-xs font-medium text-muted-foreground">AI</Badge>
                     <span className="line-clamp-2 italic">{artwork.visual_alt_text}</span>
                   </span>
                 </div>
@@ -155,9 +172,18 @@ function ArtworkCard({
             {metadata.medium && (
               <div className="line-clamp-2 text-xs">{metadata.medium}</div>
             )}
+            {/* AI-generated emoji summary */}
+            {artwork.visual_emoji_summary && (
+              <div className="mt-2 pt-2 border-t">
+                <div className="flex items-center gap-2">
+                  <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-medium">AI</span>
+                  <ClickableEmojis emojis={artwork.visual_emoji_summary} size="lg" />
+                </div>
+              </div>
+            )}
             {/* AI-generated description */}
             {artwork.visual_alt_text && (
-              <div className="mt-2 pt-2 border-t">
+              <div className={artwork.visual_emoji_summary ? "mt-2" : "mt-2 pt-2 border-t"}>
                 <div className="inline-flex items-start gap-1.5 text-xs">
                   <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-medium mt-0.5">AI</span>
                   <span className="line-clamp-3 italic text-muted-foreground">{artwork.visual_alt_text}</span>

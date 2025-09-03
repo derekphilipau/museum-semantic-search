@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate SigLIP 2 image embeddings for museum artworks.
+Generate SigLIP 2 image embeddings for Met museum artworks.
 Only generates image embeddings - text queries are handled at search time.
 """
 
@@ -22,9 +22,9 @@ from transformers import AutoProcessor, AutoModel
 MODEL_ID = "google/siglip2-base-patch16-224"
 MODEL_KEY = "siglip2"  # This will be the directory name
 BATCH_SIZE = 16  # Adjust based on your RAM
-DATA_DIR = Path(__file__).parent.parent / "data"
+DATA_DIR = Path(__file__).parent.parent.parent / "data" / "met"
 OUTPUT_DIR = DATA_DIR / "embeddings" / MODEL_KEY
-MOMA_CSV = DATA_DIR / "moma" / "Artworks_50k.csv"
+MET_CSV = DATA_DIR / "MetObjects.csv"
 
 class SigLIP2Embedder:
     def __init__(self, device: str = "mps"):  # mps for Apple Silicon
@@ -89,31 +89,67 @@ def save_progress(progress_path: Path, progress: Dict):
     with open(progress_path, 'w') as f:
         json.dump(progress, f, indent=2)
 
-def load_moma_csv(csv_path: Path) -> List[Dict]:
-    """Load MoMA artworks from CSV file."""
+def load_met_csv_with_images(csv_path: Path) -> List[Dict]:
+    """Load Met artworks from CSV file, only paintings with images."""
     artworks = []
     
-    with open(csv_path, 'r', encoding='utf-8') as f:
+    # Load pre-fetched image URL cache (JSONL format)
+    cache_path = csv_path.parent / "met_image_urls_cache.jsonl"
+    if not cache_path.exists():
+        print("ERROR: Met image cache not found!")
+        print(f"Please run: python3 scripts/met/fetch-met-image-urls.py")
+        print(f"Expected cache at: {cache_path}")
+        return []
+    
+    print("Loading Met image URL cache...")
+    image_cache = {}
+    with open(cache_path, 'r') as f:
+        for line in f:
+            if line.strip():
+                entry = json.loads(line)
+                image_cache[entry['object_id']] = entry
+    
+    images_found = len([v for v in image_cache.values() if v.get('hasImage', False)])
+    print(f"Cache loaded: {len(image_cache)} entries, {images_found} with images")
+    
+    print("Reading Met CSV...")
+    with open(csv_path, 'r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            # Check if has image URL
-            image_url = row.get('ImageURL', '').strip()
+            # Filter for paintings that are public domain
+            if (row.get('Classification', '').lower() != 'paintings' or
+                row.get('Is Public Domain', '').lower() != 'true' or
+                not row.get('Link Resource', '').strip()):
+                continue
+            
+            object_id = row.get('Object ID', '')
+            
+            # Check cache for image URL
+            cached_data = image_cache.get(object_id, {})
+            if not cached_data.get('hasImage', False):
+                continue
+            
+            # Use web-large version, not the huge original
+            image_url = cached_data.get('primaryImageSmall', '') or cached_data.get('primaryImage', '')
             if not image_url:
                 continue
                 
             artwork = {
-                "id": f"moma_{row.get('ObjectID', '')}",
+                "id": f"met_{object_id}",
                 "title": row.get('Title', ''),
-                "artist": row.get('Artist', ''),
-                "date": row.get('Date', ''),
+                "artist": row.get('Artist Display Name', ''),
+                "date": row.get('Object Date', ''),
                 "medium": row.get('Medium', ''),
                 "classification": row.get('Classification', ''),
                 "imageUrl": image_url,
                 "department": row.get('Department', ''),
-                "nationality": row.get('Nationality', ''),
-                "artistBio": row.get('ArtistBio', ''),
-                "creditLine": row.get('CreditLine', ''),
-                "dimensions": row.get('Dimensions', '')
+                "culture": row.get('Culture', ''),
+                "period": row.get('Period', ''),
+                "dynasty": row.get('Dynasty', ''),
+                "reign": row.get('Reign', ''),
+                "portfolio": row.get('Portfolio', ''),
+                "dimensions": row.get('Dimensions', ''),
+                "creditLine": row.get('Credit Line', '')
             }
             artworks.append(artwork)
                 
@@ -145,7 +181,7 @@ def process_artwork(embedder: SigLIP2Embedder, artwork: Dict, writer) -> Dict[st
             "metadata": {
                 "title": artwork["title"],
                 "artist": artwork["artist"] or "Unknown",
-                "collection": "MoMA"
+                "collection": "Met"
             }
         }
         
@@ -158,7 +194,7 @@ def process_artwork(embedder: SigLIP2Embedder, artwork: Dict, writer) -> Dict[st
         return {"processed": 0, "skipped": 0, "failed": 1}
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate SigLIP 2 image embeddings")
+    parser = argparse.ArgumentParser(description="Generate SigLIP 2 image embeddings for Met paintings")
     parser.add_argument("--limit", type=int, help="Limit number of artworks to process")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE, help="Save progress every N artworks")
     parser.add_argument("--resume", action="store_true", help="Resume from checkpoint")
@@ -167,22 +203,22 @@ def main():
     args = parser.parse_args()
     
     # Check if CSV exists
-    if not MOMA_CSV.exists():
-        print(f"Error: CSV file not found at {MOMA_CSV}")
-        print("Please ensure the MoMA data is in data/moma/Artworks_50k.csv")
+    if not MET_CSV.exists():
+        print(f"Error: CSV file not found at {MET_CSV}")
+        print("Please ensure the Met data is in data/met/MetObjects.csv")
         return
     
-    print('MoMA Artwork SigLIP 2 Image Embedding Generation')
-    print('================================================')
+    print('Met Artwork SigLIP 2 Image Embedding Generation')
+    print('==============================================')
     print(f'Model: {MODEL_KEY} ({MODEL_ID})')
     print(f'Limit: {args.limit or "all"}')
     print(f'Resume: {args.resume}')
     print(f'Save progress every: {args.batch_size} artworks')
     
     # Load artworks from CSV
-    print('\nLoading artworks from CSV...')
-    artworks = load_moma_csv(MOMA_CSV)
-    print(f'Found {len(artworks)} artworks with images')
+    print('\nLoading Met paintings from CSV and fetching image URLs...')
+    artworks = load_met_csv_with_images(MET_CSV)
+    print(f'Found {len(artworks)} paintings with images')
     
     # Create output directory
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

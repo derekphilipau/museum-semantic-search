@@ -42,7 +42,7 @@ export class MoMAParser extends BaseParser {
     return 'Museum of Modern Art';
   }
   
-  async parseFile(filePath: string): Promise<ParsedArtwork[]> {
+  async parseFile(filePath: string, limit?: number): Promise<ParsedArtwork[]> {
     const artworks: ParsedArtwork[] = [];
     
     const parser = createReadStream(filePath)
@@ -137,6 +137,12 @@ export class MoMAParser extends BaseParser {
         metadata,
         image
       });
+      
+      // Check if we've reached the limit
+      if (limit && artworks.length >= limit) {
+        parser.destroy(); // Stop reading the CSV
+        break;
+      }
     }
     
     return artworks;

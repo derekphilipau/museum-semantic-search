@@ -89,6 +89,28 @@ This provides the most comprehensive similarity ranking by considering what the 
 - **Parallel Search**: All search types execute concurrently
 - **Efficient Ranking**: Manual RRF implementation for multi-model fusion
 - **Modal Auto-scaling**: Handles load spikes automatically
+- **Smart Caching**: Query embeddings cached to reduce API calls and costs
+
+### Embedding Cache
+
+The system includes a hybrid caching strategy to minimize Modal API calls:
+
+1. **Local Development**: Uses in-memory cache (no setup required)
+   - Stores up to 1,000 recent queries
+   - Zero latency for repeated searches
+   - Resets on server restart
+
+2. **Production (Vercel)**: Uses Vercel KV Redis store
+   - 3,000 free requests/day
+   - 256MB free storage
+   - 7-day TTL for cached embeddings
+   - Setup: Connect Vercel KV in your Vercel dashboard
+
+3. **Cache Benefits**:
+   - Instant results for repeated queries
+   - Significantly reduced Modal API costs
+   - Better user experience during development
+   - Automatic fallback if cache unavailable
 
 ## Model Performance Notes
 
@@ -185,6 +207,11 @@ ELASTICSEARCH_URL=http://localhost:9200
 
 # Index name (optional, defaults to 'artworks_semantic')
 # ELASTICSEARCH_INDEX=artworks_semantic
+
+# Vercel KV (optional) - For caching embeddings
+# Automatically set when you connect Vercel KV to your project
+# KV_REST_API_URL=https://...
+# KV_REST_API_TOKEN=...
 ```
 
 ### 5. Deploy Modal Embeddings API
@@ -338,20 +365,21 @@ We also generate bias-free visual descriptions using Google's Gemini 2.5 Flash m
 **Workflow (Recommended for production)**
 ```bash
 # 1. Generate visual descriptions with Gemini (required for text embeddings)
-npm run generate-descriptions -- --limit=100    # Start with 100 for testing
-npm run generate-descriptions -- --resume        # Resume from last checkpoint
+npm run generate-descriptions -- --limit=100          # Test with 100 (resumes by default)
+npm run generate-descriptions                         # Process all (resumes by default)
+npm run generate-descriptions -- --force --limit=100  # Start fresh (overwrites)
 
 # 2. Generate SigLIP 2 cross-modal embeddings
 # First install Python dependencies (one-time setup)
 npm run setup-siglip2
 
 # Then generate embeddings (runs locally on your Mac)
-npm run generate-siglip2-embeddings -- --limit 100    # Test with 100 first
-npm run generate-siglip2-embeddings -- --resume       # Resume from checkpoint
+npm run generate-siglip2-embeddings -- --limit 100    # Test with 100 (resumes by default)
+npm run generate-siglip2-embeddings                   # Process all (resumes by default)
 
 # 3. Generate Jina v3 text embeddings (combines metadata + visual descriptions)
-npm run generate-jina-embeddings -- --limit 100      # Test with 100 first
-npm run generate-jina-embeddings -- --resume         # Resume from checkpoint
+npm run generate-jina-embeddings -- --limit 100      # Test with 100 (resumes by default)
+npm run generate-jina-embeddings                     # Process all (resumes by default)
 
 # 4. Index everything to Elasticsearch (includes embeddings and descriptions)
 npm run index-artworks -- --force
@@ -374,19 +402,22 @@ Open [http://localhost:3000](http://localhost:3000) to use the application.
 - `npm run index-artworks` - Index artworks into Elasticsearch
   - `--force` - Force recreate the index (WARNING: deletes all existing data)
   - `--limit N` - Only index N artworks (useful for testing)
-  - `--collection NAME` - Specify collection to index (e.g., moma)
+  - `--collection NAME` - Specify collection to index (e.g., moma, met)
 - `npm run generate-siglip2-embeddings` - Generate SigLIP 2 cross-modal embeddings
   - `--limit=N` - Only process N artworks
-  - `--resume` - Continue from last checkpoint
+  - `--force` - Start fresh instead of resuming (default: resume)
   - `--batch-size=N` - Save progress every N artworks (default: 16)
 - `npm run generate-jina-embeddings` - Generate Jina v3 text embeddings
   - `--limit=N` - Only process N artworks
-  - `--resume` - Continue from last checkpoint
+  - `--force` - Start fresh instead of resuming (default: resume)
   - `--batch-size=N` - Save progress every N artworks (default: 10)
 - `npm run generate-descriptions` - Generate visual descriptions using Gemini 2.5 Flash
   - `--limit=N` - Only process N artworks
-  - `--resume` - Continue from last checkpoint
+  - `--force` - Start fresh instead of resuming (default: resume)
   - `--batch-size=N` - Save progress every N artworks (default: 10)
+- `npm run fetch-met-images` - Pre-fetch Met image URLs from API
+  - `--limit=N` - Only fetch N paintings
+  - `--delay=N` - Seconds between requests (default: 2.0)
 - `npm run update-descriptions` - Update Elasticsearch with generated descriptions
   - `--limit=N` - Only update N artworks
 - `npm run dev` - Start the development server

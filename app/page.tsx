@@ -5,6 +5,7 @@ import {
   performKeywordSearch, 
   performSemanticSearchWithEmbedding, 
   performHybridSearchWithEmbeddings,
+  performEmojiSearch,
   getIndexStats 
 } from '@/lib/elasticsearch/client';
 import { SearchResponse, ESSearchQuery, ESHybridQuery } from '@/app/types';
@@ -25,6 +26,7 @@ async function parseSearchParams(searchParams: PageProps['searchParams']) {
   const hybridMode = (params.hybridMode as HybridMode) || 'image';
   const hybridBalance = params.hybridBalance ? parseFloat(params.hybridBalance as string) : 0.5;
   const includeDescriptions = params.includeDescriptions !== 'false';
+  const emoji = params.emoji === 'true';
   
   // Parse models - if not specified, all models are enabled
   const modelsParam = params.models as string;
@@ -35,13 +37,13 @@ async function parseSearchParams(searchParams: PageProps['searchParams']) {
     [key]: enabledModels.includes(key)
   }), {} as Record<string, boolean>);
 
-  return { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions };
+  return { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, emoji };
 }
 
 
 // Server component that performs search
 async function SearchResults({ searchParams }: PageProps) {
-  const { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions } = await parseSearchParams(searchParams);
+  const { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, emoji } = await parseSearchParams(searchParams);
   
   if (!query) {
     return null;
@@ -69,12 +71,29 @@ async function SearchResults({ searchParams }: PageProps) {
   // Build search promises
   const searchPromises: Promise<{ type: string; model?: string; results: SearchResponse }>[] = [];
 
-  // Keyword search
+  // If emoji search is enabled and query contains emojis, prioritize emoji search
+  const queryEmojis = query.match(/\p{Emoji}/gu) || [];
+  const isEmojiSearch = emoji && queryEmojis.length > 0;
+
+  // Keyword search - use emoji search if it's an emoji-only query
   if (keyword) {
-    searchPromises.push(
-      performKeywordSearch(query, 20, includeDescriptions)
-        .then(results => ({ type: 'keyword', results }))
-    );
+    if (isEmojiSearch) {
+      // For emoji queries, use emoji search but return as keyword results
+      searchPromises.push(
+        performEmojiSearch(queryEmojis, 20)
+          .then(results => ({ type: 'keyword', results }))
+          .catch(error => {
+            console.error('Emoji search failed:', error);
+            return { type: 'keyword', results: { took: 0, total: 0, hits: [] } };
+          })
+      );
+    } else {
+      // Regular keyword search
+      searchPromises.push(
+        performKeywordSearch(query, 20, includeDescriptions)
+          .then(results => ({ type: 'keyword', results }))
+      );
+    }
   }
 
   // Semantic searches using pre-computed embeddings
@@ -126,6 +145,7 @@ async function SearchResults({ searchParams }: PageProps) {
       );
     }
   }
+
 
   // Track query start time
   const queryStartTime = Date.now();
@@ -202,16 +222,16 @@ async function SearchResults({ searchParams }: PageProps) {
 }
 
 export default async function Home({ searchParams }: PageProps) {
-  const { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions } = await parseSearchParams(searchParams);
+  const { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, emoji } = await parseSearchParams(searchParams);
   const resolvedParams = await searchParams;
 
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="space-y-6">
         <SearchForm 
-          key={JSON.stringify({ query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions })} // Reset form when any URL param changes
+          key={JSON.stringify({ query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, emoji })} // Reset form when any URL param changes
           initialQuery={query}
-          initialOptions={{ keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions }}
+          initialOptions={{ keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, emoji }}
         />
         
         <Suspense 

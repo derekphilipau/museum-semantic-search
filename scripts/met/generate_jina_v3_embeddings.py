@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate Jina v3 embeddings for museum artworks.
+Generate Jina v3 embeddings for Met museum artworks.
 Combines artwork metadata with AI visual descriptions for enhanced semantic search.
 """
 
@@ -14,14 +14,15 @@ from typing import Dict, List, Optional
 from tqdm import tqdm
 from transformers import AutoModel
 import torch
+import requests
 
 # Configuration
 MODEL_ID = "jinaai/jina-embeddings-v3"
 MODEL_KEY = "jina_v3"  # This will be the directory name
 BATCH_SIZE = 16  # Adjust based on your RAM
-DATA_DIR = Path(__file__).parent.parent / "data"
+DATA_DIR = Path(__file__).parent.parent.parent / "data" / "met"
 OUTPUT_DIR = DATA_DIR / "embeddings" / MODEL_KEY
-MOMA_CSV = DATA_DIR / "moma" / "Artworks_50k.csv"
+MET_CSV = DATA_DIR / "MetObjects.csv"
 DESCRIPTIONS_DIR = DATA_DIR / "descriptions" / "gemini_2_5_flash"
 
 class JinaV3Embedder:
@@ -76,27 +77,68 @@ def save_progress(progress_path: Path, progress: Dict):
     with open(progress_path, 'w') as f:
         json.dump(progress, f, indent=2)
 
-def load_moma_csv(csv_path: Path) -> List[Dict]:
-    """Load MoMA artworks from CSV file."""
+def load_met_csv(csv_path: Path) -> List[Dict]:
+    """Load Met artworks from CSV file."""
     artworks = []
     
-    with open(csv_path, 'r', encoding='utf-8') as f:
+    # Load pre-fetched image URL cache for hasImage flag (JSONL format)
+    cache_path = csv_path.parent / "met_image_urls_cache.jsonl"
+    image_cache = {}
+    if cache_path.exists():
+        print("Loading Met image URL cache...")
+        with open(cache_path, 'r') as f:
+            for line in f:
+                if line.strip():
+                    entry = json.loads(line)
+                    image_cache[entry['object_id']] = entry
+        images_found = len([v for v in image_cache.values() if v.get('hasImage', False)])
+        print(f"Cache loaded: {len(image_cache)} entries, {images_found} with images")
+    else:
+        print("Warning: Met image cache not found. hasImage flag will be set to False.")
+        print(f"Run: python3 scripts/met/fetch-met-image-urls.py")
+    
+    print("Reading Met CSV...")
+    with open(csv_path, 'r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            # Check if has image URL (we want all artworks, not just those with images)
+            # Filter for paintings that are public domain
+            if (row.get('Classification', '').lower() != 'paintings' or
+                row.get('Is Public Domain', '').lower() != 'true' or
+                not row.get('Link Resource', '').strip()):
+                continue
+            
+            object_id = row.get('Object ID', '')
+            
+            # Check cache for hasImage flag
+            cached_data = image_cache.get(object_id, {})
+            has_image = cached_data.get('hasImage', False)
+                
             artwork = {
-                "id": f"moma_{row.get('ObjectID', '')}",
+                "id": f"met_{object_id}",
                 "title": row.get('Title', ''),
-                "artist": row.get('Artist', ''),
-                "date": row.get('Date', ''),
+                "artist": row.get('Artist Display Name', ''),
+                "date": row.get('Object Date', ''),
                 "medium": row.get('Medium', ''),
                 "classification": row.get('Classification', ''),
                 "department": row.get('Department', ''),
-                "nationality": row.get('Nationality', ''),
-                "artistBio": row.get('ArtistBio', ''),
-                "creditLine": row.get('CreditLine', ''),
+                "culture": row.get('Culture', ''),
+                "period": row.get('Period', ''),
+                "dynasty": row.get('Dynasty', ''),
+                "reign": row.get('Reign', ''),
+                "portfolio": row.get('Portfolio', ''),
+                "artistBio": row.get('Artist Display Bio', ''),
+                "artistNationality": row.get('Artist Nationality', ''),
+                "artistRole": row.get('Artist Role', ''),
+                "creditLine": row.get('Credit Line', ''),
                 "dimensions": row.get('Dimensions', ''),
-                "hasImage": bool(row.get('ImageURL', '').strip())
+                "city": row.get('City', ''),
+                "state": row.get('State', ''),
+                "country": row.get('Country', ''),
+                "region": row.get('Region', ''),
+                "subregion": row.get('Subregion', ''),
+                "locale": row.get('Locale', ''),
+                "tags": row.get('Tags', ''),
+                "hasImage": has_image
             }
             
             artworks.append(artwork)
@@ -143,17 +185,44 @@ def create_text_for_embedding(artwork: Dict, description: Optional[Dict]) -> str
     if artwork['department']:
         parts.append(f"Department: {artwork['department']}")
     
+    # Cultural context
+    if artwork['culture']:
+        parts.append(f"Culture: {artwork['culture']}")
+    if artwork['period']:
+        parts.append(f"Period: {artwork['period']}")
+    if artwork['dynasty']:
+        parts.append(f"Dynasty: {artwork['dynasty']}")
+    if artwork['reign']:
+        parts.append(f"Reign: {artwork['reign']}")
+    
     # Artist details
-    if artwork['nationality']:
-        parts.append(f"Nationality: {artwork['nationality']}")
+    if artwork['artistNationality']:
+        parts.append(f"Nationality: {artwork['artistNationality']}")
     if artwork['artistBio']:
         parts.append(f"Artist bio: {artwork['artistBio']}")
+    if artwork['artistRole']:
+        parts.append(f"Artist role: {artwork['artistRole']}")
+    
+    # Geographic context
+    if artwork['country']:
+        parts.append(f"Country: {artwork['country']}")
+    if artwork['region']:
+        parts.append(f"Region: {artwork['region']}")
+    if artwork['city']:
+        parts.append(f"City: {artwork['city']}")
     
     # Physical details
     if artwork['dimensions']:
         parts.append(f"Dimensions: {artwork['dimensions']}")
     if artwork['creditLine']:
         parts.append(f"Credit: {artwork['creditLine']}")
+    
+    # Tags
+    if artwork['tags']:
+        # Split tags by pipe and clean them
+        tags = [t.strip() for t in artwork['tags'].split('|') if t.strip()]
+        if tags:
+            parts.append(f"Tags: {', '.join(tags)}")
     
     # AI visual descriptions (if available)
     if description:
@@ -188,7 +257,7 @@ def process_artwork(embedder: JinaV3Embedder, artwork: Dict, description: Option
             "metadata": {
                 "title": artwork["title"],
                 "artist": artwork["artist"] or "Unknown",
-                "collection": "MoMA",
+                "collection": "Met",
                 "has_image": artwork["hasImage"],
                 "has_description": description is not None
             }
@@ -203,7 +272,7 @@ def process_artwork(embedder: JinaV3Embedder, artwork: Dict, description: Option
         return {"processed": 0, "skipped": 0, "failed": 1}
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate Jina v3 text embeddings")
+    parser = argparse.ArgumentParser(description="Generate Jina v3 text embeddings for Met paintings")
     parser.add_argument("--limit", type=int, help="Limit number of artworks to process")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE, help="Save progress every N artworks")
     parser.add_argument("--resume", action="store_true", help="Resume from checkpoint")
@@ -212,21 +281,21 @@ def main():
     args = parser.parse_args()
     
     # Check if CSV exists
-    if not MOMA_CSV.exists():
-        print(f"Error: CSV file not found at {MOMA_CSV}")
+    if not MET_CSV.exists():
+        print(f"Error: CSV file not found at {MET_CSV}")
         return
     
-    print('MoMA Artwork Jina v3 Text Embedding Generation')
-    print('==============================================')
+    print('Met Artwork Jina v3 Text Embedding Generation')
+    print('============================================')
     print(f'Model: {MODEL_KEY} ({MODEL_ID})')
     print(f'Limit: {args.limit or "all"}')
     print(f'Resume: {args.resume}')
     print(f'Save progress every: {args.batch_size} artworks')
     
     # Load artworks from CSV
-    print('\nLoading artworks from CSV...')
-    artworks = load_moma_csv(MOMA_CSV)
-    print(f'Found {len(artworks)} total artworks')
+    print('\nLoading Met paintings from CSV...')
+    artworks = load_met_csv(MET_CSV)
+    print(f'Found {len(artworks)} total paintings')
     
     # Load AI descriptions
     print('\nLoading AI visual descriptions...')

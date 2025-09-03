@@ -3,7 +3,7 @@ import { ArtworkMetadata, ArtworkImage } from '../../../app/types';
 // Generic parser interface that all collection parsers must implement
 export interface CollectionParser {
   // Parse a CSV/JSON file and return normalized artwork data
-  parseFile(filePath: string): Promise<ParsedArtwork[]>;
+  parseFile(filePath: string, limit?: number): Promise<ParsedArtwork[]>;
   
   // Get collection identifier
   getCollectionId(): string;
@@ -20,7 +20,7 @@ export interface ParsedArtwork {
 
 // Base parser class with common functionality
 export abstract class BaseParser implements CollectionParser {
-  abstract parseFile(filePath: string): Promise<ParsedArtwork[]>;
+  abstract parseFile(filePath: string, limit?: number): Promise<ParsedArtwork[]>;
   abstract getCollectionId(): string;
   abstract getCollectionName(): string;
   

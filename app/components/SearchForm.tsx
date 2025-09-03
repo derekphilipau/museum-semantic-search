@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/tooltip';
 import ImageSearchUpload from './ImageSearchUpload';
 import SearchResultsWrapper from './SearchResultsWrapper';
+import EmojiPalette from './EmojiPalette';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export type HybridMode = 'text' | 'image' | 'both';
@@ -33,13 +34,14 @@ interface SearchFormProps {
     hybridMode?: HybridMode;
     hybridBalance?: number;
     includeDescriptions?: boolean;
+    emoji?: boolean;
   };
 }
 
 // Helper to build URL search params
 function buildSearchParams(
   query: string,
-  options: { keyword: boolean; models: Record<string, boolean>; hybrid: boolean; hybridMode?: HybridMode; hybridBalance?: number; includeDescriptions?: boolean }
+  options: { keyword: boolean; models: Record<string, boolean>; hybrid: boolean; hybridMode?: HybridMode; hybridBalance?: number; includeDescriptions?: boolean; emoji?: boolean }
 ): string {
   const params = new URLSearchParams();
   
@@ -73,6 +75,11 @@ function buildSearchParams(
   // Always set models param, even if all are selected
   params.set('models', enabledModels.join(','));
   
+  // Add emoji parameter if it's true (for emoji searches)
+  if (options.emoji) {
+    params.set('emoji', 'true');
+  }
+  
   return params.toString();
 }
 
@@ -103,7 +110,17 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
     
     if (searchMode === 'text') {
       if (!query.trim()) return;
-      const params = buildSearchParams(query, searchOptions);
+      
+      // Check if query contains only emojis
+      const queryEmojis = query.match(/\p{Emoji}/gu) || [];
+      const queryWithoutEmojis = query.replace(/\p{Emoji}/gu, '').trim();
+      const isOnlyEmojis = queryEmojis.length > 0 && queryWithoutEmojis === '';
+      
+      // Build params with emoji flag if query contains only emojis
+      const params = buildSearchParams(query, {
+        ...searchOptions,
+        emoji: isOnlyEmojis || searchOptions.emoji
+      });
       router.push(`/?${params}`);
     } else {
       // Image search
@@ -178,14 +195,15 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search artworks (try 'abstract', 'picasso', 'print', 'collage')"
-              className="flex-1"
+              className="flex-1 text-lg md:text-xl h-10"
             />
             <Button 
               type="submit" 
               disabled={!query.trim()}
               size="default"
+              className="text-lg md:text-xl h-10"
             >
-              <Search className="w-4 h-4 mr-2" />
+              <Search className="size-5" />
               Search
             </Button>
           </div>
@@ -277,7 +295,7 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
         {/* Second row: Visual descriptions and hybrid mode options */}
         <div className="flex flex-wrap items-center gap-4">
           {/* Include visual descriptions checkbox */}
-          <span className="text-sm font-medium">Keyword & Text Embedding Options:</span>
+          <span className="text-sm font-medium">Keyword Options:</span>
           <div className="flex items-center space-x-2">
             <Checkbox
               id="includeDescriptions"
@@ -367,6 +385,9 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
         </div>
       </div>
       )}
+      
+      {/* Emoji Palette */}
+      <EmojiPalette />
     </form>
     
     {/* Image search results display */}

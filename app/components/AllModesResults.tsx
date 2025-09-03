@@ -149,6 +149,7 @@ export default function AllModesResults({
         />
       </div>
 
+
     </div>
   );
 }
