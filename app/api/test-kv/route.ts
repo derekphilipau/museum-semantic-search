@@ -51,9 +51,11 @@ export async function GET() {
     });
   } catch (error) {
     console.error('[Test KV] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
     return Response.json({ 
-      error: error.message,
-      stack: error.stack,
+      error: errorMessage,
+      stack: errorStack,
     }, { status: 500 });
   }
 }
