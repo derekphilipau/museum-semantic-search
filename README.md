@@ -90,7 +90,7 @@ Despite sometimes questionable results, text embedding search with AI-Generated 
 
 Below are comparisons of keyword search, text embedding search, and image embedding search for the query *"woman looking into mirror"*.  
 
-[Search for "woman looking into a mirror"](https://museum-semantic-search.vercel.app/?q=woman+looking+into+a+mirror&keyword=true&hybrid=true&hybridMode=image&hybridBalance=0.5&models=jina_v3%2Csiglip2)
+[Search for "woman looking into mirror"](https://museum-semantic-search.vercel.app/?q=woman+looking+into+mirror&keyword=true&hybrid=true&hybridMode=image&hybridBalance=0.5&models=jina_v3%2Csiglip2)
 
 Out of a result set of 20:
 

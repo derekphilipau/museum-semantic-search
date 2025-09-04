@@ -255,7 +255,7 @@ export default async function Home({ searchParams }: PageProps) {
   
   // If no query is provided, redirect to default search
   if (!query) {
-    redirect('/?q=woman+looking+into+a+mirror&keyword=true&hybrid=true&hybridMode=both&hybridBalance=0.5&models=jina_v3%2Csiglip2');
+    redirect('/?q=woman+looking+into+mirror&keyword=true&hybrid=true&hybridMode=both&hybridBalance=0.5&models=jina_v3%2Csiglip2');
   }
 
   return (
