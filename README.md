@@ -128,6 +128,12 @@ Perhaps the woman is not looking into a mirror, but it does feel like a *mirrori
 </tr>
 </table>
 
+### AI-Generated Emojis
+
+Sometimes strangely accurate revealing details I missed, at other times questionable and problematic, and often hilarious.  Dubious practical use but fun.
+
+![AI-Generated Emojis](docs/images/Emojis.jpg)
+
 ## Architecture Overview
 
 The system uses a modern, scalable architecture:
