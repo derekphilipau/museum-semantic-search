@@ -196,7 +196,7 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search artworks (try 'abstract', 'picasso', 'print', 'collage')"
+              placeholder="Enter multilingual natural language query (e.g. 'woman looking into mirror', '女人照镜子')"
               className="flex-1 text-lg md:text-xl h-10"
             />
             <Button 
@@ -233,6 +233,11 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
           )}
         </TabsContent>
       </Tabs>
+
+      <div className="text-xs italic text-muted-foreground">
+        Initial search may be delayed up to 30 seconds due to server cold start.
+        Due to costs, this project only contains <a href="https://github.com/metmuseum/openaccess" target="_blank" rel="noopener noreferrer" className="underline">Open Access Met Museum Paintings</a>.
+      </div>
       
       {/* Search options - only show for text search */}
       {searchMode === 'text' && (

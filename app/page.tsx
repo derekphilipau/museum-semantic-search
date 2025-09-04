@@ -234,11 +234,6 @@ export default async function Home({ searchParams }: PageProps) {
           initialOptions={{ keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, emoji }}
         />
 
-        <div className="text-xs italic text-muted-foreground">
-          Initial search may be delayed up to 30 seconds due to server cold start.
-          Due to costs, this project only contains <a href="https://github.com/metmuseum/openaccess" target="_blank" rel="noopener noreferrer" className="underline">Open Access Met Museum Paintings</a>.
-        </div>
-
         <Suspense 
           key={JSON.stringify(resolvedParams)} 
           fallback={

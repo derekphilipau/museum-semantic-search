@@ -78,11 +78,55 @@ Jina v3 ([`jinaai/jina-embeddings-v3`](https://jina.ai/embeddings/)) - 768 dimen
 
 **2. Image Embeddings**
 
-SigLIP 2 ([`google/siglip2-base-patch16-224`](https://huggingface.co/google/siglip2-base-patch16-224)) - 768 dimensions. Cross-modal embeddings enabling text-to-image search in shared vector space. Allows multilingual natural language queries like *"woman looking at mirror"* or *"女人看镜子"* to find visually matching artworks.
+SigLIP 2 ([`google/siglip2-base-patch16-224`](https://huggingface.co/google/siglip2-base-patch16-224)) - 768 dimensions. Cross-modal embeddings enabling text-to-image search in shared vector space. Allows multilingual natural language queries like *"woman looking into mirror"* or *"女人照镜子"* to find visually matching artworks.
 
 ### Software Development
 
 AI was used to help quickly develop this software for the purpose of quickly prototyping and experimenting with different semantic search techniques.  It should not be taken as a good example of Next.js or proper Elasticsearch indexing or querying.  Museum collections search is much more complex and nuanced.  The [Musefully](https://musefully.org/) project is more reflective of good faceted search practices.
+
+## Search Comparison
+
+Despite sometimes questionable results, text embedding search with AI-Generated visual descriptions seems to work well in practice.  Image embedding search also shows promise, although it seems less reliable and often produces strange results.
+
+Below are comparisons of keyword search, text embedding search, and image embedding search for the query *"woman looking into mirror"*.  
+
+Out of a result set of 20:
+
+- The conventional Elasticsearch keyword search over Met Museum metadata produces only 3 results that I consider highly relevant.
+- Text embedding search using Jina v3 embeddings on combined metadata and AI-generated descriptions returns 13 excellent results, including a number of images where the reflection or mirror is not even visible.
+- Image embedding search using SigLIP 2 cross-modal embeddings returns 8 highly-relevant results, including artworks where there's no actual mirror, but rather the concept of mirroring, for example [*"Portrait of a Woman with a Man at a Casement"* by Fra Filippo Lippi](https://www.metmuseum.org/art/collection/search/436896) and [*"Dancers, Pink and Green"* by Edgar Degas](https://www.metmuseum.org/art/collection/search/436140).
+
+![Highly Relevant Results for "woman looking into mirror"](docs/images/MirrorCompare.jpg)
+
+Results that I found exciting are highlighted in the image below.  A number of these I probably would have missed if browsing through images. 
+
+![Notable Search Results for "woman looking into mirror"](docs/images/NotableCompare.jpg)
+
+<table>
+<tr>
+<td width="50%">
+<img src="docs/images/DP259541.jpg" alt="Vilaval Ragini: Folio from a ragamala series (Garland of Musical Modes)" width="100%">
+</td>
+<td width="50%">
+Difficult to see: the woman on the right is looking into a mirror.
+
+<a href="https://www.metmuseum.org/art/collection/search/37854">Vilaval Ragini: Folio from a ragamala series (Garland of Musical Modes)</a>
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+<img src="docs/images/DP159891.jpg" alt="Vilaval Ragini: Folio from a ragamala series (Garland of Musical Modes)" width="100%">
+</td>
+<td width="50%">
+
+Perhaps the woman is not looking into a mirror, but it does feel like a *mirroring*.
+
+<a href="https://www.metmuseum.org/art/collection/search/436896">Portrait of a Woman with a Man at a Casement</a> by Fra Filippo Lippi
+
+</td>
+</tr>
+</table>
 
 ## Architecture Overview
 
