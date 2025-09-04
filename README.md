@@ -90,6 +90,8 @@ Despite sometimes questionable results, text embedding search with AI-Generated 
 
 Below are comparisons of keyword search, text embedding search, and image embedding search for the query *"woman looking into mirror"*.  
 
+[Search for "woman looking into a mirror"](https://museum-semantic-search.vercel.app/?q=woman+looking+into+a+mirror&keyword=true&hybrid=true&hybridMode=image&hybridBalance=0.5&models=jina_v3%2Csiglip2)
+
 Out of a result set of 20:
 
 - The conventional Elasticsearch keyword search over Met Museum metadata produces only 3 results that I consider highly relevant.
@@ -108,7 +110,7 @@ Results that I found exciting are highlighted in the image below.  A number of t
 <img src="docs/images/DP259541.jpg" alt="Vilaval Ragini: Folio from a ragamala series (Garland of Musical Modes)" width="100%">
 </td>
 <td width="50%">
-Difficult to see: the woman on the right is looking into a mirror.
+Difficult to see: the woman on the left is looking into a mirror.
 
 <a href="https://www.metmuseum.org/art/collection/search/37854">Vilaval Ragini: Folio from a ragamala series (Garland of Musical Modes)</a>
 

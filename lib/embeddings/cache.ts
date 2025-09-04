@@ -23,7 +23,10 @@ export function getCacheKey(query: string): string {
 
 // Check if we're in production (Vercel)
 function isProduction(): boolean {
-  return process.env.NODE_ENV === 'production' && process.env.VERCEL === '1';
+  // More robust production detection
+  return process.env.NODE_ENV === 'production' || 
+         process.env.VERCEL === '1' || 
+         !!process.env.VERCEL_ENV;
 }
 
 // Check if KV is available
@@ -37,6 +40,7 @@ export async function getCachedEmbeddings(query: string): Promise<CachedEmbeddin
   try {
     // Try KV first if available (works in both dev and prod if configured)
     if (isKVAvailable()) {
+      console.log(`[Cache] KV is available, checking for query: "${query}"`);
       const cached = await kv.get<CachedEmbedding>(key);
       if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
         console.log(`[Cache] KV hit for query: "${query}"`);
@@ -51,10 +55,12 @@ export async function getCachedEmbeddings(query: string): Promise<CachedEmbeddin
         
         return cached;
       }
+    } else if (isProduction()) {
+      console.log(`[Cache] WARNING: KV not available in production. Check KV_REST_API_URL and KV_REST_API_TOKEN environment variables.`);
     }
     
-    // Fall back to memory cache (especially useful in development)
-    if (!isProduction()) {
+    // Fall back to memory cache (useful in both development and as production fallback)
+    if (!isProduction() || !isKVAvailable()) {
       const cached = memoryCache.get(key);
       if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
         console.log(`[Cache] Memory hit for query: "${query}"`);
@@ -93,10 +99,12 @@ export async function setCachedEmbeddings(
       // Set with TTL in seconds
       await kv.set(key, data, { ex: Math.floor(CACHE_TTL / 1000) });
       console.log(`[Cache] Stored in KV for query: "${query}"`);
+    } else if (isProduction()) {
+      console.log(`[Cache] WARNING: Cannot store in KV (not available) for query: "${query}"`);
     }
     
-    // Also store in memory cache for development
-    if (!isProduction()) {
+    // Store in memory cache as fallback or for development
+    if (!isProduction() || !isKVAvailable()) {
       // Implement simple LRU by removing oldest entries if cache is too large
       if (memoryCache.size >= MAX_MEMORY_CACHE_SIZE) {
         const firstKey = memoryCache.keys().next().value;
@@ -135,6 +143,13 @@ export function getCacheStats() {
   return {
     memorySize: memoryCache.size,
     isKVAvailable: isKVAvailable(),
-    isProduction: isProduction()
+    isProduction: isProduction(),
+    environment: {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL: process.env.VERCEL,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      KV_REST_API_URL: process.env.KV_REST_API_URL ? 'Set' : 'Not set',
+      KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN ? 'Set' : 'Not set'
+    }
   };
 }
