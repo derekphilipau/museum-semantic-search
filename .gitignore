@@ -49,3 +49,4 @@ data/
 !data/met/descriptions/gemini_2_5_flash/descriptions.jsonl
 !data/met/met_image_urls_cache.jsonl
 
+.env*.local

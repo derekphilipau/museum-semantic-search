@@ -2,9 +2,19 @@ import { createClient } from '@vercel/kv';
 import crypto from 'crypto';
 
 // Create KV client with proper environment variables
+const kvUrl = process.env.KV_KV_REST_API_URL || process.env.KV_REST_API_URL;
+const kvToken = process.env.KV_KV_REST_API_TOKEN || process.env.KV_REST_API_TOKEN;
+
+console.log('[Cache] Initializing KV client:', {
+  url: kvUrl ? kvUrl.substring(0, 30) + '...' : 'NOT SET',
+  token: kvToken ? 'SET' : 'NOT SET',
+  usingDoublePrefix: !!process.env.KV_KV_REST_API_URL,
+  usingSinglePrefix: !!process.env.KV_REST_API_URL,
+});
+
 const kv = createClient({
-  url: process.env.KV_KV_REST_API_URL || process.env.KV_REST_API_URL,
-  token: process.env.KV_KV_REST_API_TOKEN || process.env.KV_REST_API_TOKEN,
+  url: kvUrl,
+  token: kvToken,
 });
 
 // Types
@@ -48,20 +58,27 @@ export async function getCachedEmbeddings(query: string): Promise<CachedEmbeddin
   try {
     // Try KV first if available (works in both dev and prod if configured)
     if (isKVAvailable()) {
-      console.log(`[Cache] KV is available, checking for query: "${query}"`);
-      const cached = await kv.get<CachedEmbedding>(key);
-      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        console.log(`[Cache] KV hit for query: "${query}"`);
+      console.log(`[Cache] KV is available, checking for query: "${query}" with key: ${key}`);
+      try {
+        const cached = await kv.get<CachedEmbedding>(key);
+        console.log(`[Cache] KV lookup completed for key ${key}:`, cached ? 'Found' : 'Not found');
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+          console.log(`[Cache] KV hit for query: "${query}" (age: ${Math.round((Date.now() - cached.timestamp) / 1000)}s)`);
         
         // Refresh TTL for frequently accessed items
         // Only refresh if entry is older than 1 hour to avoid excessive writes
         if (Date.now() - cached.timestamp > 60 * 60 * 1000) {
           const refreshed = { ...cached, timestamp: Date.now() };
           await kv.set(key, refreshed, { ex: Math.floor(CACHE_TTL / 1000) });
-          console.log(`[Cache] Refreshed TTL for query: "${query}"`);
+            console.log(`[Cache] Refreshed TTL for query: "${query}"`);
+          }
+          
+          return cached;
+        } else if (cached) {
+          console.log(`[Cache] KV entry expired for query: "${query}" (age: ${Math.round((Date.now() - cached.timestamp) / 1000)}s)`);
         }
-        
-        return cached;
+      } catch (kvError) {
+        console.error(`[Cache] KV lookup error for query "${query}":`, kvError);
       }
     } else if (isProduction()) {
       console.log(`[Cache] WARNING: KV not available in production. Check KV_KV_REST_API_URL and KV_KV_REST_API_TOKEN environment variables.`);
@@ -105,10 +122,18 @@ export async function setCachedEmbeddings(
     // Store in KV if available
     if (isKVAvailable()) {
       // Set with TTL in seconds
-      await kv.set(key, data, { ex: Math.floor(CACHE_TTL / 1000) });
-      console.log(`[Cache] Stored in KV for query: "${query}"`);
+      const ttlSeconds = Math.floor(CACHE_TTL / 1000);
+      console.log(`[Cache] Attempting to store in KV for query: "${query}" with TTL: ${ttlSeconds}s`);
+      await kv.set(key, data, { ex: ttlSeconds });
+      console.log(`[Cache] Successfully stored in KV for query: "${query}" (key: ${key})`);
     } else if (isProduction()) {
       console.log(`[Cache] WARNING: Cannot store in KV (not available) for query: "${query}"`);
+      console.log('[Cache] Debug - KV availability:', {
+        KV_REST_API_URL: !!process.env.KV_REST_API_URL,
+        KV_REST_API_TOKEN: !!process.env.KV_REST_API_TOKEN,
+        KV_KV_REST_API_URL: !!process.env.KV_KV_REST_API_URL,
+        KV_KV_REST_API_TOKEN: !!process.env.KV_KV_REST_API_TOKEN,
+      });
     }
     
     // Store in memory cache as fallback or for development
