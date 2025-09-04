@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface EmojiItem {
   emoji: string;
@@ -16,7 +15,6 @@ export default function EmojiPalette() {
   const [emojis, setEmojis] = useState<EmojiItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY_COUNT);
-  const router = useRouter();
 
   useEffect(() => {
     fetchEmojis();
@@ -44,14 +42,6 @@ export default function EmojiPalette() {
     }
   };
 
-  const handleEmojiClick = (emoji: string) => {
-    const searchParams = new URLSearchParams({
-      q: emoji,
-      emoji: 'true'
-    });
-    router.push(`/?${searchParams.toString()}`);
-  };
-
   const displayedEmojis = emojis.slice(0, displayCount);
 
   if (loading) {
@@ -67,32 +57,30 @@ export default function EmojiPalette() {
   }
 
   // Emoji button component
-  const EmojiButton = ({ item }: { item: EmojiItem }) => (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          onClick={() => handleEmojiClick(item.emoji)}
-          className="group inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-accent transition-colors"
-          aria-label={`Search for ${item.emoji} (${item.count} artworks)`}
-        >
-          <span className="text-lg group-hover:scale-110 transition-transform">
-            {item.emoji}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {item.count}
-          </span>
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p className="text-xs">Search {item.count} artworks with {item.emoji}</p>
-      </TooltipContent>
-    </Tooltip>
-  );
+  const EmojiButton = ({ item }: { item: EmojiItem }) => {
+    const searchParams = new URLSearchParams({
+      q: item.emoji
+    });
+    
+    return (
+      <Link
+        href={`/?${searchParams.toString()}`}
+        className="group inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-accent transition-colors"
+        aria-label={`Search for ${item.emoji} (${item.count} artworks)`}
+      >
+        <span className="text-lg group-hover:scale-110 transition-transform">
+          {item.emoji}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {item.count}
+        </span>
+      </Link>
+    );
+  };
 
   return (
     <div className="w-full">
-      <TooltipProvider delayDuration={200}>
-        <div className="space-y-2">
+      <div className="space-y-2">
           <div className="flex flex-wrap gap-0 items-center">
             <div className="text-sm font-medium">
               {emojis.length} Emojis:
@@ -112,7 +100,6 @@ export default function EmojiPalette() {
             )}
           </div>
         </div>
-      </TooltipProvider>
     </div>
   );
 }

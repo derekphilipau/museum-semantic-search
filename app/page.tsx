@@ -28,7 +28,6 @@ async function parseSearchParams(searchParams: PageProps['searchParams']) {
   const hybridMode = (params.hybridMode as HybridMode) || 'image';
   const hybridBalance = params.hybridBalance ? parseFloat(params.hybridBalance as string) : 0.5;
   const includeDescriptions = params.includeDescriptions !== 'false';
-  const emoji = params.emoji === 'true';
   
   // Parse models - if not specified, all models are enabled
   const modelsParam = params.models as string;
@@ -39,13 +38,13 @@ async function parseSearchParams(searchParams: PageProps['searchParams']) {
     [key]: enabledModels.includes(key)
   }), {} as Record<string, boolean>);
 
-  return { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, emoji };
+  return { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions };
 }
 
 
 // Server component that performs search
 async function SearchResults({ searchParams }: PageProps) {
-  const { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, emoji } = await parseSearchParams(searchParams);
+  const { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions } = await parseSearchParams(searchParams);
   
   if (!query) {
     return null;
@@ -94,14 +93,15 @@ async function SearchResults({ searchParams }: PageProps) {
   // Build search promises
   const searchPromises: Promise<{ type: string; model?: string; results: SearchResponse }>[] = [];
 
-  // If emoji search is enabled and query contains emojis, prioritize emoji search
+  // Check if query contains emojis
   const queryEmojis = query.match(/\p{Emoji}/gu) || [];
-  const isEmojiSearch = emoji && queryEmojis.length > 0;
+  const queryWithoutEmojis = query.replace(/\p{Emoji}/gu, '').trim();
+  const isEmojiOnlyQuery = queryEmojis.length > 0 && queryWithoutEmojis === '';
 
   // Keyword search - use emoji search if it's an emoji-only query
   if (keyword) {
-    if (isEmojiSearch) {
-      // For emoji queries, use emoji search but return as keyword results
+    if (isEmojiOnlyQuery) {
+      // For emoji-only queries, use emoji search but return as keyword results
       searchPromises.push(
         performEmojiSearch(queryEmojis, 20)
           .then(results => ({ type: 'keyword', results }))

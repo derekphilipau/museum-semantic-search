@@ -21,8 +21,7 @@ export default function ClickableEmojis({ emojis, className = '', size = 'base' 
     
     // Navigate to search with emoji
     const searchParams = new URLSearchParams({
-      q: emoji,
-      emoji: 'true'
+      q: emoji
     });
     router.push(`/?${searchParams.toString()}`);
   };
@@ -43,6 +42,7 @@ export default function ClickableEmojis({ emojis, className = '', size = 'base' 
           <Tooltip key={index}>
             <TooltipTrigger asChild>
               <button
+                type="button"
                 onClick={(e) => handleEmojiClick(emoji, e)}
                 className="hover:scale-125 transition-transform duration-200 cursor-pointer focus:outline-none focus:scale-125"
                 aria-label={`Search for artworks with ${emoji}`}
