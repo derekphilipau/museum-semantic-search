@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Info, Image as ImageIcon } from 'lucide-react';
-import emojiRegex from 'emoji-regex';
 import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
 import { SearchResponse } from '@/app/types';
 import { Input } from '@/components/ui/input';
@@ -35,14 +34,13 @@ interface SearchFormProps {
     hybridMode?: HybridMode;
     hybridBalance?: number;
     includeDescriptions?: boolean;
-    emoji?: boolean;
   };
 }
 
 // Helper to build URL search params
 function buildSearchParams(
   query: string,
-  options: { keyword: boolean; models: Record<string, boolean>; hybrid: boolean; hybridMode?: HybridMode; hybridBalance?: number; includeDescriptions?: boolean; emoji?: boolean }
+  options: { keyword: boolean; models: Record<string, boolean>; hybrid: boolean; hybridMode?: HybridMode; hybridBalance?: number; includeDescriptions?: boolean }
 ): string {
   const params = new URLSearchParams();
   
@@ -76,10 +74,6 @@ function buildSearchParams(
   // Always set models param, even if all are selected
   params.set('models', enabledModels.join(','));
   
-  // Add emoji parameter if it's true (for emoji searches)
-  if (options.emoji) {
-    params.set('emoji', 'true');
-  }
   
   return params.toString();
 }
@@ -112,17 +106,8 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
     if (searchMode === 'text') {
       if (!query.trim()) return;
       
-      // Check if query contains only emojis
-      const regex = emojiRegex();
-      const queryEmojis = query.match(regex) || [];
-      const queryWithoutEmojis = query.replace(regex, '').trim();
-      const isOnlyEmojis = queryEmojis.length > 0 && queryWithoutEmojis === '';
-      
-      // Build params with emoji flag if query contains only emojis
-      const params = buildSearchParams(query, {
-        ...searchOptions,
-        emoji: isOnlyEmojis || searchOptions.emoji
-      });
+      // Build params
+      const params = buildSearchParams(query, searchOptions);
       router.push(`/?${params}`);
     } else {
       // Image search

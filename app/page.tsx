@@ -250,7 +250,7 @@ async function SearchResults({ searchParams }: PageProps) {
 }
 
 export default async function Home({ searchParams }: PageProps) {
-  const { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, emoji } = await parseSearchParams(searchParams);
+  const { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions } = await parseSearchParams(searchParams);
   const resolvedParams = await searchParams;
   
   // If no query is provided, redirect to default search
@@ -262,9 +262,9 @@ export default async function Home({ searchParams }: PageProps) {
     <div className="container mx-auto px-4 py-6">
       <div className="space-y-3">
         <SearchForm 
-          key={JSON.stringify({ query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, emoji })} // Reset form when any URL param changes
+          key={JSON.stringify({ query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions })} // Reset form when any URL param changes
           initialQuery={query}
-          initialOptions={{ keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, emoji }}
+          initialOptions={{ keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions }}
         />
 
         <Suspense 
