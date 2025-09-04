@@ -87,6 +87,11 @@ export interface SearchResponse {
   hits: SearchHit[];
 }
 
+// Extended search response that includes the ES query for debugging
+export interface SearchResponseWithQuery extends SearchResponse {
+  esQuery?: ESSearchQuery | ESHybridQuery;
+}
+
 // Elasticsearch query types
 export interface ESMultiMatchQuery {
   multi_match: {

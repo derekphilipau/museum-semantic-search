@@ -2,7 +2,7 @@ import { Client } from '@elastic/elasticsearch';
 // @ts-expect-error - TypeScript can't find the module but it exists
 import type { SearchResponse as ESResponse } from '@elastic/elasticsearch/lib/api/types';
 import { ModelKey } from '@/lib/embeddings/types';
-import { SearchResponse, SearchHit, ESSearchQuery, ESHybridQuery, Artwork } from '@/app/types';
+import { SearchResponse, SearchHit, SearchResponseWithQuery, ESSearchQuery, ESHybridQuery, Artwork } from '@/app/types';
 
 // ============================================================================
 // Constants
@@ -74,10 +74,10 @@ const METADATA_FIELD_WEIGHTS = {
  * Maps Elasticsearch response hits to our SearchHit format
  */
 function mapESResponseToSearchHits(hits: ESResponse['hits']['hits']): SearchHit[] {
-  return hits.map(hit => ({
+  return hits.map((hit: ESResponse['hits']['hits'][0]) => ({
     _id: hit._id,
     _score: hit._score || 0,
-    _source: hit._source
+    _source: hit._source as Artwork
   }));
 }
 
@@ -87,8 +87,8 @@ function mapESResponseToSearchHits(hits: ESResponse['hits']['hits']): SearchHit[
 function buildSearchResponse(
   response: ESResponse, 
   hits: SearchHit[], 
-  queryMetadata?: any
-): SearchResponse {
+  queryMetadata?: Partial<SearchResponseWithQuery>
+): SearchResponseWithQuery {
   return {
     took: response.took,
     total: response.hits.total.value,
@@ -139,7 +139,7 @@ function calculateBalanceWeights(balance: number): NormalizedWeights {
  * Gets the appropriate score threshold for a given model or search type
  */
 function getScoreThreshold(model: ModelKey | 'keyword' | 'metadata' | 'similarity'): number {
-  const thresholds = {
+  const thresholds: Record<string, number> = {
     keyword: SEARCH_CONSTANTS.SCORE_THRESHOLDS.KEYWORD,
     jina_v3: SEARCH_CONSTANTS.SCORE_THRESHOLDS.JINA_V3,
     siglip2: SEARCH_CONSTANTS.SCORE_THRESHOLDS.SIGLIP2,
@@ -203,7 +203,7 @@ export async function performKeywordSearch(
   query: string,
   size: number = 20,
   includeDescriptions: boolean = false
-): Promise<SearchResponse & { esQuery?: ESSearchQuery }> {
+): Promise<SearchResponseWithQuery> {
   try {
     const client = getElasticsearchClient();
     
@@ -248,7 +248,7 @@ export async function performKeywordSearch(
 export async function performEmojiSearch(
   emojis: string[],
   size: number = 20
-): Promise<SearchResponse & { esQuery?: ESSearchQuery }> {
+): Promise<SearchResponseWithQuery> {
   try {
     const client = getElasticsearchClient();
     
@@ -297,7 +297,7 @@ export async function performSemanticSearchWithEmbedding(
   embedding: number[],
   model: ModelKey,
   size: number = 20
-): Promise<SearchResponse & { esQuery?: ESSearchQuery }> {
+): Promise<SearchResponseWithQuery> {
   try {
     const client = getElasticsearchClient();
 
@@ -343,7 +343,7 @@ async function performSingleEmbeddingHybridSearchWithEmbedding(
   size: number = 20,
   includeDescriptions: boolean = false,
   balance: number = 0.5
-): Promise<SearchResponse & { esQuery?: ESHybridQuery }> {
+): Promise<SearchResponseWithQuery> {
   // If balance is 1 (100% semantic), just do a pure KNN search
   if (balance >= 0.99) {
     const result = await performSemanticSearchWithEmbedding(embedding, model, size);
@@ -487,7 +487,7 @@ async function performMultipleEmbeddingHybridSearchWithEmbeddings(
   size: number = 20,
   includeDescriptions: boolean = false,
   balance: number = 0.5
-): Promise<SearchResponse & { esQuery?: ESHybridQuery }> {
+): Promise<SearchResponseWithQuery> {
   // Run parallel searches: one keyword + one knn per model
   const searchPromises: Promise<SearchResponse & { esQuery?: ESSearchQuery | ESHybridQuery }>[] = [];
   
@@ -600,7 +600,7 @@ export async function performHybridSearchWithEmbeddings(
   size: number = 20,
   includeDescriptions: boolean = false,
   balance: number = 0.5
-): Promise<SearchResponse & { esQuery?: ESHybridQuery }> {
+): Promise<SearchResponseWithQuery> {
   try {
     const modelsArray = Array.isArray(models) ? models : [models];
     
@@ -699,7 +699,7 @@ export async function findSimilarArtworks(
 export async function findMetadataSimilarArtworks(
   artworkId: string,
   size: number = 20
-): Promise<SearchResponse & { esQuery?: ESSearchQuery }> {
+): Promise<SearchResponseWithQuery> {
   try {
     const client = getElasticsearchClient();
     
@@ -915,7 +915,7 @@ export async function findCombinedSimilarArtworks(
   models: ModelKey[],
   size: number = 20,
   weights?: Record<ModelKey | 'metadata', number>
-): Promise<SearchResponse & { esQuery?: ESHybridQuery }> {
+): Promise<SearchResponseWithQuery> {
   try {
     const client = getElasticsearchClient();
     
