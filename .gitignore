@@ -40,8 +40,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-tmp/
-data/
-!data/met/descriptions/gemini_2_5_flash/descriptions.jsonl
 public/images
 modal/__pycache__/
+tmp/
+data/
+
+# Retain final generated data files:
+!data/met/descriptions/gemini_2_5_flash/descriptions.jsonl
+!data/met/met_image_urls_cache.jsonl
+
