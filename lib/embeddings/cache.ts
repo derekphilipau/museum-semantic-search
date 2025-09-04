@@ -1,5 +1,11 @@
-import { kv } from '@vercel/kv';
+import { createClient } from '@vercel/kv';
 import crypto from 'crypto';
+
+// Create KV client with proper environment variables
+const kv = createClient({
+  url: process.env.KV_KV_REST_API_URL || process.env.KV_REST_API_URL,
+  token: process.env.KV_KV_REST_API_TOKEN || process.env.KV_REST_API_TOKEN,
+});
 
 // Types
 interface CachedEmbedding {
@@ -31,7 +37,9 @@ function isProduction(): boolean {
 
 // Check if KV is available
 function isKVAvailable(): boolean {
-  return !!(process.env.KV_KV_REST_API_URL && process.env.KV_KV_REST_API_TOKEN);
+  // Upstash/Vercel sometimes doubles the KV prefix
+  return !!(process.env.KV_KV_REST_API_URL && process.env.KV_KV_REST_API_TOKEN) ||
+         !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
 }
 
 export async function getCachedEmbeddings(query: string): Promise<CachedEmbedding | null> {
