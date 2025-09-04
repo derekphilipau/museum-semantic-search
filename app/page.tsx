@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
 import { EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings/types';
 import { generateUnifiedEmbeddings, extractSigLIP2Embedding, extractJinaV3Embedding } from '@/lib/embeddings';
 import { 
@@ -224,6 +225,11 @@ async function SearchResults({ searchParams }: PageProps) {
 export default async function Home({ searchParams }: PageProps) {
   const { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, emoji } = await parseSearchParams(searchParams);
   const resolvedParams = await searchParams;
+  
+  // If no query is provided, redirect to default search
+  if (!query) {
+    redirect('/?q=woman+looking+into+a+mirror&keyword=true&hybrid=true&hybridMode=both&hybridBalance=0.5&models=jina_v3%2Csiglip2');
+  }
 
   return (
     <div className="container mx-auto px-4 py-6">

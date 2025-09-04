@@ -4,6 +4,161 @@ import type { SearchResponse as ESResponse } from '@elastic/elasticsearch/lib/ap
 import { ModelKey } from '@/lib/embeddings/types';
 import { SearchResponse, SearchHit, ESSearchQuery, ESHybridQuery, Artwork } from '@/app/types';
 
+// ============================================================================
+// Constants
+// ============================================================================
+
+const SEARCH_CONSTANTS = {
+  // Score thresholds for filtering results
+  SCORE_THRESHOLDS: {
+    KEYWORD: 10.0,        // Lowered to allow more keyword matches in hybrid search
+    JINA_V3: 0.71,        // Threshold for Jina v3 text embeddings
+    SIGLIP2: 0.58,        // Threshold for SigLIP 2 image embeddings
+    SIMILARITY: 0.55,     // General similarity threshold
+    METADATA: 2.0         // Metadata scores are typically higher
+  },
+  
+  // RRF (Reciprocal Rank Fusion) constants
+  RRF: {
+    DEFAULT_K: 60,        // Default k value for RRF
+    DYNAMIC_K_MIN: 20,    // Minimum k value for dynamic calculation
+    DYNAMIC_K_RANGE: 40   // Range for dynamic k calculation
+  },
+  
+  // Search size multipliers
+  MULTIPLIERS: {
+    RESULTS: 2,           // Fetch 2x results for fusion
+    CANDIDATES: 4         // kNN num_candidates multiplier
+  },
+  
+  // Weight calculation exponent
+  WEIGHT_EXPONENT: 1.5
+};
+
+// Search fields configuration
+const SEARCH_FIELDS = {
+  BASE: [
+    'metadata.title^3',
+    'metadata.artist^2', 
+    'metadata.classification^1.5',
+    'metadata.medium',
+    'metadata.date',
+    'metadata.artistNationality',
+    'metadata.department'
+  ],
+  DESCRIPTIONS: [
+    'visual_alt_text^0.8',
+    'visual_long_description^0.5'
+  ]
+};
+
+// Metadata field weights for similarity scoring
+const METADATA_FIELD_WEIGHTS = {
+  artist: 10,
+  date: 7,
+  medium: 6,
+  classification: 5,
+  department: 4,
+  culture: 4,
+  artistNationality: 4,
+  dimensions: 3,
+  period: 3,
+  dynasty: 3
+};
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Maps Elasticsearch response hits to our SearchHit format
+ */
+function mapESResponseToSearchHits(hits: ESResponse['hits']['hits']): SearchHit[] {
+  return hits.map(hit => ({
+    _id: hit._id,
+    _score: hit._score || 0,
+    _source: hit._source
+  }));
+}
+
+/**
+ * Builds a standard search response object
+ */
+function buildSearchResponse(
+  response: ESResponse, 
+  hits: SearchHit[], 
+  queryMetadata?: any
+): SearchResponse {
+  return {
+    took: response.took,
+    total: response.hits.total.value,
+    hits,
+    ...queryMetadata
+  };
+}
+
+/**
+ * Calculates RRF score for a given rank
+ */
+function calculateRRFScore(rank: number, weight: number, k: number): number {
+  return weight * (1 / (k + rank + 1));
+}
+
+/**
+ * Calculates dynamic k value based on balance
+ */
+function calculateDynamicK(balance: number): number {
+  return SEARCH_CONSTANTS.RRF.DYNAMIC_K_MIN + 
+    (1 - Math.abs(balance - 0.5) * 2) * SEARCH_CONSTANTS.RRF.DYNAMIC_K_RANGE;
+}
+
+/**
+ * Calculates normalized weights based on balance parameter
+ */
+interface NormalizedWeights {
+  keywordWeight: number;
+  semanticWeight: number;
+  normalizedKeywordWeight: number;
+  normalizedSemanticWeight: number;
+}
+
+function calculateBalanceWeights(balance: number): NormalizedWeights {
+  const keywordWeight = Math.pow(1 - balance, SEARCH_CONSTANTS.WEIGHT_EXPONENT);
+  const semanticWeight = Math.pow(balance, SEARCH_CONSTANTS.WEIGHT_EXPONENT);
+  const totalWeight = keywordWeight + semanticWeight;
+  
+  return {
+    keywordWeight,
+    semanticWeight,
+    normalizedKeywordWeight: keywordWeight / totalWeight,
+    normalizedSemanticWeight: semanticWeight / totalWeight
+  };
+}
+
+/**
+ * Gets the appropriate score threshold for a given model or search type
+ */
+function getScoreThreshold(model: ModelKey | 'keyword' | 'metadata' | 'similarity'): number {
+  const thresholds = {
+    keyword: SEARCH_CONSTANTS.SCORE_THRESHOLDS.KEYWORD,
+    jina_v3: SEARCH_CONSTANTS.SCORE_THRESHOLDS.JINA_V3,
+    siglip2: SEARCH_CONSTANTS.SCORE_THRESHOLDS.SIGLIP2,
+    similarity: SEARCH_CONSTANTS.SCORE_THRESHOLDS.SIMILARITY,
+    metadata: SEARCH_CONSTANTS.SCORE_THRESHOLDS.METADATA
+  };
+  return thresholds[model] || 0;
+}
+
+/**
+ * Builds base search configuration
+ */
+function buildBaseSearchConfig(size: number, excludeEmbeddings: boolean = true) {
+  return {
+    size,
+    _source: excludeEmbeddings ? { excludes: ['embeddings'] } : undefined
+  };
+}
+
 export function getElasticsearchClient(): Client {
   const esUrl = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
   const apiKey = process.env.ELASTICSEARCH_API_KEY;
@@ -52,29 +207,12 @@ export async function performKeywordSearch(
   try {
     const client = getElasticsearchClient();
     
-    const searchFields = [
-      'metadata.title^3',
-      'metadata.artist^2',
-      'metadata.classification^1.5',
-      'metadata.medium',
-      'metadata.date',
-      'metadata.artistNationality',
-      'metadata.department'
-    ];
-    
-    // Add visual description fields if requested
-    if (includeDescriptions) {
-      searchFields.push(
-        'visual_alt_text^0.8',
-        'visual_long_description^0.5'
-      );
-    }
+    const searchFields = includeDescriptions 
+      ? [...SEARCH_FIELDS.BASE, ...SEARCH_FIELDS.DESCRIPTIONS]
+      : SEARCH_FIELDS.BASE;
     
     const searchBody = {
-      size,
-      _source: {
-        excludes: ['embeddings']
-      },
+      ...buildBaseSearchConfig(size),
       query: {
         bool: {
           must: [{
@@ -94,16 +232,11 @@ export async function performKeywordSearch(
       ...searchBody
     });
 
-    return {
-      took: response.took,
-      total: (response.hits.total as { value: number }).value,
-      hits: (response.hits.hits as ESResponse['hits']['hits']).map((hit: ESResponse['hits']['hits'][0]) => ({
-        _id: hit._id,
-        _score: hit._score || 0,
-        _source: hit._source
-      })),
-      esQuery: searchBody
-    };
+    return buildSearchResponse(
+      response,
+      mapESResponseToSearchHits(response.hits.hits as ESResponse['hits']['hits']),
+      { esQuery: searchBody }
+    );
   } catch (error) {
     console.error('Keyword search error:', error);
     return { took: 0, total: 0, hits: [] };
@@ -139,10 +272,7 @@ export async function performEmojiSearch(
         };
     
     const searchBody = {
-      size,
-      _source: {
-        excludes: ['embeddings']
-      },
+      ...buildBaseSearchConfig(size),
       query
     };
 
@@ -151,16 +281,11 @@ export async function performEmojiSearch(
       ...searchBody
     });
 
-    return {
-      took: response.took,
-      total: (response.hits.total as { value: number }).value,
-      hits: (response.hits.hits as ESResponse['hits']['hits']).map((hit: ESResponse['hits']['hits'][0]) => ({
-        _id: hit._id,
-        _score: hit._score || 0,
-        _source: hit._source
-      })),
-      esQuery: searchBody
-    };
+    return buildSearchResponse(
+      response,
+      mapESResponseToSearchHits(response.hits.hits as ESResponse['hits']['hits']),
+      { esQuery: searchBody }
+    );
   } catch (error) {
     console.error('Emoji search error:', error);
     return { took: 0, total: 0, hits: [] };
@@ -177,15 +302,12 @@ export async function performSemanticSearchWithEmbedding(
     const client = getElasticsearchClient();
 
     const searchBody = {
-      size,
-      _source: {
-        excludes: ['embeddings']
-      },
+      ...buildBaseSearchConfig(size),
       knn: {
         field: `embeddings.${model}`,
         query_vector: embedding,
         k: size,
-        num_candidates: size * 2
+        num_candidates: size * SEARCH_CONSTANTS.MULTIPLIERS.CANDIDATES
       }
     };
 
@@ -194,22 +316,19 @@ export async function performSemanticSearchWithEmbedding(
       ...searchBody
     });
 
-    return {
-      took: response.took,
-      total: (response.hits.total as { value: number }).value,
-      hits: (response.hits.hits as ESResponse['hits']['hits']).map((hit: ESResponse['hits']['hits'][0]) => ({
-        _id: hit._id,
-        _score: hit._score || 0,
-        _source: hit._source
-      })),
-      esQuery: {
-        ...searchBody,
-        knn: {
-          ...searchBody.knn,
-          query_vector: '[embedding vector]' // Don't include full vector in UI
-        }
+    const esQuery = {
+      ...searchBody,
+      knn: {
+        ...searchBody.knn,
+        query_vector: '[embedding vector]' // Don't include full vector in UI
       }
     };
+
+    return buildSearchResponse(
+      response,
+      mapESResponseToSearchHits(response.hits.hits as ESResponse['hits']['hits']),
+      { esQuery }
+    );
   } catch (error) {
     console.error(`Semantic search with embedding error for ${model}:`, error);
     return { took: 0, total: 0, hits: [] };
@@ -235,7 +354,7 @@ async function performSingleEmbeddingHybridSearchWithEmbedding(
         note: 'Pure semantic search (100% balance)',
         balance,
         model,
-        k: 30,
+        k: 60,
         weights: { 
           keyword: { raw: 0, normalized: 0 }, 
           semantic: { raw: 1, normalized: 1 } 
@@ -256,7 +375,7 @@ async function performSingleEmbeddingHybridSearchWithEmbedding(
         note: 'Pure keyword search (0% balance)',
         balance,
         model,
-        k: 30,
+        k: 60,
         weights: { 
           keyword: { raw: 1, normalized: 1 }, 
           semantic: { raw: 0, normalized: 0 } 
@@ -272,10 +391,11 @@ async function performSingleEmbeddingHybridSearchWithEmbedding(
   const searchPromises: Promise<SearchResponse & { esQuery?: ESSearchQuery | ESHybridQuery }>[] = [];
   
   // Keyword search
-  searchPromises.push(performKeywordSearch(query, size * 2, includeDescriptions));
+  const searchSize = size * SEARCH_CONSTANTS.MULTIPLIERS.RESULTS;
+  searchPromises.push(performKeywordSearch(query, searchSize, includeDescriptions));
   
   // Semantic search
-  searchPromises.push(performSemanticSearchWithEmbedding(embedding, model, size * 2));
+  searchPromises.push(performSemanticSearchWithEmbedding(embedding, model, searchSize));
   
   const results = await Promise.all(searchPromises);
   const keywordResults = results[0];
@@ -284,39 +404,44 @@ async function performSingleEmbeddingHybridSearchWithEmbedding(
   // Manual RRF implementation with improved balance handling
   const documentScores = new Map<string, { hit: SearchHit, rrfScore: number, keywordRank?: number, semanticRank?: number }>();
   
-  // Use smaller k for more pronounced differences
-  // k=10 is more aggressive, k=60 is more conservative
-  // We'll use a dynamic k based on the balance to make the effect more noticeable
-  const k = 10 + (1 - Math.abs(balance - 0.5) * 2) * 20; // k ranges from 10 to 30
+  // Calculate dynamic k value based on balance
+  const k = calculateDynamicK(balance);
   
-  // Apply balance weights with exponential scaling for more pronounced effect
-  // This makes extreme balance values (near 0 or 1) have stronger effects
-  const keywordWeight = Math.pow(1 - balance, 1.5);
-  const semanticWeight = Math.pow(balance, 1.5);
-  
-  // Normalize weights so they sum to 1
-  const totalWeight = keywordWeight + semanticWeight;
-  const normalizedKeywordWeight = keywordWeight / totalWeight;
-  const normalizedSemanticWeight = semanticWeight / totalWeight;
+  // Calculate normalized weights based on balance
+  const weights = calculateBalanceWeights(balance);
 
-  // Process keyword results
-  keywordResults.hits.forEach((hit, rank) => {
-    const rrfScore = normalizedKeywordWeight * (1 / (k + rank + 1));
+  // Debug logging
+  console.log(`Hybrid search debug - Model: ${model}, Balance: ${balance}, K: ${k}`);
+  console.log(`Weights - Keyword: ${weights.normalizedKeywordWeight}, Semantic: ${weights.normalizedSemanticWeight}`);
+  console.log(`Keyword results: ${keywordResults.hits.length}, Semantic results: ${semanticResults.hits.length}`);
+
+  // Process keyword results with score filtering
+  const keywordThreshold = getScoreThreshold('keyword');
+  const keywordFiltered = keywordResults.hits.filter(hit => hit._score >= keywordThreshold);
+  console.log(`Keyword filtered: ${keywordFiltered.length} (threshold: ${keywordThreshold})`);
+  
+  keywordFiltered.forEach((hit, rank) => {
+    const rrfScore = calculateRRFScore(rank, weights.normalizedKeywordWeight, k);
     documentScores.set(hit._id, { hit, rrfScore, keywordRank: rank });
   });
   
-  // Process semantic results
-  semanticResults.hits.forEach((hit, rank) => {
-    const rrfScore = normalizedSemanticWeight * (1 / (k + rank + 1));
-    
-    if (documentScores.has(hit._id)) {
-      const existing = documentScores.get(hit._id)!;
-      existing.rrfScore += rrfScore;
-      existing.semanticRank = rank;
-    } else {
-      documentScores.set(hit._id, { hit, rrfScore, semanticRank: rank });
-    }
-  });
+  // Process semantic results with score filtering
+  // For hybrid search, use a more lenient threshold to ensure results aren't completely filtered out
+  const semanticThreshold = balance > 0.8 ? getScoreThreshold(model) : getScoreThreshold(model) * 0.7;
+  const semanticFiltered = semanticResults.hits.filter(hit => hit._score >= semanticThreshold);
+  console.log(`Semantic filtered: ${semanticFiltered.length} (threshold: ${semanticThreshold}, model: ${model})`);
+  
+  semanticFiltered.forEach((hit, rank) => {
+      const rrfScore = calculateRRFScore(rank, weights.normalizedSemanticWeight, k);
+      
+      if (documentScores.has(hit._id)) {
+        const existing = documentScores.get(hit._id)!;
+        existing.rrfScore += rrfScore;
+        existing.semanticRank = rank;
+      } else {
+        documentScores.set(hit._id, { hit, rrfScore, semanticRank: rank });
+      }
+    });
   
   // Sort by RRF score and take top N
   const sortedHits = Array.from(documentScores.values())
@@ -326,6 +451,8 @@ async function performSingleEmbeddingHybridSearchWithEmbedding(
       ...hit,
       _score: rrfScore
     }));
+  
+  console.log(`Final hybrid results: ${sortedHits.length} documents (from ${documentScores.size} unique)`);
   
   return {
     took: Math.max(keywordResults.took || 0, semanticResults.took || 0),
@@ -337,12 +464,12 @@ async function performSingleEmbeddingHybridSearchWithEmbedding(
       k,
       weights: {
         keyword: {
-          raw: keywordWeight,
-          normalized: normalizedKeywordWeight
+          raw: weights.keywordWeight,
+          normalized: weights.normalizedKeywordWeight
         },
         semantic: {
-          raw: semanticWeight,
-          normalized: normalizedSemanticWeight
+          raw: weights.semanticWeight,
+          normalized: weights.normalizedSemanticWeight
         }
       },
       model,
@@ -365,12 +492,13 @@ async function performMultipleEmbeddingHybridSearchWithEmbeddings(
   const searchPromises: Promise<SearchResponse & { esQuery?: ESSearchQuery | ESHybridQuery }>[] = [];
   
   // Keyword search
-  searchPromises.push(performKeywordSearch(query, size * 2, includeDescriptions));
+  const searchSize = size * SEARCH_CONSTANTS.MULTIPLIERS.RESULTS;
+  searchPromises.push(performKeywordSearch(query, searchSize, includeDescriptions));
   
   // Semantic searches using pre-computed embeddings
   for (const model of models) {
     if (embeddings[model as ModelKey]) {
-      searchPromises.push(performSemanticSearchWithEmbedding(embeddings[model as ModelKey] as number[], model, size * 2));
+      searchPromises.push(performSemanticSearchWithEmbedding(embeddings[model as ModelKey] as number[], model, searchSize));
     }
   }
   
@@ -381,36 +509,45 @@ async function performMultipleEmbeddingHybridSearchWithEmbeddings(
   // Manual RRF implementation with improved balance handling
   const documentScores = new Map<string, { hit: SearchHit, rrfScore: number }>();
   
-  // Use smaller k for more pronounced differences
-  const k = 10 + (1 - Math.abs(balance - 0.5) * 2) * 20; // k ranges from 10 to 30
+  // Calculate dynamic k value based on balance
+  const k = calculateDynamicK(balance);
   
-  // Apply balance weights with exponential scaling
-  const keywordWeight = Math.pow(1 - balance, 1.5);
-  const semanticWeight = Math.pow(balance, 1.5);
-  
-  // Normalize weights
-  const totalWeight = keywordWeight + semanticWeight;
-  const normalizedKeywordWeight = keywordWeight / totalWeight;
-  const normalizedSemanticWeight = semanticWeight / totalWeight;
+  // Calculate normalized weights based on balance
+  const weights = calculateBalanceWeights(balance);
 
-  // Process keyword results
-  keywordResults.hits.forEach((hit, rank) => {
-    const rrfScore = normalizedKeywordWeight * (1 / (k + rank + 1));
+  // Debug logging for multi-model hybrid
+  console.log(`Multi-model hybrid search - Models: ${models.join(', ')}, Balance: ${balance}, K: ${k}`);
+  console.log(`Weights - Keyword: ${weights.normalizedKeywordWeight}, Semantic: ${weights.normalizedSemanticWeight}`);
+  console.log(`Keyword results: ${keywordResults.hits.length}, Semantic results: ${semanticResults.map(r => r.hits.length).join(', ')}`);
+
+  // Process keyword results with score filtering
+  const keywordThreshold = getScoreThreshold('keyword');
+  const keywordFiltered = keywordResults.hits.filter(hit => hit._score >= keywordThreshold);
+  console.log(`Keyword filtered: ${keywordFiltered.length} (threshold: ${keywordThreshold})`);
+  
+  keywordFiltered.forEach((hit, rank) => {
+    const rrfScore = calculateRRFScore(rank, weights.normalizedKeywordWeight, k);
     documentScores.set(hit._id, { hit, rrfScore });
   });
   
-  // Process semantic results
-  semanticResults.forEach((result) => {
-    result.hits.forEach((hit, rank) => {
-      const rrfScore = (normalizedSemanticWeight / models.length) * (1 / (k + rank + 1));
-      
-      if (documentScores.has(hit._id)) {
-        const existing = documentScores.get(hit._id)!;
-        existing.rrfScore += rrfScore;
-      } else {
-        documentScores.set(hit._id, { hit, rrfScore });
-      }
-    });
+  // Process semantic results with score filtering
+  // For hybrid search, use a more lenient threshold to ensure results aren't completely filtered out
+  semanticResults.forEach((result, index) => {
+    const model = models[index];
+    const semanticThreshold = balance > 0.8 ? getScoreThreshold(model) : getScoreThreshold(model) * 0.7;
+    const semanticFiltered = result.hits.filter(hit => hit._score >= semanticThreshold);
+    console.log(`Semantic ${model} filtered: ${semanticFiltered.length} (threshold: ${semanticThreshold})`);
+    
+    semanticFiltered.forEach((hit, rank) => {
+        const rrfScore = calculateRRFScore(rank, weights.normalizedSemanticWeight / models.length, k);
+        
+        if (documentScores.has(hit._id)) {
+          const existing = documentScores.get(hit._id)!;
+          existing.rrfScore += rrfScore;
+        } else {
+          documentScores.set(hit._id, { hit, rrfScore });
+        }
+      });
   });
   
   // Sort by RRF score and take top N
@@ -422,6 +559,8 @@ async function performMultipleEmbeddingHybridSearchWithEmbeddings(
       _score: rrfScore
     }));
   
+  console.log(`Final multi-model hybrid results: ${sortedHits.length} documents (from ${documentScores.size} unique)`);
+  
   return {
     took: Math.max(...results.map(r => r.took || 0)),
     total: documentScores.size,
@@ -432,13 +571,13 @@ async function performMultipleEmbeddingHybridSearchWithEmbeddings(
       k,
       weights: {
         keyword: {
-          raw: keywordWeight,
-          normalized: normalizedKeywordWeight
+          raw: weights.keywordWeight,
+          normalized: weights.normalizedKeywordWeight
         },
         semantic: {
-          raw: semanticWeight,
-          normalized: normalizedSemanticWeight,
-          perModel: normalizedSemanticWeight / models.length
+          raw: weights.semanticWeight,
+          normalized: weights.normalizedSemanticWeight,
+          perModel: weights.normalizedSemanticWeight / models.length
         }
       },
       models: models,
@@ -526,17 +665,15 @@ export async function findSimilarArtworks(
     }
 
     // Search for similar artworks
+    const searchConfig = buildBaseSearchConfig(size + 1); // +1 to exclude self
     const response = await client.search({
       index: INDEX_NAME,
-      size: size + 1, // +1 to exclude self
-      _source: {
-        excludes: ['embeddings']
-      },
+      ...searchConfig,
       knn: {
         field: `embeddings.${model}`,
         query_vector: embedding,
         k: size + 1,
-        num_candidates: (size + 1) * 2
+        num_candidates: (size + 1) * SEARCH_CONSTANTS.MULTIPLIERS.CANDIDATES
       }
     });
 
@@ -587,7 +724,7 @@ export async function findMetadataSimilarArtworks(
         match: {
           'metadata.artist': {
             query: metadata.artist,
-            boost: 10
+            boost: METADATA_FIELD_WEIGHTS.artist
           }
         }
       });
@@ -611,7 +748,7 @@ export async function findMetadataSimilarArtworks(
               }
             }
           }],
-          boost: 7
+          boost: METADATA_FIELD_WEIGHTS.date
         }
       });
     }
@@ -622,7 +759,7 @@ export async function findMetadataSimilarArtworks(
         match: {
           'metadata.medium': {
             query: metadata.medium,
-            boost: 6,
+            boost: METADATA_FIELD_WEIGHTS.medium,
             fuzziness: 'AUTO'
           }
         }
@@ -635,7 +772,7 @@ export async function findMetadataSimilarArtworks(
         term: {
           'metadata.classification': {
             value: metadata.classification,
-            boost: 5
+            boost: METADATA_FIELD_WEIGHTS.classification
           }
         }
       });
@@ -647,7 +784,7 @@ export async function findMetadataSimilarArtworks(
         term: {
           'metadata.department': {
             value: metadata.department,
-            boost: 4
+            boost: METADATA_FIELD_WEIGHTS.department
           }
         }
       });
@@ -659,7 +796,7 @@ export async function findMetadataSimilarArtworks(
         term: {
           'metadata.culture': {
             value: metadata.culture,
-            boost: 4
+            boost: METADATA_FIELD_WEIGHTS.culture
           }
         }
       });
@@ -670,7 +807,7 @@ export async function findMetadataSimilarArtworks(
         term: {
           'metadata.artistNationality': {
             value: metadata.artistNationality,
-            boost: 4
+            boost: METADATA_FIELD_WEIGHTS.artistNationality
           }
         }
       });
@@ -699,7 +836,7 @@ export async function findMetadataSimilarArtworks(
               }
             }
           ],
-          boost: 3
+          boost: METADATA_FIELD_WEIGHTS.dimensions
         }
       });
     }
@@ -710,7 +847,7 @@ export async function findMetadataSimilarArtworks(
         term: {
           'metadata.period': {
             value: metadata.period,
-            boost: 3
+            boost: METADATA_FIELD_WEIGHTS.period
           }
         }
       });
@@ -721,7 +858,7 @@ export async function findMetadataSimilarArtworks(
         term: {
           'metadata.dynasty': {
             value: metadata.dynasty,
-            boost: 3
+            boost: METADATA_FIELD_WEIGHTS.dynasty
           }
         }
       });
@@ -735,10 +872,7 @@ export async function findMetadataSimilarArtworks(
 
     // Execute the search
     const searchBody = {
-      size: size + 1, // +1 to exclude self
-      _source: {
-        excludes: ['embeddings']
-      },
+      ...buildBaseSearchConfig(size + 1), // +1 to exclude self
       query: {
         bool: {
           should: shouldClauses,
@@ -755,26 +889,20 @@ export async function findMetadataSimilarArtworks(
       ...searchBody
     });
 
-    return {
-      took: response.took,
-      total: (response.hits.total as { value: number }).value,
-      hits: (response.hits.hits as ESResponse['hits']['hits']).slice(0, size).map((hit: ESResponse['hits']['hits'][0]) => ({
-        _id: hit._id,
-        _score: hit._score || 0,
-        _source: hit._source
-      })),
-      esQuery: {
-        ...searchBody,
-        note: 'Metadata-based similarity using art historical principles',
-        sourceArtwork: {
-          id: artworkId,
-          artist: metadata.artist,
-          date: `${metadata.dateBegin || '?'}-${metadata.dateEnd || '?'}`,
-          medium: metadata.medium,
-          classification: metadata.classification
-        }
-      } as ESSearchQuery & { note: string; sourceArtwork: Record<string, unknown> }
-    };
+    const hits = mapESResponseToSearchHits(response.hits.hits as ESResponse['hits']['hits']).slice(0, size);
+    const esQuery = {
+      ...searchBody,
+      note: 'Metadata-based similarity using art historical principles',
+      sourceArtwork: {
+        id: artworkId,
+        artist: metadata.artist,
+        date: `${metadata.dateBegin || '?'}-${metadata.dateEnd || '?'}`,
+        medium: metadata.medium,
+        classification: metadata.classification
+      }
+    } as ESSearchQuery & { note: string; sourceArtwork: Record<string, unknown> };
+
+    return buildSearchResponse(response, hits, { esQuery });
   } catch (error) {
     console.error('Metadata similarity search error:', error);
     return { took: 0, total: 0, hits: [] };
@@ -825,19 +953,18 @@ export async function findCombinedSimilarArtworks(
     const searchPromises: Promise<ESResponse | (SearchResponse & { esQuery?: ESSearchQuery })>[] = [];
     
     // Embedding searches
+    const searchSize = size * SEARCH_CONSTANTS.MULTIPLIERS.RESULTS;
     availableModels.forEach(model => {
+      const searchConfig = buildBaseSearchConfig(searchSize);
       searchPromises.push(
         client.search({
           index: INDEX_NAME,
-          size: size * 2, // Get more results for better fusion
-          _source: {
-            excludes: ['embeddings']
-          },
+          ...searchConfig,
           knn: {
             field: `embeddings.${model}`,
             query_vector: embeddings[model],
-            k: size * 2,
-            num_candidates: size * 4
+            k: searchSize,
+            num_candidates: searchSize * SEARCH_CONSTANTS.MULTIPLIERS.RESULTS
           }
         })
       );
@@ -845,7 +972,7 @@ export async function findCombinedSimilarArtworks(
     
     // Add metadata similarity search
     searchPromises.push(
-      findMetadataSimilarArtworks(artworkId, size * 2)
+      findMetadataSimilarArtworks(artworkId, searchSize)
         .then(result => ({
           hits: {
             hits: result.hits.map(hit => ({
@@ -862,55 +989,59 @@ export async function findCombinedSimilarArtworks(
     
     // Combine results using weighted RRF
     const documentScores = new Map<string, { hit: SearchHit & { _metadata?: { sources: string[] } }, combinedScore: number, sources: string[] }>();
-    const k = 20; // RRF constant for more aggressive ranking
+    const k = SEARCH_CONSTANTS.RRF.DEFAULT_K; // RRF constant for combined similarity
     
     // Process results from each embedding model
     availableModels.forEach((model, modelIndex) => {
       const modelWeight = modelWeights[model as keyof typeof modelWeights] || defaultWeights[model as keyof typeof defaultWeights];
       const searchResult = results[modelIndex];
       
-      searchResult.hits.hits.forEach((hit: ESResponse['hits']['hits'][0], rank: number) => {
+      searchResult.hits.hits
+        .filter((hit: ESResponse['hits']['hits'][0]) => (hit._score || 0) >= getScoreThreshold('similarity'))
+        .forEach((hit: ESResponse['hits']['hits'][0], rank: number) => {
+          // Skip the source artwork
+          if (hit._id === artworkId) return;
+          
+          const rrfScore = calculateRRFScore(rank, modelWeight, k);
+          
+          if (documentScores.has(hit._id)) {
+            const existing = documentScores.get(hit._id)!;
+            existing.combinedScore += rrfScore;
+            existing.sources.push(model);
+          } else {
+            documentScores.set(hit._id, { 
+              hit: {
+                _id: hit._id,
+                _score: hit._score || 0,
+                _source: hit._source
+              } as SearchHit,
+              combinedScore: rrfScore, 
+              sources: [model] 
+            });
+          }
+        });
+    });
+    
+    // Process metadata similarity results with score filtering
+    const metadataWeight = modelWeights.metadata || defaultWeights.metadata;
+    const metadataResult = results[results.length - 1]; // Last result is metadata
+    
+    metadataResult.hits.hits
+      .filter((hit: SearchHit) => hit._score >= getScoreThreshold('metadata'))
+      .forEach((hit: SearchHit, rank: number) => {
         // Skip the source artwork
         if (hit._id === artworkId) return;
         
-        const rrfScore = modelWeight * (1 / (k + rank + 1));
+        const rrfScore = calculateRRFScore(rank, metadataWeight, k);
         
         if (documentScores.has(hit._id)) {
           const existing = documentScores.get(hit._id)!;
           existing.combinedScore += rrfScore;
-          existing.sources.push(model);
+          existing.sources.push('metadata');
         } else {
-          documentScores.set(hit._id, { 
-            hit: {
-              _id: hit._id,
-              _score: hit._score || 0,
-              _source: hit._source
-            } as SearchHit,
-            combinedScore: rrfScore, 
-            sources: [model] 
-          });
+          documentScores.set(hit._id, { hit, combinedScore: rrfScore, sources: ['metadata'] });
         }
       });
-    });
-    
-    // Process metadata similarity results
-    const metadataWeight = modelWeights.metadata || defaultWeights.metadata;
-    const metadataResult = results[results.length - 1]; // Last result is metadata
-    
-    metadataResult.hits.hits.forEach((hit: SearchHit, rank: number) => {
-      // Skip the source artwork
-      if (hit._id === artworkId) return;
-      
-      const rrfScore = metadataWeight * (1 / (k + rank + 1));
-      
-      if (documentScores.has(hit._id)) {
-        const existing = documentScores.get(hit._id)!;
-        existing.combinedScore += rrfScore;
-        existing.sources.push('metadata');
-      } else {
-        documentScores.set(hit._id, { hit, combinedScore: rrfScore, sources: ['metadata'] });
-      }
-    });
     
     // Sort by combined score and take top N
     const sortedHits = Array.from(documentScores.values())
