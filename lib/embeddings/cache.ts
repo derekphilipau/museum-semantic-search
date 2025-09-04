@@ -31,7 +31,7 @@ function isProduction(): boolean {
 
 // Check if KV is available
 function isKVAvailable(): boolean {
-  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+  return !!(process.env.KV_KV_REST_API_URL && process.env.KV_KV_REST_API_TOKEN);
 }
 
 export async function getCachedEmbeddings(query: string): Promise<CachedEmbedding | null> {
@@ -56,7 +56,7 @@ export async function getCachedEmbeddings(query: string): Promise<CachedEmbeddin
         return cached;
       }
     } else if (isProduction()) {
-      console.log(`[Cache] WARNING: KV not available in production. Check KV_REST_API_URL and KV_REST_API_TOKEN environment variables.`);
+      console.log(`[Cache] WARNING: KV not available in production. Check KV_KV_REST_API_URL and KV_KV_REST_API_TOKEN environment variables.`);
     }
     
     // Fall back to memory cache (useful in both development and as production fallback)
@@ -148,8 +148,8 @@ export function getCacheStats() {
       NODE_ENV: process.env.NODE_ENV,
       VERCEL: process.env.VERCEL,
       VERCEL_ENV: process.env.VERCEL_ENV,
-      KV_REST_API_URL: process.env.KV_REST_API_URL ? 'Set' : 'Not set',
-      KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN ? 'Set' : 'Not set'
+      KV_KV_REST_API_URL: process.env.KV_KV_REST_API_URL ? 'Set' : 'Not set',
+      KV_KV_REST_API_TOKEN: process.env.KV_KV_REST_API_TOKEN ? 'Set' : 'Not set'
     }
   };
 }
