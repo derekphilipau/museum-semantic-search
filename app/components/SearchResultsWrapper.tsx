@@ -43,6 +43,17 @@ export default function SearchResultsWrapper({ query, results }: SearchResultsWr
           {results.metadata.totalQueryTime && (
             <span>Total time: {results.metadata.totalQueryTime}ms</span>
           )}
+          {results.metadata.cache && (
+            <span 
+              className={results.metadata.cache.hit ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}
+              title={results.metadata.cache.hit ? 
+                'Embeddings were retrieved from cache (fast)' : 
+                'Embeddings were generated fresh (slower)'
+              }
+            >
+              Cache: {results.metadata.cache.hit ? '✓ Hit' : '✗ Miss'}
+            </span>
+          )}
           {results.metadata.esQueries && (
             <>
               {results.metadata.esQueries.keyword && (
@@ -65,6 +76,14 @@ export default function SearchResultsWrapper({ query, results }: SearchResultsWr
                     <DialogTitle>Elasticsearch Query Details</DialogTitle>
                     <DialogDescription>
                       The actual Elasticsearch queries sent to the server
+                      {results.metadata.cache && (
+                        <span className="ml-2">
+                          • Embeddings: {results.metadata.cache.hit ? 
+                            <span className="text-green-600 dark:text-green-400">Cached</span> : 
+                            <span className="text-orange-600 dark:text-orange-400">Generated</span>
+                          }
+                        </span>
+                      )}
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">

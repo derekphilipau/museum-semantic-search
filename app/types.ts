@@ -162,6 +162,11 @@ export interface SearchMetadata {
     semantic?: Record<string, ESSearchQuery>;
     hybrid?: ESHybridQuery;
   };
+  cache?: {
+    hit: boolean;
+    query?: string;
+    embeddingsUsed?: 'cached' | 'generated';
+  };
 }
 
 export interface MultiSearchResponse {

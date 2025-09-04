@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings/types';
 import { generateUnifiedEmbeddings, extractSigLIP2Embedding, extractJinaV3Embedding } from '@/lib/embeddings';
+import { getCachedEmbeddings, setCachedEmbeddings } from '@/lib/embeddings/cache';
 import { 
   performKeywordSearch, 
   performSemanticSearchWithEmbedding, 
@@ -56,16 +57,37 @@ async function SearchResults({ searchParams }: PageProps) {
     .map(([key]) => key as ModelKey);
   
   let embeddings: { siglip2?: number[]; jina_v3?: number[] } = {};
+  let cacheHit = false;
   
   if (selectedModels.length > 0 || hybrid) {
-    try {
-      const unified = await generateUnifiedEmbeddings(query);
+    // Check cache first
+    const cached = await getCachedEmbeddings(query);
+    
+    if (cached) {
       embeddings = {
-        siglip2: extractSigLIP2Embedding(unified).embedding,
-        jina_v3: extractJinaV3Embedding(unified).embedding
+        siglip2: cached.siglip2,
+        jina_v3: cached.jina_v3
       };
-    } catch (error) {
-      console.error('Failed to generate embeddings:', error);
+      cacheHit = true;
+    } else {
+      // Generate new embeddings if not cached
+      try {
+        const unified = await generateUnifiedEmbeddings(query);
+        embeddings = {
+          siglip2: extractSigLIP2Embedding(unified).embedding,
+          jina_v3: extractJinaV3Embedding(unified).embedding
+        };
+        
+        // Cache the embeddings
+        if (embeddings.siglip2 && embeddings.jina_v3) {
+          await setCachedEmbeddings(query, { 
+            siglip2: embeddings.siglip2, 
+            jina_v3: embeddings.jina_v3 
+          });
+        }
+      } catch (error) {
+        console.error('Failed to generate embeddings:', error);
+      }
     }
   }
 
@@ -173,7 +195,12 @@ async function SearchResults({ searchParams }: PageProps) {
         keyword: undefined as ESSearchQuery | undefined,
         semantic: {} as Record<string, ESSearchQuery>,
         hybrid: undefined as ESHybridQuery | undefined
-      }
+      },
+      cache: (selectedModels.length > 0 || hybrid) ? {
+        hit: cacheHit,
+        query: query,
+        embeddingsUsed: cacheHit ? 'cached' : 'generated'
+      } as const : undefined
     }
   };
 
