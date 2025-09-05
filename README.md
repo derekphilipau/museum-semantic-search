@@ -130,6 +130,27 @@ Perhaps the woman is not looking into a mirror, but it does feel like a *mirrori
 </tr>
 </table>
 
+## Mining Archetypes
+
+Intrigued by the results for ["woman looking into mirror"](https://museum-semantic-search.vercel.app/?q=woman+looking+into+mirror), I started to search for other art history archetypes to explore across cultures & time.  Although the embedding searches are often inaccurate, interspersed are some surprisingly relevant results that would not have been possible with keyword search alone.
+
+Searches:
+
+- ["Three Women"](https://museum-semantic-search.vercel.app/?q=three+women)
+- ["The gnarled tree"](https://museum-semantic-search.vercel.app/?q=the+gnarled+tree)
+- ["Mother and child"](https://museum-semantic-search.vercel.app/?q=mother+and+child)
+- ["Old man with a beard"](https://museum-semantic-search.vercel.app/?q=old+man+with+a+beard)
+- ["Person fighting a monster"](https://museum-semantic-search.vercel.app/?q=person+fighting+a+monster)
+- ["People on a bridge"](https://museum-semantic-search.vercel.app/?q=people+on+a+bridge)
+- ["A banquet scene"](https://museum-semantic-search.vercel.app/?q=a+banquet+scene)
+- ["Man on a horse"](https://museum-semantic-search.vercel.app/?q=man+on+a+horse)
+- ["Ruins in a landscape"](https://museum-semantic-search.vercel.app/?q=ruins+in+a+landscape)
+- ["Sleeping person"](https://museum-semantic-search.vercel.app/?q=sleeping+person)
+- ["The reclining nude"](https://museum-semantic-search.vercel.app/?q=the+reclining+nude)
+- ["Man in armor"](https://museum-semantic-search.vercel.app/?q=man+in+armor)
+- ["A person with a dog"](https://museum-semantic-search.vercel.app/?q=a+person+with+a+dog)
+- ["Flowers in a vase"](https://museum-semantic-search.vercel.app/?q=flowers+in+a+vase)
+
 ### AI-Generated Emojis
 
 Sometimes strangely accurate revealing details I missed, at other times questionable and problematic, and often hilarious.  Dubious practical use but fun.
