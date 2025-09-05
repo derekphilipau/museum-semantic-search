@@ -134,9 +134,12 @@ Perhaps the woman is not looking into a mirror, but it does feel like a *mirrori
 
 Intrigued by the results for ["woman looking into mirror"](https://museum-semantic-search.vercel.app/?q=woman+looking+into+mirror), I started to search for other art history archetypes to explore across cultures & time.  Although the embedding searches are often inaccurate, interspersed are some surprisingly relevant results that would not have been possible with keyword search alone.
 
+![Curated Search Results for Various Archetypes](docs/images/Themes.jpg)
+
 Searches:
 
 - ["Three Women"](https://museum-semantic-search.vercel.app/?q=three+women)
+- ["Gazing from the window"](https://museum-semantic-search.vercel.app/?q=gazing+from+the+window)
 - ["The gnarled tree"](https://museum-semantic-search.vercel.app/?q=the+gnarled+tree)
 - ["Mother and child"](https://museum-semantic-search.vercel.app/?q=mother+and+child)
 - ["Old man with a beard"](https://museum-semantic-search.vercel.app/?q=old+man+with+a+beard)
