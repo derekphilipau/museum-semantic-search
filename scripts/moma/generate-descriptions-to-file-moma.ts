@@ -4,9 +4,9 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createWriteStream } from 'fs';
 import { MoMAParser } from '../lib/parsers/moma-parser';
-import { generateVisualDescription, validatePureDescription } from '../../lib/descriptions/gemini';
+import { generateVisualDescription } from '../../lib/descriptions/gemini';
 import { ParsedArtwork } from '../lib/parsers/types';
-const emojiRegex = require('emoji-regex');
+import emojiRegex from 'emoji-regex';
 
 // Load environment variables
 const projectDir = path.join(__dirname, '../..');
@@ -17,7 +17,6 @@ interface Progress {
   totalProcessed: number;
   totalSkipped: number;
   totalFailed: number;
-  totalViolations: number;
   lastArtworkId: string;
   timestamp: string;
 }
@@ -27,8 +26,6 @@ interface DescriptionRecord {
   alt_text: string;
   long_description: string;
   emoji_summary: string;
-  has_violations: boolean;
-  violations: string[];
   timestamp: string;
   model: string;
   metadata: {
@@ -91,13 +88,13 @@ async function downloadWithRetry(url: string, maxRetries: number = 3): Promise<A
 async function processArtwork(
   artwork: ParsedArtwork,
   writer: any
-): Promise<{ processed: number; skipped: number; failed: number; violations: number }> {
+): Promise<{ processed: number; skipped: number; failed: number }> {
   try {
     const imageUrl = typeof artwork.image === 'string' ? artwork.image : artwork.image?.url;
     
     if (!imageUrl) {
       console.log(`  No image URL for ${artwork.metadata.id}`);
-      return { processed: 0, skipped: 1, failed: 0, violations: 0 };
+      return { processed: 0, skipped: 1, failed: 0 };
     }
 
     // Download image to temp file
@@ -136,16 +133,7 @@ async function processArtwork(
       await fs.unlink(tempFile);
       
       if (result && result.descriptions) {
-        // Validate descriptions for metadata leakage
-        const altValidation = validatePureDescription(result.descriptions.altText);
-        const longValidation = validatePureDescription(result.descriptions.longDescription);
-        
-        const hasViolations = !altValidation.isValid || !longValidation.isValid;
-        const allViolations = [...altValidation.violations, ...longValidation.violations];
-        
-        if (hasViolations) {
-          console.log(`  ⚠️  Metadata violations detected: ${allViolations.join(', ')}`);
-        }
+        // No longer validating here - violations will be handled in the editing pass
         
         // Normalize emoji summary: remove commas, spaces, and filter out non-emoji characters
         let normalizedEmojiSummary = result.descriptions.emojiSummary;
@@ -167,8 +155,6 @@ async function processArtwork(
           alt_text: result.descriptions.altText,
           long_description: result.descriptions.longDescription,
           emoji_summary: normalizedEmojiSummary,
-          has_violations: hasViolations,
-          violations: allViolations,
           timestamp: result.timestamp,
           model: result.model,
           metadata: {
@@ -186,12 +172,11 @@ async function processArtwork(
         return { 
           processed: 1, 
           skipped: 0, 
-          failed: 0, 
-          violations: hasViolations ? 1 : 0 
+          failed: 0 
         };
       } else {
         console.log(`  ✗ Failed to generate descriptions`);
-        return { processed: 0, skipped: 0, failed: 1, violations: 0 };
+        return { processed: 0, skipped: 0, failed: 1 };
       }
     } catch (error) {
       // Clean up on error
@@ -202,7 +187,7 @@ async function processArtwork(
     }
   } catch (error: any) {
     console.error(`  ✗ Error: ${error.message}`);
-    return { processed: 0, skipped: 0, failed: 1, violations: 0 };
+    return { processed: 0, skipped: 0, failed: 1 };
   }
 }
 
@@ -264,7 +249,6 @@ async function main() {
     totalProcessed: 0,
     totalSkipped: 0,
     totalFailed: 0,
-    totalViolations: 0,
     lastArtworkId: '',
     timestamp: new Date().toISOString()
   };
@@ -277,7 +261,6 @@ async function main() {
       console.log(`Previously processed: ${progress.totalProcessed}`);
       console.log(`Previously skipped: ${progress.totalSkipped}`);
       console.log(`Previously failed: ${progress.totalFailed}`);
-      console.log(`Previously with violations: ${progress.totalViolations}`);
     }
   }
   
@@ -300,7 +283,6 @@ async function main() {
       progress.totalProcessed += result.processed;
       progress.totalSkipped += result.skipped;
       progress.totalFailed += result.failed;
-      progress.totalViolations += result.violations;
       progress.lastProcessedIndex = i;
       progress.lastArtworkId = artwork.metadata.id;
       progress.timestamp = new Date().toISOString();
@@ -327,7 +309,6 @@ async function main() {
     console.log(`Total processed: ${progress.totalProcessed}`);
     console.log(`Total skipped: ${progress.totalSkipped}`);
     console.log(`Total failed: ${progress.totalFailed}`);
-    console.log(`Total with violations: ${progress.totalViolations}`);
     console.log(`\nDescriptions saved to: ${outputPath}`);
     
   } finally {

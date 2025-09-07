@@ -214,18 +214,32 @@ For Jina v3 (text):
 ```
 
 **Visual Descriptions with Gemini 2.5 Flash:**
-We also generate bias-free visual descriptions using Google's Gemini 2.5 Flash model, following Cooper Hewitt accessibility guidelines:
-- **Alt Text**: 15-word concise summary for accessibility
-- **Long Description**: Detailed 100-500 word description focusing purely on visual elements
-- **Zero Metadata Contamination**: No artist names, dates, or cultural attributions to avoid bias
+We use a two-pass system to generate high-quality, bias-free visual descriptions following Cooper Hewitt accessibility guidelines:
+
+**Pass 1 - Generation:**
+- **Alt Text**: 10-20 word concise summary for accessibility
+- **Long Description**: Detailed 100-300 word description focusing purely on visual elements  
+- **Emoji Summary**: 2-8 emojis representing main visual elements
 - **Objective Description**: Only describes what is visually present, no interpretations
+
+**Pass 2 - Editorial Review:**
+- Ensures complete objectivity without cultural assumptions
+- Standardizes alt text to approximately 15 words
+- Removes any metadata references (artist names, dates, etc.)
+- Refines emoji selection for clarity and accuracy
+- Allows qualified uncertainty ("possibly", "appears to be") for ambiguous visual elements
 
 **Workflow (Recommended for production)**
 ```bash
 # 1. Generate visual descriptions with Gemini (required for text embeddings)
-npm run generate-descriptions -- --limit=100          # Test with 100 (resumes by default)
-npm run generate-descriptions                         # Process all (resumes by default)
-npm run generate-descriptions -- --force --limit=100  # Start fresh (overwrites)
+npm run generate-descriptions-met -- --limit=100          # Test with 100 (resumes by default)
+npm run generate-descriptions-met                         # Process all (resumes by default)
+npm run generate-descriptions-met -- --force --limit=100  # Start fresh (overwrites)
+
+# 1b. Edit visual descriptions for consistency and quality (optional but recommended)
+npm run edit-descriptions-met -- --limit=100     # Edit first 100 descriptions
+npm run edit-descriptions-met                     # Edit all descriptions
+# Note: By default, ALL descriptions are edited. Use --skip-clean to only edit problematic ones
 
 # 2. Generate SigLIP 2 cross-modal embeddings
 # First install Python dependencies (one-time setup)
@@ -242,6 +256,8 @@ npm run generate-jina-embeddings                     # Process all (resumes by d
 # 4. Index everything to Elasticsearch (includes embeddings and descriptions)
 npm run index-artworks -- --force
 ```
+
+**Quality Control**: Use `npm run compare-met-coverage` periodically to ensure all eligible artworks have been processed. The script identifies paintings from MetObjects.csv that are missing descriptions, helping maintain complete coverage.
 
 **Note**: The Modal deployment (step 5 above) handles real-time query embedding generation. The scripts above generate embeddings for the artwork collection to be stored in Elasticsearch.
 
@@ -269,10 +285,15 @@ Open [http://localhost:3000](http://localhost:3000) to use the application.
   - `--limit=N` - Only process N artworks
   - `--force` - Start fresh instead of resuming (default: resume)
   - `--batch-size=N` - Save progress every N artworks (default: 10)
-- `npm run generate-descriptions` - Generate visual descriptions using Gemini 2.5 Flash
+- `npm run generate-descriptions-met` - Generate visual descriptions using Gemini 2.5 Flash
   - `--limit=N` - Only process N artworks
   - `--force` - Start fresh instead of resuming (default: resume)
   - `--batch-size=N` - Save progress every N artworks (default: 10)
+- `npm run edit-descriptions-met` - Edit existing descriptions for quality and consistency
+  - `--limit=N` - Only edit N descriptions
+  - `--force` - Start fresh instead of resuming (default: resume)
+  - `--batch-size=N` - Save progress every N descriptions (default: 50)
+  - `--skip-clean` - Only edit descriptions that appear problematic (default: edit all)
 - `npm run fetch-met-images` - Pre-fetch Met image URLs from API
   - `--limit=N` - Only fetch N paintings
   - `--delay=N` - Seconds between requests (default: 2.0)
@@ -286,9 +307,10 @@ Open [http://localhost:3000](http://localhost:3000) to use the application.
 
 ### Indexing Pipeline
 1. **Museum CSV** → Parse metadata → Generate visual descriptions (Gemini)
-2. **Artwork images** → Generate SigLIP 2 embeddings (local Python script)
-3. **Metadata + descriptions** → Generate Jina v3 embeddings (local Python script)
-4. **All data** → Index to Elasticsearch with embeddings
+2. **Optional but recommended** → Edit descriptions for quality and consistency (Gemini)
+3. **Artwork images** → Generate SigLIP 2 embeddings (local Python script)
+4. **Metadata + descriptions** → Generate Jina v3 embeddings (local Python script)
+5. **All data** → Index to Elasticsearch with embeddings
 
 ### Search Pipeline  
 1. **User query** → Modal API (single call) → Both embeddings
@@ -362,6 +384,27 @@ const response = await generateUnifiedEmbeddings("abstract painting");
 ### Development
 - **Port conflicts**: The app will auto-select next available port
 - **Memory issues**: Reduce batch size in embedding generation scripts
+
+### Content Filtering Issues
+
+When processing museum artworks, Gemini's safety filters may block certain historical artworks containing:
+
+1. **Exposed skin/nudity**:
+   - Artworks with phrases like "revealing her upper torso" or "sits naked"
+   - Classical paintings with nude figures (common in art history)
+   - Mother and child paintings (e.g., Bouguereau)
+
+2. **Detailed physical descriptions**:
+   - Historical portraits describing women's features
+   - Traditional art depicting human bodies
+   - Religious or mythological scenes with violence
+
+These safety filters cannot distinguish between:
+- Historical/artistic content vs. inappropriate content
+- Academic descriptions vs. problematic content
+- Museum collections vs. general imagery
+
+**Affected artworks** will fail with `PROHIBITED_CONTENT` errors. The scripts will skip these and continue processing other artworks. Consider maintaining a separate list of blocked artworks for manual review or alternative processing approaches.
 
 ## Future Improvements
 

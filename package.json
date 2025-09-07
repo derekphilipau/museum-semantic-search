@@ -10,6 +10,7 @@
     "setup-siglip2": "pip3 install -r scripts/requirements-siglip2.txt",
     "fetch-met-images": "python3 scripts/met/fetch-met-image-urls.py",
     "generate-descriptions-met": "npx tsx scripts/met/generate-descriptions-to-file-met.ts",
+    "edit-descriptions-met": "npx tsx scripts/met/edit-descriptions-met.ts",
     "generate-siglip2-embeddings-met": "python3 scripts/met/generate_siglip2_embeddings.py",
     "generate-jina-embeddings-met": "python3 scripts/met/generate_jina_v3_embeddings.py",
     "generate-siglip2-embeddings-moma": "python3 scripts/moma/generate_siglip2_embeddings.py",

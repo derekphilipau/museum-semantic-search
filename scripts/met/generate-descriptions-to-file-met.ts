@@ -2,33 +2,21 @@
 import { loadEnvConfig } from '@next/env';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { createWriteStream } from 'fs';
+import { createReadStream, createWriteStream } from 'fs';
+import * as readline from 'readline';
 import { MetParser } from '../lib/parsers/met-parser';
-import { generateVisualDescription, validatePureDescription } from '../../lib/descriptions/gemini';
+import { generateVisualDescription } from '../../lib/descriptions/gemini';
 import { ParsedArtwork } from '../lib/parsers/types';
-const emojiRegex = require('emoji-regex');
 
 // Load environment variables
 const projectDir = path.join(__dirname, '../..');
 loadEnvConfig(projectDir);
-
-interface Progress {
-  lastProcessedIndex: number;
-  totalProcessed: number;
-  totalSkipped: number;
-  totalFailed: number;
-  totalViolations: number;
-  lastArtworkId: string;
-  timestamp: string;
-}
 
 interface DescriptionRecord {
   artwork_id: string;
   alt_text: string;
   long_description: string;
   emoji_summary: string;
-  has_violations: boolean;
-  violations: string[];
   timestamp: string;
   model: string;
   metadata: {
@@ -48,17 +36,34 @@ async function ensureDirectoryExists(dir: string) {
   }
 }
 
-async function loadProgress(progressPath: string): Promise<Progress | null> {
+async function loadExistingArtworkIds(jsonlPath: string): Promise<Set<string>> {
+  const existingIds = new Set<string>();
+  
   try {
-    const data = await fs.readFile(progressPath, 'utf-8');
-    return JSON.parse(data);
+    await fs.access(jsonlPath);
   } catch {
-    return null;
+    // File doesn't exist yet, return empty set
+    return existingIds;
   }
-}
-
-async function saveProgress(progressPath: string, progress: Progress) {
-  await fs.writeFile(progressPath, JSON.stringify(progress, null, 2));
+  
+  const fileStream = createReadStream(jsonlPath);
+  const rl = readline.createInterface({
+    input: fileStream,
+    crlfDelay: Infinity
+  });
+  
+  for await (const line of rl) {
+    if (line.trim()) {
+      try {
+        const record: DescriptionRecord = JSON.parse(line);
+        existingIds.add(record.artwork_id);
+      } catch (error) {
+        console.error('Error parsing existing record:', error);
+      }
+    }
+  }
+  
+  return existingIds;
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -91,284 +96,204 @@ async function downloadWithRetry(url: string, maxRetries: number = 3): Promise<A
 async function processArtwork(
   artwork: ParsedArtwork,
   writer: any
-): Promise<{ processed: number; skipped: number; failed: number; violations: number }> {
+): Promise<{ success: boolean; reason?: string }> {
   try {
     const imageUrl = typeof artwork.image === 'string' ? artwork.image : artwork.image?.url;
     
     if (!imageUrl) {
-      console.log(`  No image URL for ${artwork.metadata.id}`);
-      return { processed: 0, skipped: 1, failed: 0, violations: 0 };
+      return { success: false, reason: 'No image URL' };
     }
 
-    // Download image to temp file
-    const tempDir = path.join(process.cwd(), 'tmp');
-    await ensureDirectoryExists(tempDir);
-    const tempFile = path.join(tempDir, `temp_${Date.now()}.jpg`);
+    // Download image
+    console.log(`  Downloading from: ${imageUrl}`);
+    const imageArrayBuffer = await downloadWithRetry(imageUrl);
+    const imageBuffer = Buffer.from(imageArrayBuffer);
     
+    // Get unique filename
+    const ext = imageUrl.split('.').pop()?.split('?')[0] || 'jpg';
+    const tempFile = path.join('/tmp', `met_${artwork.metadata.id}_${Date.now()}.${ext}`);
+    
+    await fs.writeFile(tempFile, imageBuffer);
+    console.log(`  Image saved to: ${tempFile} (${(imageBuffer.length / 1024 / 1024).toFixed(2)} MB)`);
+    
+    // Generate description
+    console.log('  Generating description...');
+    const result = await generateVisualDescription(tempFile);
+    
+    // Clean up temp file
     try {
-      console.log(`  Downloading image...`);
-      const buffer = await downloadWithRetry(imageUrl);
-      await fs.writeFile(tempFile, Buffer.from(buffer));
-      
-      // Generate description with retry for API errors
-      console.log(`  Generating visual descriptions...`);
-      let result;
-      let attempt = 0;
-      const maxRetries = 3;
-      
-      while (attempt < maxRetries) {
-        try {
-          attempt++;
-          result = await generateVisualDescription(tempFile);
-          break; // Success, exit retry loop
-        } catch (error: any) {
-          if (attempt === maxRetries) {
-            throw error;
-          }
-          console.log(`  Attempt ${attempt}/${maxRetries} failed: ${error.message}`);
-          const waitTime = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
-          console.log(`  Waiting ${waitTime}ms before retry...`);
-          await sleep(waitTime);
-        }
-      }
-      
-      // Clean up temp file
       await fs.unlink(tempFile);
-      
-      if (result && result.descriptions) {
-        // Validate descriptions for metadata leakage
-        const altValidation = validatePureDescription(result.descriptions.altText);
-        const longValidation = validatePureDescription(result.descriptions.longDescription);
-        
-        const hasViolations = !altValidation.isValid || !longValidation.isValid;
-        const allViolations = [...altValidation.violations, ...longValidation.violations];
-        
-        if (hasViolations) {
-          console.log(`  ⚠️  Metadata violations detected: ${allViolations.join(', ')}`);
-        }
-        
-        // Normalize emoji summary: remove commas, spaces, and filter out non-emoji characters
-        let normalizedEmojiSummary = result.descriptions.emojiSummary;
-        
-        // Remove commas and extra spaces
-        normalizedEmojiSummary = normalizedEmojiSummary.replace(/,/g, '').replace(/\s+/g, '');
-        
-        // Use emoji-regex package to accurately match all emoji
-        const regex = emojiRegex();
-        const emojis = normalizedEmojiSummary.match(regex);
-        normalizedEmojiSummary = emojis ? emojis.join('') : '';
-        
-        if (normalizedEmojiSummary !== result.descriptions.emojiSummary) {
-          console.log(`  📝 Normalized emojis: "${result.descriptions.emojiSummary}" → "${normalizedEmojiSummary}"`);
-        }
-        
-        const record: DescriptionRecord = {
-          artwork_id: artwork.metadata.id,
-          alt_text: result.descriptions.altText,
-          long_description: result.descriptions.longDescription,
-          emoji_summary: normalizedEmojiSummary,
-          has_violations: hasViolations,
-          violations: allViolations,
-          timestamp: result.timestamp,
-          model: result.model,
-          metadata: {
-            title: artwork.metadata.title,
-            artist: artwork.metadata.artist,
-            date: artwork.metadata.date,
-            medium: artwork.metadata.medium,
-            collection: artwork.metadata.collection
-          }
-        };
-        
-        writer.write(JSON.stringify(record) + '\n');
-        console.log(`  ✓ Success (${result.descriptions.altText.split(' ').length} words alt text)`);
-        
-        return { 
-          processed: 1, 
-          skipped: 0, 
-          failed: 0, 
-          violations: hasViolations ? 1 : 0 
-        };
-      } else {
-        console.log(`  ✗ Failed to generate descriptions`);
-        return { processed: 0, skipped: 0, failed: 1, violations: 0 };
-      }
     } catch (error) {
-      // Clean up on error
-      try {
-        await fs.unlink(tempFile);
-      } catch {}
-      throw error;
+      console.error('  Warning: Failed to delete temp file:', error);
     }
+    
+    if (!result) {
+      return { success: false, reason: 'Failed to generate description' };
+    }
+    
+    // Validate that we actually got description content
+    if (!result.descriptions || !result.descriptions.altText || !result.descriptions.longDescription || !result.descriptions.emojiSummary) {
+      console.error('  Invalid description result - missing required fields:');
+      console.error(`    alt_text: ${result.descriptions?.altText ? 'present' : 'MISSING'}`);
+      console.error(`    long_description: ${result.descriptions?.longDescription ? 'present' : 'MISSING'}`);
+      console.error(`    emoji_summary: ${result.descriptions?.emojiSummary ? 'present' : 'MISSING'}`);
+      return { success: false, reason: 'Generated description missing required fields' };
+    }
+    
+    // Additional validation - check for reasonable content
+    if (result.descriptions.altText.length < 5 || result.descriptions.longDescription.length < 50) {
+      console.error('  Invalid description result - content too short:');
+      console.error(`    alt_text length: ${result.descriptions.altText.length} (min: 5)`);
+      console.error(`    long_description length: ${result.descriptions.longDescription.length} (min: 50)`);
+      return { success: false, reason: 'Generated description too short' };
+    }
+    
+    // Create record
+    const record: DescriptionRecord = {
+      artwork_id: artwork.metadata.id,
+      alt_text: result.descriptions.altText,
+      long_description: result.descriptions.longDescription,
+      emoji_summary: result.descriptions.emojiSummary,
+      timestamp: result.timestamp || new Date().toISOString(),
+      model: result.model || 'gemini-2.5-flash',
+      metadata: {
+        title: artwork.title || '',
+        artist: artwork.artist || '',
+        date: artwork.date || '',
+        medium: artwork.medium || '',
+        collection: 'Metropolitan Museum of Art'
+      }
+    };
+    
+    // Write immediately
+    return new Promise((resolve) => {
+      writer.write(JSON.stringify(record) + '\n', (err: any) => {
+        if (err) {
+          console.error('  Failed to write record:', err);
+          resolve({ success: false, reason: 'Write failed' });
+        } else {
+          console.log(`  ✓ Saved description for ${artwork.metadata.id}`);
+          resolve({ success: true });
+        }
+      });
+    });
+    
   } catch (error: any) {
-    console.error(`  ✗ Error: ${error.message}`);
-    return { processed: 0, skipped: 0, failed: 1, violations: 0 };
+    console.error(`  Error: ${error.message}`);
+    return { success: false, reason: error.message };
   }
+}
+
+interface Options {
+  limit?: number;
+  batchSize: number;
+  artworkIds?: string[];
 }
 
 async function main() {
+  // Parse command line arguments
   const args = process.argv.slice(2);
-  const limitArg = args.find(arg => arg.startsWith('--limit='));
-  const force = args.includes('--force');
-  const batchSizeArg = args.find(arg => arg.startsWith('--batch-size='));
-  
-  const limit = limitArg ? parseInt(limitArg.split('=')[1]) : undefined;
-  const batchSize = batchSizeArg ? parseInt(batchSizeArg.split('=')[1]) : 10;
-  const resume = !force; // Resume by default unless --force is used
-  
-  console.log('Met Artwork Visual Description Generation');
-  console.log('=========================================');
-  console.log(`Model: Gemini 2.5 Flash`);
-  console.log(`Limit: ${limit || 'all'}`);
-  console.log(`Mode: ${force ? 'Force (overwrite)' : 'Resume (default)'}`);
-  console.log(`Save progress every: ${batchSize} artworks`);
-  
-  // Check API key
-  if (!process.env.GOOGLE_GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
-    console.error('\nError: GOOGLE_GEMINI_API_KEY or GOOGLE_API_KEY not set');
-    console.log('Please set one of these environment variables in your .env.local file');
-    process.exit(1);
-  }
-  
-  // Parse Met CSV
-  const parser = new MetParser();
-  const csvPath = path.join(process.cwd(), 'data', 'met', 'MetObjects.csv');
-  
-  console.log('\nParsing Met CSV...');
-  
-  let artworks: ParsedArtwork[];
-  try {
-    // Pass limit to parser to avoid loading all paintings
-    artworks = await parser.parseFile(csvPath, limit);
-    console.log(`Found ${artworks.length} paintings with images`);
-  } catch (error) {
-    console.error('Failed to parse CSV:', error);
-    process.exit(1);
-  }
-  
-  // Setup output directory
-  const outputDir = path.join(process.cwd(), 'data', 'met', 'descriptions', 'gemini_2_5_flash');
-  await ensureDirectoryExists(outputDir);
-  
-  const outputPath = path.join(outputDir, 'descriptions.jsonl');
-  const progressPath = path.join(outputDir, 'progress.json');
-  
-  // Load progress if resuming
-  let progress: Progress = {
-    lastProcessedIndex: -1,
-    totalProcessed: 0,
-    totalSkipped: 0,
-    totalFailed: 0,
-    totalViolations: 0,
-    lastArtworkId: '',
-    timestamp: new Date().toISOString()
+  const options: Options = {
+    batchSize: 10 // Default batch size for rate limiting
   };
   
-  if (resume) {
-    const savedProgress = await loadProgress(progressPath);
-    if (savedProgress) {
-      progress = savedProgress;
-      console.log(`\nResuming from index ${progress.lastProcessedIndex} (artwork ${progress.lastArtworkId})`);
-      console.log(`Previously processed: ${progress.totalProcessed}`);
-      console.log(`Previously skipped: ${progress.totalSkipped}`);
-      console.log(`Previously failed: ${progress.totalFailed}`);
-      console.log(`Previously with violations: ${progress.totalViolations}`);
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--limit' && args[i + 1]) {
+      options.limit = parseInt(args[i + 1]);
+      i++;
+    } else if (args[i] === '--batch-size' && args[i + 1]) {
+      options.batchSize = parseInt(args[i + 1]);
+      i++;
+    } else if (args[i] === '--artwork-ids' && args[i + 1]) {
+      options.artworkIds = args[i + 1].split(',');
+      i++;
     }
   }
   
-  // Open output file
-  const writer = createWriteStream(outputPath, { flags: resume ? 'a' : 'w' });
+  const outputDir = path.join(process.cwd(), 'data', 'met', 'descriptions', 'gemini_2_5_flash');
+  const outputFile = path.join(outputDir, 'descriptions.jsonl');
   
-  try {
-    let processedInSession = 0;
-    const startIndex = progress.lastProcessedIndex + 1;
-    const endIndex = limit ? Math.min(startIndex + limit, artworks.length) : artworks.length;
+  await ensureDirectoryExists(outputDir);
+  
+  // Load existing artwork IDs
+  console.log('Loading existing descriptions...');
+  const existingIds = await loadExistingArtworkIds(outputFile);
+  console.log(`Found ${existingIds.size} existing descriptions`);
+  
+  // Open output file in append mode
+  const writer = createWriteStream(outputFile, { flags: 'a' });
+  
+  // Load and process artworks
+  const parser = new MetParser();
+  const csvPath = path.join(process.cwd(), 'data', 'met', 'MetObjects.csv');
+  const artworks = await parser.parseFile(csvPath);
+  
+  console.log(`\nTotal artworks available: ${artworks.length}`);
+  console.log(`Limit: ${options.limit || 'none'}`);
+  console.log(`Batch size: ${options.batchSize}`);
+  if (options.artworkIds) {
+    console.log(`Specific artwork IDs: ${options.artworkIds.join(', ')}`);
+  }
+  
+  let totalProcessed = 0;
+  let totalSkipped = 0;
+  let totalFailed = 0;
+  let batchCount = 0;
+  
+  for (let i = 0; i < artworks.length; i++) {
+    const artwork = artworks[i];
     
-    console.log(`\nProcessing artworks ${startIndex + 1} to ${endIndex}...\n`);
+    // Check if we've hit the limit
+    if (options.limit && totalProcessed >= options.limit) {
+      console.log(`\nReached limit of ${options.limit} artworks`);
+      break;
+    }
     
-    for (let i = startIndex; i < endIndex; i++) {
-      const artwork = artworks[i];
-      console.log(`[${i + 1}/${endIndex}] ${artwork.metadata.title} by ${artwork.metadata.artist || 'Unknown'}`);
+    // Skip if already processed
+    if (existingIds.has(artwork.metadata.id)) {
+      totalSkipped++;
+      continue;
+    }
+    
+    // Skip if specific IDs requested and this isn't one
+    if (options.artworkIds && !options.artworkIds.includes(artwork.metadata.id)) {
+      continue;
+    }
+    
+    console.log(`\n[${totalProcessed + 1}] Processing ${artwork.metadata.id}: ${artwork.title} by ${artwork.artist || 'Unknown'}`);
+    
+    const result = await processArtwork(artwork, writer);
+    
+    if (result.success) {
+      totalProcessed++;
+      batchCount++;
       
-      const result = await processArtwork(artwork, writer);
-      
-      progress.totalProcessed += result.processed;
-      progress.totalSkipped += result.skipped;
-      progress.totalFailed += result.failed;
-      progress.totalViolations += result.violations;
-      progress.lastProcessedIndex = i;
-      progress.lastArtworkId = artwork.metadata.id;
-      progress.timestamp = new Date().toISOString();
-      
-      processedInSession += result.processed;
-      
-      // Save progress periodically
-      if ((i - startIndex + 1) % batchSize === 0) {
-        await saveProgress(progressPath, progress);
-        console.log(`  → Progress saved\n`);
+      // Rate limiting
+      if (batchCount >= options.batchSize) {
+        console.log(`\n--- Completed batch of ${options.batchSize}, waiting 1s for rate limiting ---`);
+        await sleep(1000);
+        batchCount = 0;
       }
-      
-      // Rate limiting - Gemini has generous limits but let's be respectful
-      // 2000 RPM = ~33 per second, but let's do 10 per second to be safe
-      await sleep(100);
+    } else {
+      totalFailed++;
+      console.log(`  ✗ Failed: ${result.reason}`);
     }
-    
-    // Final progress save
-    await saveProgress(progressPath, progress);
-    
-    console.log('\n\nSummary');
-    console.log('=======');
-    console.log(`Processed in this session: ${processedInSession}`);
-    console.log(`Total processed: ${progress.totalProcessed}`);
-    console.log(`Total skipped: ${progress.totalSkipped}`);
-    console.log(`Total failed: ${progress.totalFailed}`);
-    console.log(`Total with violations: ${progress.totalViolations}`);
-    console.log(`\nDescriptions saved to: ${outputPath}`);
-    
-  } finally {
-    writer.end();
   }
   
-  // Clean up temp directory
-  try {
-    const tempDir = path.join(process.cwd(), 'tmp');
-    await fs.rmdir(tempDir);
-  } catch {}
+  // Close the writer
+  writer.end();
+  
+  console.log('\n\nSUMMARY');
+  console.log('=======');
+  console.log(`Total processed: ${totalProcessed}`);
+  console.log(`Total skipped (already exists): ${totalSkipped}`);
+  console.log(`Total failed: ${totalFailed}`);
+  console.log(`\nDescriptions saved to: ${outputFile}`);
 }
 
-// Add usage function
-function showUsage() {
-  console.log(`
-Generate visual descriptions from Met artworks using Gemini 2.5 Flash
-
-Usage:
-  npm run generate-descriptions-met [options]
-
-Options:
-  --limit=N         Limit to N artworks (optional)
-  --force           Start fresh, overwriting existing progress (default: resume)
-  --batch-size=N    Save progress every N artworks (default: 10)
-
-Output:
-  data/met/descriptions/gemini_2_5_flash/descriptions.jsonl
-  data/met/descriptions/gemini_2_5_flash/progress.json
-
-Example:
-  npm run generate-descriptions-met -- --limit=100       # Resume by default
-  npm run generate-descriptions-met -- --force --limit=10  # Start fresh
-`);
-}
-
-// Run if called directly
 if (require.main === module) {
-  const args = process.argv.slice(2);
-  if (args.includes('--help') || args.includes('-h')) {
-    showUsage();
-    process.exit(0);
-  }
-  
   main().catch(error => {
-    console.error('Fatal error:', error);
+    console.error('\nFatal error:', error);
     process.exit(1);
   });
 }

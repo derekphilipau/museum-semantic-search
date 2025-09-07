@@ -48,8 +48,6 @@ interface DescriptionRecord {
   alt_text: string;
   long_description: string;
   emoji_summary?: string;  // Optional for backward compatibility
-  has_violations: boolean;
-  violations: string[];
   timestamp: string;
   model: string;
   metadata: {
@@ -217,9 +215,7 @@ async function indexArtworks(
         
         doc.description_metadata = {
           model: description.model,
-          generated_at: description.timestamp,
-          has_violations: description.has_violations,
-          violations: description.violations
+          generated_at: description.timestamp
         };
       }
       
@@ -266,7 +262,7 @@ async function main() {
   const forceRecreate = args.includes('--force');
   
   // Parse collection (support both --collection met and --collection=met)
-  let collection = 'moma'; // default
+  let collection = 'met'; // default
   const collectionArg = args.find(arg => arg.startsWith('--collection'));
   if (collectionArg) {
     if (collectionArg.includes('=')) {
@@ -371,8 +367,10 @@ async function main() {
     console.log(`  Loaded ${embeddings[modelKey]?.size || 0} ${modelKey} embeddings`);
   }
   
-  // Load descriptions
+  // Load descriptions - prioritize edited descriptions
   console.log('\nLoading AI-generated descriptions...');
+  
+  // First, load original descriptions
   const descriptionsPath = path.join(
     process.cwd(),
     config.dataDir,
@@ -380,8 +378,26 @@ async function main() {
     'gemini_2_5_flash',
     'descriptions.jsonl'
   );
-  const descriptions = await loadDescriptionsMap(descriptionsPath);
-  console.log(`  Loaded ${descriptions.size} descriptions`);
+  const originalDescriptions = await loadDescriptionsMap(descriptionsPath);
+  console.log(`  Loaded ${originalDescriptions.size} original descriptions`);
+  
+  // Then, load edited descriptions and override originals
+  const editedDescriptionsPath = path.join(
+    process.cwd(),
+    config.dataDir,
+    'descriptions',
+    'gemini_2_5_flash',
+    'edited_descriptions.jsonl'
+  );
+  const editedDescriptions = await loadDescriptionsMap(editedDescriptionsPath);
+  console.log(`  Loaded ${editedDescriptions.size} edited descriptions`);
+  
+  // Merge: edited descriptions override original ones
+  const descriptions = new Map(originalDescriptions);
+  for (const [id, editedDesc] of editedDescriptions) {
+    descriptions.set(id, editedDesc);
+  }
+  console.log(`  Total descriptions available: ${descriptions.size} (${editedDescriptions.size} edited)`);
   
   // Check coverage
   console.log('\nEmbedding coverage:');

@@ -32,7 +32,11 @@ Project limited to ~5300 Open Access artworks with classification type "Painting
 
 ### Visual Descriptions
 
-Gemini Flash 2.5 was used to generate three types of visual descriptions: alt text, long description, and emoji summary.  The prompt was inspired by [Cooper Hewitt Guidelines for Image Description](https://www.cooperhewitt.org/cooper-hewitt-guidelines-for-image-description/) but could use further refinement.
+Gemini 2.5 Flash was used to generate three types of visual descriptions: alt text, long description, and emoji summary. The prompt was inspired by [Cooper Hewitt Guidelines for Image Description](https://www.cooperhewitt.org/cooper-hewitt-guidelines-for-image-description/).
+
+The system uses a two-pass approach:
+1. **Generation Pass**: Creates initial descriptions following accessibility guidelines
+2. **Editorial Pass**: Refines all descriptions for consistency, removes any inadvertent biases, and ensures strict adherence to museum standards
 
 Prompt:
 
@@ -67,6 +71,13 @@ EMOJI SUMMARY (2-8 emojis):
 - Avoid color-only emojis like 💛,🔴,🟦 unless color is the primary subject
 - Choose specific over generic (🌲🌊⛰️ not 🏞️)
 ```
+
+A secondary editorial pass ensures:
+- More objectivity without cultural assumptions or interpretations
+- More consistent word count (approximately 15 words for alt text)
+- Removal of any metadata references that may have leaked through
+- More thoughtful emoji selection that accurately represents visual elements
+- Permission for qualified uncertainty (e.g., "possibly", "appears to be") when visual elements are ambiguous
 
 ### Embeddings
 

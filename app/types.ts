@@ -70,8 +70,6 @@ export interface Artwork {
   description_metadata?: {
     model: string;
     generated_at: string;
-    has_violations: boolean;
-    violations: string[];
   };
 }
 
