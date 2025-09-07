@@ -47,6 +47,7 @@ data/
 
 # Retain final generated data files:
 !data/met/descriptions/gemini_2_5_flash/descriptions.jsonl
+!data/met/descriptions/gemini_2_5_flash/edited_descriptions.jsonl
 !data/met/met_image_urls_cache.jsonl
 
 .env*.local
