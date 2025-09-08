@@ -135,6 +135,10 @@ class SimilarArtworkGenerator {
     }
     
     console.log(`Found ${artworkIds.length} total artworks`);
+    
+    // Sort IDs for consistent processing order
+    artworkIds.sort();
+    
     return artworkIds;
   }
 

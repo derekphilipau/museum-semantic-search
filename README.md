@@ -35,49 +35,43 @@ Project limited to 5,280 Open Access artworks from The Metropolitan Museum of Ar
 Gemini 2.5 Flash was used to generate three types of visual descriptions: alt text, long description, and emoji summary. The prompt was inspired by [Cooper Hewitt Guidelines for Image Description](https://www.cooperhewitt.org/cooper-hewitt-guidelines-for-image-description/).
 
 The system uses a two-pass approach:
-1. **Generation Pass**: Creates initial descriptions following accessibility guidelines
-2. **Editorial Pass**: Refines all descriptions for consistency, removes any inadvertent biases, and ensures strict adherence to museum standards
+1. **Generation Pass**: Multimodal Gemini 2.5 Flash with image and metadata input. Creates initial descriptions following accessibility guidelines.  [Full prompt here.](lib/descriptions/gemini.ts#L30)
+2. **Editorial Pass**: Prompts Gemini 2.5 Flash again, this time only with the initial text outputs and the guidelines. Refines descriptions for consistency, removes biases, and ensures strict adherence to museum standards including objectivity, consistent word counts, and appropriate emoji selection. [Full prompt here.](lib/descriptions/gemini.ts#L171)
 
-Prompt:
+**Personal Conclusions**:
+- In practice, the initial generation often deviates from the guidelines, and often contains cultural assumptions, interpretations, or subjective language. The secondary editorial pass is very helpful in ensuring high-quality, objective descriptions that strictly adhere to the Cooper Hewitt Guidelines.
+- When combined with text embeddings search, visual descriptions significantly improve search relevance for queries in comparison to basic metadata keyword searches.  E.g. *"woman holding a fan"*, "man fighting a monster"*, etc.  See *"Mining Archetypes"* below for more examples.
 
-```
-Generate museum-quality accessibility descriptions for this artwork image.
+### Visual Descriptions Example: *The Death of Socrates*, Jacques Louis David, 1787
 
-GENERAL RULES (apply to all descriptions):
-- Describe only what is visible, not interpretations or symbolism
-- For people: describe appearance without assumptions about identity
-- Avoid geographic/cultural labels unless describing specific visible features
-- Do not assume geographic origin (e.g. East Asian)
-- Use clear, common language (avoid technical jargon)
-- Never mention metadata (artist, date) unless visible in the image
-- Focus on the artwork's visual content, not the physical condition or mounting of the piece
+![The Death of Socrates, Jacques Louis David, 1787](docs/images/DP-13139-001.jpg)
 
-ALT TEXT (10-20 words):
-- One concise phrase capturing the essential visual content
-- Start with the most important element
-- No ending punctuation
+1. Generation Pass, Initial Visual Descriptions Multimodal Gemini 2.5 Flash output:
 
-LONG DESCRIPTION (100-300 words):
-- Progress from general to specific details
-- Follow spatial logic (top-to-bottom, left-to-right, or center-outward)
-- Include: colors (common names), composition, sizes, spatial relationships
-- Transcribe any visible text exactly
+- **Alt Text**: *"Socrates, surrounded by grieving students, reaches for a cup of hemlock in a dimly lit prison cell"*
+- **Long Description**: *"The painting depicts a dramatic scene within a dimly lit, stone-walled room. In the center, an elderly, muscular man with a white beard, identified as Socrates, sits upright on a bed, draped in a white cloth. He gestures upwards with his right hand, as if speaking, while his left hand reaches for a small, red cup offered by a younger, muscular man in a red tunic, who turns away with a pained expression. To the right of Socrates, several men are gathered, showing various states of distress. One man in a red robe sits on a stone block, looking down thoughtfully. Behind him, others express anguish, some covering their faces, others raising their hands in despair. To the left of Socrates, an older man with a white beard and gray robe sits slumped on a bench, his head bowed in sorrow. Further back, in a darker arched doorway, more figures are visible, including a woman being led away. On the floor in the foreground, near the slumped man, are two rolled scrolls and a broken chain. The room's architecture is simple, with stone blocks forming the walls and an arched opening leading to a darker area. A small, dark object hangs from the ceiling. The overall lighting is dim, with a subtle glow on the central figures."*
+- **Emojis**: 🧔🍷😭⛓️📜
 
-EMOJI SUMMARY (2-8 emojis):
-- Select emojis that would help someone quickly understand what they'd see
-- Main visual elements in order of importance
-- ONE emoji per subject (🧔 not 👨+🧔 for bearded man) or group of subjects
-- Focus only on content in the artwork, never include display emojis like 🏛️⚱🎨🖼️
-- Avoid color-only emojis like 💛,🔴,🟦 unless color is the primary subject
-- Choose specific over generic (🌲🌊⛰️ not 🏞️)
-```
+2. Editorial Pass, Gemini 2.5 Flash Editorially Revised Output:
 
-A secondary editorial pass ensures:
-- More objectivity without cultural assumptions or interpretations
-- More consistent word count (approximately 15 words for alt text)
-- Removal of any metadata references that may have leaked through
-- More thoughtful emoji selection that accurately represents visual elements
-- Permission for qualified uncertainty (e.g., "possibly", "appears to be") when visual elements are ambiguous
+- **Alt Text**: *An elderly man reaches for a cup, surrounded by distressed figures in a dimly lit stone room"*
+- **Long Description**: *"A dimly lit, stone-walled room contains multiple figures. In the center, an elderly, muscular man with a white beard sits upright on a bed, draped in a white cloth. He gestures upwards with his right hand, while his left hand reaches for a small, red cup. A younger, muscular man in a red tunic offers the cup, turning his head away from the elderly man with a downturned mouth. To the right of the central elderly man, several men are gathered, displaying varied postures. One man in a red robe sits on a stone block, looking downwards. Behind him, other figures cover their faces or raise their hands. To the left of the central elderly man, an older man with a white beard and gray robe sits slumped on a bench, his head bowed. Further back, in a darker arched doorway, more figures are visible, including a woman standing near another figure. On the floor in the foreground, near the slumped man, are two rolled scrolls and a broken chain. The room features stone block walls and an arched opening leading to a darker area. A small, dark object hangs from the ceiling. The overall lighting is dim, with a subtle glow on the central figures."*
+- **Emojis**: 🧔🍷👥⛓️📜
+
+- ***Editorial Changes Made***:
+   - Alt Text: Removed specific name "Socrates."
+   - Alt Text: Removed interpretive terms "grieving students," "hemlock," and "prison cell."
+   - Alt Text: Replaced with objective visual descriptions like "distressed figures" and "stone room."
+   - Alt Text: Adjusted word count to be closer to 15 words.
+   - Long Description: Removed subjective phrase "The painting depicts a dramatic scene."
+   - Long Description: Removed specific name "Socrates" and the phrase "identified as Socrates."
+   - Long Description: Removed interpretive phrases such as "as if speaking," "pained expression," "various states of distress," "looking down thoughtfully," "express anguish," "raising their hands in despair," and "bowed in sorrow."
+   - Long Description: Replaced character-specific references like "To the right of Socrates" with neutral spatial references like "To the right of the central elderly man."
+   - Long Description: Rephrased "a woman being led away" to "a woman standing near another figure" to remove implied action/intent.
+   - Long Description: Removed subjective judgment "The room's architecture is simple."
+   - Long Description: Replaced emotional descriptions of figures with objective descriptions of their postures and expressions (e.g., "downturned mouth," "displaying varied postures," "cover their faces").
+   - Emoji Summary: Removed "😭" emoji as it represents an emotion, which is explicitly forbidden.
+   - Emoji Summary: Added "👥" emoji to represent the group of multiple figures, ensuring all main visual elements are covered objectively.
 
 ### Embeddings
 
