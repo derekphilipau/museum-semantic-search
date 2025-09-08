@@ -42,7 +42,7 @@ The system uses a two-pass approach:
 - In practice, the initial generation often deviates from the guidelines, and often contains cultural assumptions, interpretations, or subjective language. The secondary editorial pass is very helpful in ensuring high-quality, objective descriptions that strictly adhere to the Cooper Hewitt Guidelines.
 - When combined with text embeddings search, visual descriptions significantly improve search relevance for queries in comparison to basic metadata keyword searches.  E.g. *"woman holding a fan"*, "man fighting a monster"*, etc.  See *"Mining Archetypes"* below for more examples.
 
-### Visual Descriptions Example: *The Death of Socrates*, Jacques Louis David, 1787
+### Visual Descriptions Example: [*The Death of Socrates*, Jacques Louis David, 1787](https://www.metmuseum.org/art/collection/search/436105)
 
 ![The Death of Socrates, Jacques Louis David, 1787](docs/images/DP-13139-001.jpg)
 
@@ -54,7 +54,7 @@ The system uses a two-pass approach:
 
 2. Editorial Pass, Gemini 2.5 Flash Editorially Revised Output:
 
-- **Alt Text**: *An elderly man reaches for a cup, surrounded by distressed figures in a dimly lit stone room"*
+- **Alt Text**: *"An elderly man reaches for a cup, surrounded by distressed figures in a dimly lit stone room"*
 - **Long Description**: *"A dimly lit, stone-walled room contains multiple figures. In the center, an elderly, muscular man with a white beard sits upright on a bed, draped in a white cloth. He gestures upwards with his right hand, while his left hand reaches for a small, red cup. A younger, muscular man in a red tunic offers the cup, turning his head away from the elderly man with a downturned mouth. To the right of the central elderly man, several men are gathered, displaying varied postures. One man in a red robe sits on a stone block, looking downwards. Behind him, other figures cover their faces or raise their hands. To the left of the central elderly man, an older man with a white beard and gray robe sits slumped on a bench, his head bowed. Further back, in a darker arched doorway, more figures are visible, including a woman standing near another figure. On the floor in the foreground, near the slumped man, are two rolled scrolls and a broken chain. The room features stone block walls and an arched opening leading to a darker area. A small, dark object hangs from the ceiling. The overall lighting is dim, with a subtle glow on the central figures."*
 - **Emojis**: 🧔🍷👥⛓️📜
 
@@ -111,21 +111,35 @@ Results that I found exciting are highlighted in the image below.  A number of t
 
 <table>
 <tr>
-<td width="50%">
+<td width="250">
 <img src="docs/images/DP259541.jpg" alt="Vilaval Ragini: Folio from a ragamala series (Garland of Musical Modes)" width="100%">
 </td>
-<td width="50%">
+<td>
 Difficult to see: the woman on the left is looking into a mirror.
 
 <a href="https://www.metmuseum.org/art/collection/search/37854">Vilaval Ragini: Folio from a ragamala series (Garland of Musical Modes)</a>
 
 </td>
 </tr>
+
 <tr>
-<td width="50%">
+<td width="250">
+<img src="docs/images/DP247889.jpg" alt="Madame Marsollier and Her Daughter" width="100%">
+</td>
+<td>
+
+I thought the AI-generated visual description and/or text embeddings had it wrong, but there is indeed a mirror in the painting and it's possible the main figure is looking into it.
+
+<a href="https://www.metmuseum.org/art/collection/search/437181">Madame Marsollier and Her Daughter</a> by Jean Marc Nattier
+
+</td>
+</tr>
+
+<tr>
+<td width="250">
 <img src="docs/images/DP159891.jpg" alt="Vilaval Ragini: Folio from a ragamala series (Garland of Musical Modes)" width="100%">
 </td>
-<td width="50%">
+<td>
 
 Perhaps the woman is not looking into a mirror, but it does feel like a *mirroring*.
 
