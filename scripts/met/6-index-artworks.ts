@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Load environment variables FIRST before any other imports
-const projectDir = path.join(__dirname, '..');
+const projectDir = path.join(__dirname, '../..');
 // Set NODE_ENV if not already set
 if (!process.env.NODE_ENV) {
   // @ts-expect-error - NODE_ENV is readonly but we need to set it
@@ -24,11 +24,10 @@ console.log('Environment variables loaded:', {
 import * as fs from 'fs/promises';
 import { createReadStream } from 'fs';
 import * as readline from 'readline';
-import { MoMAParser } from './lib/parsers/moma-parser';
-import { MetParser } from './lib/parsers/met-parser';
-import { BaseParser, ParsedArtwork } from './lib/parsers/types';
-import { createElasticsearchClient, INDEX_NAME, INDEX_MAPPING } from './lib/elasticsearch';
-import { ModelKey, EMBEDDING_MODELS } from '../lib/embeddings/types';
+import { MetParser } from '../lib/parsers/met-parser';
+import { ParsedArtwork } from '../lib/parsers/types';
+import { createElasticsearchClient, INDEX_NAME, INDEX_MAPPING } from '../lib/elasticsearch';
+import { ModelKey, EMBEDDING_MODELS } from '../../lib/embeddings/types';
 
 interface EmbeddingRecord {
   artwork_id: string;
@@ -57,30 +56,11 @@ interface DescriptionRecord {
     medium: string;
     collection: string;
   };
+  // For edited descriptions
+  changes_made?: string[];
+  edited_timestamp?: string;
+  edited_model?: string;
 }
-
-// Collection configuration
-interface CollectionConfig {
-  name: string;
-  parser: BaseParser;
-  csvPath: string;
-  dataDir: string;
-}
-
-const COLLECTIONS: Record<string, CollectionConfig> = {
-  moma: {
-    name: 'MoMA',
-    parser: new MoMAParser(),
-    csvPath: 'data/moma/Artworks_50k.csv',
-    dataDir: 'data/moma'
-  },
-  met: {
-    name: 'Met',
-    parser: new MetParser(),
-    csvPath: 'data/met/MetObjects.csv',
-    dataDir: 'data/met'
-  }
-};
 
 // Load embeddings from JSONL file into a map
 async function loadEmbeddingsMap(filePath: string): Promise<Map<string, EmbeddingRecord>> {
@@ -177,7 +157,7 @@ async function indexArtworks(
     const operations = [];
     
     for (const artwork of batch) {
-      const artworkId = artwork.metadata.id;
+      const artworkId = artwork.id;
       
       // Get embeddings for this artwork
       const artworkEmbeddings: any = {};
@@ -191,33 +171,56 @@ async function indexArtworks(
       // Get description for this artwork
       const description = descriptions.get(artworkId);
       
-      // Create document with proper structure matching Artwork interface
+      // Create document - artwork is already flattened from parser
       const doc: any = {
+        // Spread all artwork fields (already flattened)
+        ...artwork,
+        
+        // Add/override specific fields
         id: artworkId,
-        metadata: artwork.metadata,
-        image: artwork.image,
         embeddings: artworkEmbeddings,
         indexed_at: new Date().toISOString()
       };
       
-      // Add visual descriptions if available (as separate fields, not nested)
+      // Add visual descriptions in container if available
       if (description) {
-        doc.visual_alt_text = description.alt_text;
-        doc.visual_long_description = description.long_description;
-        doc.visual_emoji_summary = description.emoji_summary;
-        
-        // Parse emojis into array for better search
-        if (description.emoji_summary) {
-          // Extract individual emojis using Unicode property escapes
-          const emojiMatches = description.emoji_summary.match(/\p{Emoji}/gu);
-          doc.visual_emoji_array = emojiMatches || [];
-        }
-        
-        doc.description_metadata = {
-          model: description.model,
-          generated_at: description.timestamp
+        doc.visual_description = {
+          alt_text: description.alt_text,
+          long_description: description.long_description,
+          emoji_summary: description.emoji_summary,
+          emoji_array: description.emoji_summary ? 
+            description.emoji_summary.match(/\p{Emoji}/gu) || [] : [],
+          metadata: {
+            model: description.model,
+            generated_at: description.timestamp,
+            edited_model: description.edited_model,
+            edited_at: description.edited_timestamp,
+            changes_made: description.changes_made
+          }
         };
       }
+      
+      // Combined text for search (include all titles if available)
+      const allTitlesText = artwork.titles ? artwork.titles.join(' ') : artwork.title;
+      doc.searchText = [
+        allTitlesText,
+        artwork.artist,
+        artwork.date,
+        artwork.medium,
+        artwork.department,
+        artwork.culture,
+        artwork.classification,
+        artwork.objectName,
+        artwork.period,
+        artwork.dynasty,
+        artwork.tags?.join(' '),
+        artwork.city,
+        artwork.country,
+        artwork.region,
+        description?.alt_text,
+        description?.long_description,
+        description?.emoji_summary
+      ].filter(Boolean).join(' ');
       
       operations.push(
         { index: { _index: INDEX_NAME, _id: artworkId } },
@@ -261,27 +264,6 @@ async function main() {
   const args = process.argv.slice(2);
   const forceRecreate = args.includes('--force');
   
-  // Parse collection (support both --collection met and --collection=met)
-  let collection = 'met'; // default
-  const collectionArg = args.find(arg => arg.startsWith('--collection'));
-  if (collectionArg) {
-    if (collectionArg.includes('=')) {
-      collection = collectionArg.split('=')[1].toLowerCase();
-    } else {
-      const collectionIndex = args.indexOf('--collection');
-      if (collectionIndex !== -1 && args[collectionIndex + 1]) {
-        collection = args[collectionIndex + 1].toLowerCase();
-      }
-    }
-  }
-  
-  // Validate collection
-  if (!COLLECTIONS[collection]) {
-    console.error(`Error: Unknown collection "${collection}"`);
-    console.log(`Available collections: ${Object.keys(COLLECTIONS).join(', ')}`);
-    process.exit(1);
-  }
-  
   // Parse --limit (support both --limit 100 and --limit=100)
   let limit: number | undefined;
   const limitArg = args.find(arg => arg.startsWith('--limit'));
@@ -296,23 +278,20 @@ async function main() {
     }
   }
   
-  const config = COLLECTIONS[collection];
-  
-  console.log(`${config.name} Artwork Indexing with Pre-computed Embeddings`);
-  console.log('=================================================');
-  console.log(`Collection: ${collection}`);
+  console.log('Met Museum Artwork Indexing');
+  console.log('===========================');
   console.log(`Force recreate: ${forceRecreate}`);
   console.log(`Limit: ${limit || 'all'}`);
   
-  // Create Elasticsearch client AFTER env vars are loaded
-  const esClient = createElasticsearchClient();
+  // Connect to Elasticsearch
+  console.log('\nConnecting to Elasticsearch...');
+  const esClient = await createElasticsearchClient();
   
-  // Check connection
   try {
-    const health = await esClient.cluster.health();
-    console.log(`\nElasticsearch cluster health: ${health.status}`);
+    const health = await esClient.cluster.health({});
+    console.log(`✅ Connected to cluster: ${health.cluster_name}`);
   } catch (error) {
-    console.error('\nFailed to connect to Elasticsearch:', error);
+    console.error('Failed to connect to Elasticsearch:', error);
     console.log('\nMake sure Elasticsearch is running:');
     console.log('  docker-compose up -d');
     process.exit(1);
@@ -321,32 +300,19 @@ async function main() {
   // Create or check index
   const indexCreated = await createIndex(esClient, forceRecreate);
   if (!indexCreated && !forceRecreate) {
-    console.log('\nExiting. No changes made.');
-    return;
+    console.log('\nExiting. Use --force to recreate the index.');
+    process.exit(0);
   }
   
-  // Wait a moment for index to be ready
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  // Parse Met Paintings CSV
+  console.log('\nParsing Met Museum paintings...');
+  const parser = new MetParser();
+  const csvPath = path.join(process.cwd(), 'data', 'met', 'MetPaintingsWithImages.csv');
+  const artworks = await parser.parseFile(csvPath, limit);
+  console.log(`Parsed ${artworks.length} artworks`);
   
-  // Verify index exists
-  const indexExists = await esClient.indices.exists({ index: INDEX_NAME });
-  if (!indexExists) {
-    console.error('Index creation failed - index does not exist');
-    return;
-  }
-  
-  console.log('✓ Index created');
-  
-  // Parse CSV
-  const csvPath = path.join(process.cwd(), config.csvPath);
-  
-  console.log(`\nParsing ${config.name} CSV...`);
-  let artworks: ParsedArtwork[];
-  try {
-    artworks = await config.parser.parseFile(csvPath, limit);
-    console.log(`Found ${artworks.length} artworks with images`);
-  } catch (error) {
-    console.error('Failed to parse CSV:', error);
+  if (artworks.length === 0) {
+    console.log('No artworks found. Make sure to run: npm run 1-fetch-met-images');
     process.exit(1);
   }
   
@@ -357,7 +323,8 @@ async function main() {
   for (const modelKey of Object.keys(EMBEDDING_MODELS) as ModelKey[]) {
     const embeddingPath = path.join(
       process.cwd(), 
-      config.dataDir,
+      'data',
+      'met',
       'embeddings',
       modelKey,
       'embeddings.jsonl'
@@ -373,7 +340,8 @@ async function main() {
   // First, load original descriptions
   const descriptionsPath = path.join(
     process.cwd(),
-    config.dataDir,
+    'data',
+    'met',
     'descriptions',
     'gemini_2_5_flash',
     'descriptions.jsonl'
@@ -384,7 +352,8 @@ async function main() {
   // Then, load edited descriptions and override originals
   const editedDescriptionsPath = path.join(
     process.cwd(),
-    config.dataDir,
+    'data',
+    'met',
     'descriptions',
     'gemini_2_5_flash',
     'edited_descriptions.jsonl'
@@ -403,12 +372,12 @@ async function main() {
   console.log('\nEmbedding coverage:');
   for (const [modelKey, embeddingMap] of Object.entries(embeddings)) {
     if (embeddingMap) {
-      const coverage = artworks.filter(a => embeddingMap.has(a.metadata.id)).length;
+      const coverage = artworks.filter(a => embeddingMap.has(a.id)).length;
       console.log(`  ${modelKey}: ${coverage}/${artworks.length} (${(coverage/artworks.length*100).toFixed(1)}%)`);
     }
   }
   
-  const descCoverage = artworks.filter(a => descriptions.has(a.metadata.id)).length;
+  const descCoverage = artworks.filter(a => descriptions.has(a.id)).length;
   console.log(`  descriptions: ${descCoverage}/${artworks.length} (${(descCoverage/artworks.length*100).toFixed(1)}%)`);
   
   // Index artworks
@@ -418,42 +387,15 @@ async function main() {
   console.log('\n✅ Indexing complete!');
   console.log(`   Indexed: ${indexed}`);
   console.log(`   Failed: ${failed}`);
+  console.log(`   Total: ${artworks.length}`);
   
-  // Get final stats
-  const stats = await esClient.count({ index: INDEX_NAME });
-  console.log(`\nTotal documents in index: ${stats.count}`);
+  // Close the client
+  await esClient.close();
 }
 
-// Add usage function
-function showUsage() {
-  console.log(`
-Index museum artworks with pre-computed embeddings
-
-Usage:
-  npm run index-artworks [options]
-
-Options:
-  --collection NAME  Collection to index (moma, met) - default: moma
-  --force           Force recreate the index (WARNING: deletes all data)
-  --limit N         Limit to N artworks
-
-Examples:
-  npm run index-artworks -- --collection moma
-  npm run index-artworks -- --collection met --limit 100
-  npm run index-artworks -- --force --collection met
-`);
-}
-
-// Run if called directly
 if (require.main === module) {
-  const args = process.argv.slice(2);
-  if (args.includes('--help') || args.includes('-h')) {
-    showUsage();
-    process.exit(0);
-  }
-  
   main().catch(error => {
-    console.error('\nFatal error:', error);
+    console.error('\n❌ Fatal error:', error);
     process.exit(1);
   });
 }

@@ -8,7 +8,7 @@ import SimilarArtworks from './SimilarArtworks';
 import ArtworkDetail from './ArtworkDetail';
 import ScrollToTop from '@/app/components/ScrollToTop';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getElasticsearchClient, INDEX_NAME, findSimilarArtworks, findCombinedSimilarArtworks, findMetadataSimilarArtworks } from '@/lib/elasticsearch/client';
+import { getElasticsearchClient, INDEX_NAME, findSimilarArtworks, findCombinedSimilarArtworks, findMetadataSimilarArtworks, hydrateSimilarArtworks } from '@/lib/elasticsearch/client';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -44,31 +44,31 @@ async function getSimilarArtworks(artwork: Artwork): Promise<Record<string, Sear
     const modelKeys = Object.keys(EMBEDDING_MODELS) as ModelKey[];
     const individualSearchPromises = modelKeys.map(async (modelKey) => {
       try {
-        const result = await findSimilarArtworks(artwork.metadata.id, modelKey, 12);
+        const result = await findSimilarArtworks(artwork.id, modelKey, 20);
         return { model: modelKey, result };
       } catch {
-        console.log(`No ${modelKey} embeddings for artwork ${artwork.metadata.id}`);
+        console.log(`No ${modelKey} embeddings for artwork ${artwork.id}`);
         return { model: modelKey, result: { took: 0, total: 0, hits: [] } };
       }
     });
 
     // Also get combined similarity results (now includes metadata)
     const combinedPromise = findCombinedSimilarArtworks(
-      artwork.metadata.id, 
+      artwork.id, 
       modelKeys,
-      12,
+      20,
       { jina_v3: 0.35, siglip2: 0.35, metadata: 0.3 } // Balanced weights across all similarity types
     ).catch(error => {
-      console.log(`Combined similarity search failed for artwork ${artwork.metadata.id}:`, error);
+      console.log(`Combined similarity search failed for artwork ${artwork.id}:`, error);
       return { took: 0, total: 0, hits: [] };
     });
     
     // Also get metadata-based similarity
     const metadataPromise = findMetadataSimilarArtworks(
-      artwork.metadata.id,
-      12
+      artwork.id,
+      20
     ).catch(error => {
-      console.log(`Metadata similarity search failed for artwork ${artwork.metadata.id}:`, error);
+      console.log(`Metadata similarity search failed for artwork ${artwork.id}:`, error);
       return { took: 0, total: 0, hits: [] };
     });
 
@@ -105,14 +105,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
-  const { metadata } = artwork;
-  
   return {
-    title: `${metadata.title} by ${metadata.artist || 'Unknown Artist'}`,
-    description: `${metadata.classification || 'Artwork'} from ${metadata.date || 'Unknown date'}. ${metadata.medium || ''}`,
+    title: `${artwork.title} by ${artwork.artist || 'Unknown Artist'}`,
+    description: `${artwork.classification || 'Artwork'} from ${artwork.date || 'Unknown date'}. ${artwork.medium || ''}`,
     openGraph: {
-      title: metadata.title,
-      description: `by ${metadata.artist || 'Unknown Artist'}`,
+      title: artwork.title,
+      description: `by ${artwork.artist || 'Unknown Artist'}`,
       images: typeof artwork.image === 'string' ? [artwork.image] : artwork.image?.url ? [artwork.image.url] : [],
     },
   };
@@ -120,7 +118,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 // Component to load and display similar artworks
 async function SimilarArtworksSection({ artwork }: { artwork: Artwork }) {
-  const similarArtworks = await getSimilarArtworks(artwork);
+  const [similarArtworks, precomputedHits] = await Promise.all([
+    getSimilarArtworks(artwork),
+    hydrateSimilarArtworks(artwork.similar_artworks)
+  ]);
   
   return (
     <div className="space-y-4">
@@ -129,7 +130,10 @@ async function SimilarArtworksSection({ artwork }: { artwork: Artwork }) {
         Similar Artworks
       </h2>
       
-      <SimilarArtworks similarArtworks={similarArtworks} />
+      <SimilarArtworks 
+        similarArtworks={similarArtworks}
+        precomputedHits={precomputedHits}
+      />
     </div>
   );
 }

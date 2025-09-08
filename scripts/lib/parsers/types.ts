@@ -13,8 +13,7 @@ export interface CollectionParser {
 }
 
 // Intermediate format before indexing
-export interface ParsedArtwork {
-  metadata: ArtworkMetadata;
+export interface ParsedArtwork extends ArtworkMetadata {
   image: ArtworkImage | string;
 }
 

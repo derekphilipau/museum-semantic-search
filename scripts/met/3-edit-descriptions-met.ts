@@ -112,7 +112,7 @@ async function processDescription(
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(`  Editing description... (attempt ${attempt}/${maxRetries})`);
-        result = await editVisualDescription(currentDescription, record.metadata);
+        result = await editVisualDescription(currentDescription);
         
         if (result) {
           break; // Success!

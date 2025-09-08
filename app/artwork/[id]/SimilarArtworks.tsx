@@ -1,20 +1,22 @@
 'use client';
 
 import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
-import { SearchResponse } from '@/app/types';
+import { SearchResponse, SearchHit } from '@/app/types';
 import SearchResultColumn from '@/app/components/SearchResultColumn';
-import { Sparkles, FileText, Image, Database } from 'lucide-react';
+import { Sparkles, FileText, Image, Database, Brain } from 'lucide-react';
 
 interface SimilarArtworksProps {
   similarArtworks: Record<string, SearchResponse>;
+  precomputedHits: SearchHit[];
 }
 
-export default function SimilarArtworks({ similarArtworks }: SimilarArtworksProps) {
+export default function SimilarArtworks({ similarArtworks, precomputedHits }: SimilarArtworksProps) {
   const hasAnyResults = Object.values(similarArtworks).some(
     results => results?.hits?.length > 0
   );
+  const hasPrecomputed = precomputedHits.length > 0;
 
-  if (!hasAnyResults) {
+  if (!hasAnyResults && !hasPrecomputed) {
     return (
       <div className="text-center py-8 text-muted-foreground">
         <p>No similar artworks found.</p>
@@ -27,11 +29,21 @@ export default function SimilarArtworks({ similarArtworks }: SimilarArtworksProp
   const hasCombinedResults = similarArtworks.combined?.hits?.length > 0;
   const hasMetadataResults = similarArtworks.metadata?.hits?.length > 0;
   
-  // Determine grid columns based on available results
+  // Count the number of columns we'll display
+  let columnCount = 0;
+  if (hasPrecomputed) columnCount++;
+  if (hasMetadataResults) columnCount++;
+  if (similarArtworks.jina_v3?.hits?.length > 0) columnCount++;
+  if (similarArtworks.siglip2?.hits?.length > 0) columnCount++;
+  if (hasCombinedResults) columnCount++;
+  
+  // Determine grid columns based on column count
   let gridCols = 'md:grid-cols-2';
-  if (hasCombinedResults && hasMetadataResults) {
+  if (columnCount >= 5) {
+    gridCols = 'md:grid-cols-5';
+  } else if (columnCount === 4) {
     gridCols = 'md:grid-cols-4';
-  } else if (hasCombinedResults || hasMetadataResults) {
+  } else if (columnCount === 3) {
     gridCols = 'md:grid-cols-3';
   }
 
@@ -54,7 +66,7 @@ export default function SimilarArtworks({ similarArtworks }: SimilarArtworksProp
       )}
       
       {/* 2. Jina v3 Text results */}
-      {similarArtworks.jina_v3 && (
+      {similarArtworks.jina_v3?.hits?.length > 0 && (
         <SearchResultColumn
           key="jina_v3"
           title={EMBEDDING_MODELS.jina_v3.name}
@@ -70,7 +82,7 @@ export default function SimilarArtworks({ similarArtworks }: SimilarArtworksProp
       )}
       
       {/* 3. SigLIP 2 results */}
-      {similarArtworks.siglip2 && (
+      {similarArtworks.siglip2?.hits?.length > 0 && (
         <SearchResultColumn
           key="siglip2"
           title={EMBEDDING_MODELS.siglip2.name}
@@ -98,6 +110,22 @@ export default function SimilarArtworks({ similarArtworks }: SimilarArtworksProp
           badgeColor="bg-green-700"
           responseTime={similarArtworks.combined.took}
           totalResults={similarArtworks.combined.total}
+        />
+      )}
+      
+      {/* 5. Pre-computed AI Curated results */}
+      {hasPrecomputed && (
+        <SearchResultColumn
+          key="ai_curated"
+          title="AI Curated"
+          description="Selected by Gemini 2.5 Flash"
+          icon={Brain}
+          hits={precomputedHits}
+          gradientFrom="from-indigo-500"
+          gradientTo="to-indigo-600"
+          badgeColor="bg-indigo-700"
+          responseTime={0}
+          totalResults={precomputedHits.length}
         />
       )}
     </div>

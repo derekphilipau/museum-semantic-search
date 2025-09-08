@@ -1,8 +1,7 @@
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { BaseParser, ParsedArtwork } from './types';
-import { ArtworkMetadata, ArtworkImage } from '../../../app/types';
-import { loadMetImageCache, MetImageCache } from '../met-api-cache';
+import { ArtworkImage, Artist } from '../../../app/types';
 
 interface MetCSVRow {
   'Object Number': string;
@@ -59,18 +58,14 @@ interface MetCSVRow {
   'Tags': string;
   'Tags AAT URL': string;
   'Tags Wikidata URL': string;
-}
-
-interface MetAPIResponse {
-  objectID: number;
-  primaryImage: string;
-  primaryImageSmall: string;
-  additionalImages: string[];
+  // Added by our fetch script
+  'primaryImage': string;
+  'primaryImageSmall': string;
+  'hasImage': string;
+  'fetchedAt': string;
 }
 
 export class MetParser extends BaseParser {
-  private imageCache: MetImageCache | null = null;
-  
   getCollectionId(): string {
     return 'met';
   }
@@ -79,121 +74,95 @@ export class MetParser extends BaseParser {
     return 'The Metropolitan Museum of Art';
   }
   
-  async loadImageCache(): Promise<void> {
-    if (!this.imageCache) {
-      this.imageCache = await loadMetImageCache();
-      const withImages = Object.values(this.imageCache).filter(item => item.hasImage).length;
-      console.log(`Loaded Met image cache: ${Object.keys(this.imageCache).length} entries, ${withImages} with images`);
-    }
-  }
-  
-  async fetchImageUrl(objectId: string): Promise<{ imageUrl: string; thumbnailUrl: string } | null> {
-    // Ensure cache is loaded
-    await this.loadImageCache();
+  private parseArtists(row: MetCSVRow): Artist[] {
+    const artists: Artist[] = [];
     
-    // Check cache first
-    const cached = this.imageCache?.[objectId];
-    if (cached) {
-      if (cached.hasImage && cached.primaryImage) {
-        return {
-          // Use web-large for main image (not the huge original)
-          imageUrl: cached.primaryImageSmall || cached.primaryImage,
-          thumbnailUrl: cached.primaryImageSmall || cached.primaryImage
-        };
-      }
-      return null;
+    // Split all pipe-delimited fields
+    const constituentIds = row['Constituent ID']?.split('|') || [];
+    const roles = row['Artist Role']?.split('|') || [];
+    const prefixes = row['Artist Prefix']?.split('|') || [];
+    const names = row['Artist Display Name']?.split('|') || [];
+    const bios = row['Artist Display Bio']?.split('|') || [];
+    const suffixes = row['Artist Suffix']?.split('|') || [];
+    const alphaSorts = row['Artist Alpha Sort']?.split('|') || [];
+    const nationalities = row['Artist Nationality']?.split('|') || [];
+    const beginDates = row['Artist Begin Date']?.split('|') || [];
+    const endDates = row['Artist End Date']?.split('|') || [];
+    const genders = row['Artist Gender']?.split('|') || [];
+    const ulanUrls = row['Artist ULAN URL']?.split('|') || [];
+    const wikidataUrls = row['Artist Wikidata URL']?.split('|') || [];
+    
+    // Create artist objects (use names length as the count)
+    for (let i = 0; i < names.length; i++) {
+      const name = names[i]?.trim();
+      if (!name || name === '') continue;
+      
+      const artist: Artist = {
+        displayName: name,
+        constituentId: constituentIds[i]?.trim() || undefined,
+        role: roles[i]?.trim() || 'Artist',
+        prefix: prefixes[i]?.trim() || undefined,
+        displayBio: bios[i]?.trim() || undefined,
+        suffix: suffixes[i]?.trim() || undefined,
+        alphaSort: alphaSorts[i]?.trim() || undefined,
+        nationality: nationalities[i]?.trim() || undefined,
+        beginDate: beginDates[i]?.trim() ? parseInt(beginDates[i].trim()) : undefined,
+        endDate: endDates[i]?.trim() ? parseInt(endDates[i].trim()) : undefined,
+        gender: genders[i]?.trim() || undefined,
+        ulanUrl: ulanUrls[i]?.trim() || undefined,
+        wikidataUrl: wikidataUrls[i]?.trim() || undefined
+      };
+      
+      artists.push(artist);
     }
     
-    // If not in cache, fetch from API (fallback)
-    console.warn(`Object ${objectId} not in cache, fetching from API...`);
-    
-    try {
-      const response = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${objectId}`);
-      
-      if (!response.ok) {
-        console.warn(`Failed to fetch Met API for object ${objectId}: ${response.status}`);
-        return null;
-      }
-      
-      const data = await response.json() as MetAPIResponse;
-      
-      if (data.primaryImage) {
-        return {
-          // Use web-large for main image (not the huge original)
-          imageUrl: data.primaryImageSmall || data.primaryImage,
-          thumbnailUrl: data.primaryImageSmall || data.primaryImage
-        };
-      }
-      
-      return null;
-    } catch (error) {
-      console.error(`Error fetching Met API for object ${objectId}:`, error);
-      return null;
-    }
+    return artists;
   }
   
   async parseFile(filePath: string, limit?: number): Promise<ParsedArtwork[]> {
     const artworks: ParsedArtwork[] = [];
-    const rows: MetCSVRow[] = [];
     
-    // First, collect painting rows (up to limit if specified)
+    console.log(`Parsing Met paintings from ${filePath}`);
+    
     const parser = createReadStream(filePath)
       .pipe(parse({
         columns: true,
         skip_empty_lines: true,
         cast: false,
-        bom: true // Handle BOM in Met CSV
+        bom: true,
+        quote: '"',
+        escape: '"',
+        relax_quotes: true
       }));
     
+    let count = 0;
     for await (const record of parser) {
       const row = record as MetCSVRow;
       
-      // Filter artworks by criteria:
-      if (row.Classification?.toLowerCase() === 'paintings' &&  // ONLY get Paintings
-          row['Is Public Domain']?.toLowerCase() === 'true' &&  // ONLY Public Domain
-          row['Link Resource']?.trim()) {  // MUST have a link
-        rows.push(row);
-        
-        // Stop collecting if we've reached the limit
-        if (limit && rows.length >= limit) {
-          parser.destroy(); // Stop reading the CSV
-          break;
-        }
-      }
-    }
-    
-    console.log(`Found ${rows.length} artworks to process`);
-    
-    // Process each row and fetch image URLs
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      
-      // Show progress every 100 items
-      if (i > 0 && i % 100 === 0) {
-        console.log(`Processing artwork ${i}/${rows.length}...`);
-      }
-      
-      // Fetch image URL from Met API
-      const imageUrls = await this.fetchImageUrl(row['Object ID']);
-      
-      if (!imageUrls || !imageUrls.imageUrl) {
-        console.log(`Skipping ${row['Object ID']} - no image URL from API`);
+      // The file should already contain only paintings with images
+      // But we'll double-check
+      if (!row.hasImage || row.hasImage !== 'True' || !row.primaryImage) {
         continue;
       }
       
       // Parse dates
       const { begin: dateBegin, end: dateEnd } = this.extractYear(row['Object Date']);
       
-      // Parse artist dates
-      const artistBegin = row['Artist Begin Date'] ? parseInt(row['Artist Begin Date']) : undefined;
-      const artistEnd = row['Artist End Date'] ? parseInt(row['Artist End Date']) : undefined;
+      // Parse all artists
+      const artists = this.parseArtists(row);
       
-      // Create metadata
-      const metadata: ArtworkMetadata = {
+      // Get primary artist info for backwards compatibility
+      const primaryArtist = artists[0];
+      const artistBegin = primaryArtist?.beginDate;
+      const artistEnd = primaryArtist?.endDate;
+      
+      // Create artwork object
+      const artwork: ParsedArtwork = {
         // Core fields
         id: `met_${row['Object ID']}`,
         title: row.Title || 'Untitled',
         artist: row['Artist Display Name'] || 'Unknown',
+        artists: artists.length > 0 ? artists : undefined,
         date: row['Object Date'] || '',
         medium: row.Medium || '',
         dimensions: this.cleanDimensions(row.Dimensions || ''),
@@ -207,16 +176,34 @@ export class MetParser extends BaseParser {
         // Additional fields
         department: row.Department || '',
         classification: row.Classification || '',
+        objectName: row['Object Name'] || '',
         culture: row.Culture || '',
         period: row.Period || '',
         dynasty: row.Dynasty || '',
         
-        // Artist info
-        artistBio: row['Artist Display Bio'] || '',
-        artistNationality: row['Artist Nationality'] || '',
+        // Geographic origin
+        geographyType: row['Geography Type'] || '',
+        city: row.City || '',
+        state: row.State || '',
+        country: row.Country || '',
+        region: row.Region || '',
+        locale: row.Locale || '',
+        excavation: row.Excavation || '',
+        
+        // Museum-specific
+        objectNumber: row['Object Number'] || '',
+        accessionYear: row.AccessionYear ? parseInt(row.AccessionYear) : undefined,
+        galleryNumber: row['Gallery Number'] || '',
+        portfolio: row.Portfolio || '',
+        rightsAndReproduction: row['Rights and Reproduction'] || '',
+        
+        // DEPRECATED single artist fields (for backwards compatibility)
+        artistId: primaryArtist?.constituentId || '',
+        artistBio: primaryArtist?.displayBio || '',
+        artistNationality: primaryArtist?.nationality || '',
         artistBeginDate: artistBegin,
         artistEndDate: artistEnd,
-        artistGender: row['Artist Gender'] || '',
+        artistGender: primaryArtist?.gender || '',
         
         // Dates
         dateBegin,
@@ -225,50 +212,47 @@ export class MetParser extends BaseParser {
         // Status flags
         isHighlight: row['Is Highlight']?.toLowerCase() === 'true',
         isPublicDomain: row['Is Public Domain']?.toLowerCase() === 'true',
-        onView: !!row['Gallery Number']?.trim(), // If has gallery number, it's on view
+        onView: !!row['Gallery Number']?.trim(),
+        
+        // Tags
+        tags: row.Tags ? row.Tags.split('|').map(t => t.trim()).filter(t => t) : undefined,
         
         // Additional Met-specific data
         additionalData: {
-          objectNumber: row['Object Number'],
-          accessionYear: row.AccessionYear ? parseInt(row.AccessionYear) : null,
-          objectName: row['Object Name'],
           isTimelineWork: row['Is Timeline Work']?.toLowerCase() === 'true',
-          galleryNumber: row['Gallery Number'],
-          artistULAN: row['Artist ULAN URL'],
-          artistWikidata: row['Artist Wikidata URL'],
           objectWikidata: row['Object Wikidata URL'],
-          rightsAndReproduction: row['Rights and Reproduction'],
-          tags: row.Tags ? row.Tags.split('|').map(t => t.trim()).filter(t => t).join(', ') : '',
-          // Fields not in base ArtworkMetadata
           reign: row.Reign || '',
-          portfolio: row.Portfolio || '',
-          artistRole: row['Artist Role'] || '',
-          city: row.City || '',
-          state: row.State || '',
           county: row.County || '',
-          country: row.Country || '',
-          region: row.Region || '',
           subregion: row.Subregion || '',
-          locale: row.Locale || ''
+          locus: row.Locus || '',
+          river: row.River || '',
+          tagsAAT: row['Tags AAT URL'] || '',
+          tagsWikidata: row['Tags Wikidata URL'] || ''
+        },
+        
+        // Image data directly from CSV
+        image: {
+          url: row.primaryImageSmall || row.primaryImage,
+          thumbnailUrl: row.primaryImageSmall || row.primaryImage
         }
       };
       
-      // Create image object (both use web-large, not original)
-      const image: ArtworkImage = {
-        url: imageUrls.imageUrl,
-        thumbnailUrl: imageUrls.thumbnailUrl,
-      };
+      artworks.push(artwork);
+      count++;
       
-      artworks.push({
-        metadata,
-        image
-      });
+      // Show progress
+      if (count % 100 === 0) {
+        console.log(`  Processed ${count} artworks...`);
+      }
       
-      // Add a small delay to avoid hitting API rate limits
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Apply limit if specified
+      if (limit && count >= limit) {
+        parser.destroy();
+        break;
+      }
     }
     
-    console.log(`Successfully processed ${artworks.length} paintings`);
+    console.log(`Successfully loaded ${artworks.length} paintings with images`);
     return artworks;
   }
 }

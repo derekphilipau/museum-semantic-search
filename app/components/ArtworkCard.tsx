@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import ClickableEmojis from './ClickableEmojis';
 
 interface ArtworkCardProps {
-  artwork: Artwork;
+  artwork: Artwork & { _similarityInfo?: { similarity_type: string; confidence: number; explanation: string } };
   score?: number;
   showScore?: boolean;
   rank?: number;
@@ -25,16 +25,16 @@ function ArtworkCard({
   compact = false,
 }: ArtworkCardProps) {
   // Add safety check for artwork data
-  if (!artwork || !artwork.metadata) {
+  if (!artwork) {
     return null;
   }
   
-  const { metadata, image } = artwork;
+  const { image } = artwork;
   // Handle both full image objects and simple string URLs
   const imageUrl = typeof image === 'string' ? image : image?.url;
   
   // Get institution name
-  const institutionName = metadata.collection ? getCollectionShortName(metadata.collection) : '';
+  const institutionName = artwork.collection ? getCollectionShortName(artwork.collection) : '';
 
   // Compact version for multi-column layout
   if (compact) {
@@ -48,7 +48,7 @@ function ArtworkCard({
           <div className="h-56 rounded-md bg-muted/50 relative overflow-hidden flex items-center justify-center">
             <Image
               src={imageUrl}
-              alt={metadata.title}
+              alt={artwork.title}
               fill
               className="object-contain"
               sizes="(max-width: 768px) 100vw, 280px"
@@ -65,48 +65,65 @@ function ArtworkCard({
             )}
             {/* Title */}
             <CardTitle className="text-sm mb-1 line-clamp-2 break-words">
-              {metadata.title}
+              {artwork.title}
             </CardTitle>
             
             {/* Artist */}
             <CardDescription className="text-xs mb-2 line-clamp-1">
-              {metadata.artist || 'Unknown artist'}
+              {artwork.artist || 'Unknown artist'}
             </CardDescription>
             
             {/* Classification, Date, and Medium - optional, takes available space */}
             <div className="text-xs text-muted-foreground space-y-0.5 flex-grow">
-              {metadata.classification && (
-                <div className="line-clamp-1 font-medium">{metadata.classification}</div>
+              {artwork.classification && (
+                <div className="line-clamp-1 font-medium">{artwork.classification}</div>
               )}
-              {metadata.date && (
-                <div>{metadata.date}</div>
+              {artwork.date && (
+                <div>{artwork.date}</div>
               )}
-              {metadata.medium && (
-                <div className="line-clamp-1">{metadata.medium}</div>
+              {artwork.medium && (
+                <div className="line-clamp-1">{artwork.medium}</div>
               )}
               {/* AI-generated emoji summary */}
-              {artwork.visual_emoji_summary && (
+              {artwork.visual_description?.emoji_summary && (
                 <div className="mt-1 pt-1 border-t">
                   <div className="flex items-center gap-1.5">
                     <Badge variant="secondary" className="size-5 text-xs font-medium text-muted-foreground">AI</Badge>
-                    <ClickableEmojis emojis={artwork.visual_emoji_summary} size="xl" />
+                    <ClickableEmojis emojis={artwork.visual_description.emoji_summary} size="xl" />
                   </div>
                 </div>
               )}
               {/* AI-generated alt text */}
-              {artwork.visual_alt_text && (
+              {artwork.visual_description?.alt_text && (
                 <div className="mt-1">
                   <span className="inline-flex items-center gap-1 text-xs">
                     <Badge variant="secondary" className="size-5 text-xs font-medium text-muted-foreground">AI</Badge>
-                    <span className="line-clamp-2 italic">{artwork.visual_alt_text}</span>
+                    <span className="line-clamp-2 italic">{artwork.visual_description.alt_text}</span>
                   </span>
                 </div>
               )}
             </div>
           </div>
           
+          {/* Similarity info for AI curated results */}
+          {artwork._similarityInfo && (
+            <div className="pt-2 mt-auto border-t space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="capitalize font-medium text-muted-foreground">
+                  {artwork._similarityInfo.similarity_type}
+                </span>
+                <span className="font-semibold text-indigo-600">
+                  {Math.round(artwork._similarityInfo.confidence * 100)}%
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground line-clamp-2 italic">
+                {artwork._similarityInfo.explanation}
+              </p>
+            </div>
+          )}
+          
           {/* Score - always at bottom */}
-          {showScore && score !== undefined && (
+          {showScore && score !== undefined && !artwork._similarityInfo && (
             <div className="flex items-center justify-between pt-2 mt-auto border-t">
               <span className="text-xs text-muted-foreground">Score</span>
               <span className="text-xs font-mono font-semibold">{score.toFixed(3)}</span>
@@ -133,7 +150,7 @@ function ArtworkCard({
         <div className="h-64 rounded-md bg-muted/50 mb-3 relative overflow-hidden flex items-center justify-center">
           <Image
             src={imageUrl}
-            alt={metadata.title}
+            alt={artwork.title}
             fill
             className="object-contain p-3"
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 33vw, 25vw"
@@ -150,43 +167,43 @@ function ArtworkCard({
           )}
           {/* Title */}
           <CardTitle className="text-base mb-1 line-clamp-2 break-words">
-            {metadata.title}
+            {artwork.title}
           </CardTitle>
           
           {/* Artist */}
           <CardDescription className="text-sm mb-2 line-clamp-1">
-            {metadata.artist || 'Unknown artist'}
+            {artwork.artist || 'Unknown artist'}
           </CardDescription>
           
           {/* Metadata - takes available space */}
           <div className="text-xs text-muted-foreground space-y-1 flex-grow">
-            {metadata.date && (
-              <div>{metadata.date}</div>
+            {artwork.date && (
+              <div>{artwork.date}</div>
             )}
-            {metadata.classification && (
-              <div className="font-medium">{metadata.classification}</div>
+            {artwork.classification && (
+              <div className="font-medium">{artwork.classification}</div>
             )}
-            {metadata.department && (
-              <div className="line-clamp-1">{metadata.department}</div>
+            {artwork.department && (
+              <div className="line-clamp-1">{artwork.department}</div>
             )}
-            {metadata.medium && (
-              <div className="line-clamp-2 text-xs">{metadata.medium}</div>
+            {artwork.medium && (
+              <div className="line-clamp-2 text-xs">{artwork.medium}</div>
             )}
             {/* AI-generated emoji summary */}
-            {artwork.visual_emoji_summary && (
+            {artwork.visual_description?.emoji_summary && (
               <div className="mt-2 pt-2 border-t">
                 <div className="flex items-center gap-2">
                   <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-medium">AI</span>
-                  <ClickableEmojis emojis={artwork.visual_emoji_summary} size="lg" />
+                  <ClickableEmojis emojis={artwork.visual_description.emoji_summary} size="lg" />
                 </div>
               </div>
             )}
             {/* AI-generated description */}
-            {artwork.visual_alt_text && (
-              <div className={artwork.visual_emoji_summary ? "mt-2" : "mt-2 pt-2 border-t"}>
+            {artwork.visual_description?.alt_text && (
+              <div className={artwork.visual_description?.emoji_summary ? "mt-2" : "mt-2 pt-2 border-t"}>
                 <div className="inline-flex items-start gap-1.5 text-xs">
                   <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-medium mt-0.5">AI</span>
-                  <span className="line-clamp-3 italic text-muted-foreground">{artwork.visual_alt_text}</span>
+                  <span className="line-clamp-3 italic text-muted-foreground">{artwork.visual_description.alt_text}</span>
                 </div>
               </div>
             )}

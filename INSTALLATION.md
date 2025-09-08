@@ -6,7 +6,7 @@
 - Docker (for Elasticsearch)
 - Python 3.8+ (for local embedding generation scripts)
 - Modal account (for serverless GPU inference) - https://modal.com
-- Museum artwork data (e.g., MoMA CSV in `data/moma/`)
+- Museum artwork data (e.g., Met CSV in `data/met/`)
 - API keys:
   - Google Gemini API key (for visual descriptions)
   - Jina API key (optional fallback for text embeddings)
@@ -24,24 +24,28 @@ npm install
 ### 2. Prepare museum data
 
 Download the museum data:
-- https://github.com/MuseumofModernArt/collection/
+
 - https://github.com/metmuseum/openaccess
 
-Place your museum collection data in the appropriate directory. For MoMA:
+Place your museum collection data in the appropriate directory. For Met:
 
 ```bash
 # Create data directory
-mkdir -p data
+mkdir -p data/met
 
-# For MoMA data:
-# Place Artworks_50k.csv in data/moma/
-# The file should contain artwork metadata with ImageURL field
+# For Met data:
+# Place the Met CSV file in data/met/MetObjects.csv
 ```
 
 ### 3. Data preparation
 
-For MoMA, the artwork images are referenced by URLs in the CSV file, so no separate image download is needed.
+For Met, create a new CSV that filters artworks and gets image URLs:
 
+```bash
+npm run 1-create-paintings-dataset -- --limit=1000  # Test with 1000 (resumes by default)
+npm run 1-create-paintings-dataset                     # Process all (resumes by default) 
+```
+This creates `data/met/MetPaintingsWithImages.csv` with image URLs.
 
 ### 4. Set up environment variables
 
@@ -232,29 +236,37 @@ We use a two-pass system to generate high-quality, bias-free visual descriptions
 **Workflow (Recommended for production)**
 ```bash
 # 1. Generate visual descriptions with Gemini (required for text embeddings)
-npm run generate-descriptions-met -- --limit=100          # Test with 100 (resumes by default)
-npm run generate-descriptions-met                         # Process all (resumes by default)
-npm run generate-descriptions-met -- --force --limit=100  # Start fresh (overwrites)
+npm run 2-generate-descriptions-met -- --limit=100          # Test with 100 (resumes by default)
+npm run 2-generate-descriptions-met                         # Process all (resumes by default)
+npm run 2-generate-descriptions-met -- --force --limit=100  # Start fresh (overwrites)
 
-# 1b. Edit visual descriptions for consistency and quality (optional but recommended)
-npm run edit-descriptions-met -- --limit=100     # Edit first 100 descriptions
-npm run edit-descriptions-met                     # Edit all descriptions
+# 2. Edit visual descriptions for consistency and quality (optional but recommended)
+npm run 3-edit-descriptions-met -- --limit=100     # Edit first 100 descriptions
+npm run 3-edit-descriptions-met                     # Edit all descriptions
 # Note: By default, ALL descriptions are edited. Use --skip-clean to only edit problematic ones
 
-# 2. Generate SigLIP 2 cross-modal embeddings
+# 3. Generate SigLIP 2 cross-modal embeddings
 # First install Python dependencies (one-time setup)
 npm run setup-siglip2
 
 # Then generate embeddings (runs locally on your Mac)
-npm run generate-siglip2-embeddings -- --limit 100    # Test with 100 (resumes by default)
-npm run generate-siglip2-embeddings                   # Process all (resumes by default)
+npm run 5-generate-siglip2-embeddings-met -- --limit 100    # Test with 100 (resumes by default)
+npm run 5-generate-siglip2-embeddings-met                   # Process all (resumes by default)
 
-# 3. Generate Jina v3 text embeddings (combines metadata + visual descriptions)
-npm run generate-jina-embeddings -- --limit 100      # Test with 100 (resumes by default)
-npm run generate-jina-embeddings                     # Process all (resumes by default)
+# 4. Generate Jina v3 text embeddings (combines metadata + visual descriptions)
+npm run 4-generate-jina-embeddings-met -- --limit 100      # Test with 100 (resumes by default)
+npm run 4-generate-jina-embeddings-met                     # Process all (resumes by default)
 
-# 4. Index everything to Elasticsearch (includes embeddings and descriptions)
-npm run index-artworks -- --force
+# 5. Index everything to Elasticsearch (includes embeddings and descriptions)
+npm run 6-index-artworks -- --force
+
+# 6. Generate AI-curated similar artworks (optional but recommended)
+npm run 7-generate-similar-artworks-met -- --limit 100  # Test with 100
+npm run 7-generate-similar-artworks-met                  # Process all
+
+# 7. Update Elasticsearch with similar artwork data
+npm run 8-update-similarities-met -- --limit 100        # Update 100
+npm run 8-update-similarities-met                        # Update all
 ```
 
 **Quality Control**: Use `npm run compare-met-coverage` periodically to ensure all eligible artworks have been processed. The script identifies paintings from MetObjects.csv that are missing descriptions, helping maintain complete coverage.
@@ -273,32 +285,35 @@ Open [http://localhost:3000](http://localhost:3000) to use the application.
 
 ## Scripts
 
-- `npm run index-artworks` - Index artworks into Elasticsearch
-  - `--force` - Force recreate the index (WARNING: deletes all existing data)
-  - `--limit N` - Only index N artworks (useful for testing)
-  - `--collection NAME` - Specify collection to index (e.g., moma, met)
-- `npm run generate-siglip2-embeddings` - Generate SigLIP 2 cross-modal embeddings
-  - `--limit=N` - Only process N artworks
+All Met scripts are numbered to indicate the recommended execution order:
+
+- `npm run 1-create-paintings-dataset` - Create filtered CSV with Met paintings that have images
+  - `--limit=N` - Only process first N artworks from Met CSV
   - `--force` - Start fresh instead of resuming (default: resume)
-  - `--batch-size=N` - Save progress every N artworks (default: 16)
-- `npm run generate-jina-embeddings` - Generate Jina v3 text embeddings
+- `npm run 2-generate-descriptions-met` - Generate visual descriptions using Gemini 2.5 Flash
   - `--limit=N` - Only process N artworks
   - `--force` - Start fresh instead of resuming (default: resume)
   - `--batch-size=N` - Save progress every N artworks (default: 10)
-- `npm run generate-descriptions-met` - Generate visual descriptions using Gemini 2.5 Flash
-  - `--limit=N` - Only process N artworks
-  - `--force` - Start fresh instead of resuming (default: resume)
-  - `--batch-size=N` - Save progress every N artworks (default: 10)
-- `npm run edit-descriptions-met` - Edit existing descriptions for quality and consistency
+- `npm run 3-edit-descriptions-met` - Edit existing descriptions for quality and consistency
   - `--limit=N` - Only edit N descriptions
   - `--force` - Start fresh instead of resuming (default: resume)
   - `--batch-size=N` - Save progress every N descriptions (default: 50)
   - `--skip-clean` - Only edit descriptions that appear problematic (default: edit all)
-- `npm run fetch-met-images` - Pre-fetch Met image URLs from API
-  - `--limit=N` - Only fetch N paintings
-  - `--delay=N` - Seconds between requests (default: 2.0)
-- `npm run update-descriptions` - Update Elasticsearch with generated descriptions
+- `npm run 4-generate-jina-embeddings-met` - Generate Jina v3 text embeddings
+  - `--limit=N` - Only process N artworks
+  - `--batch-size=N` - Save progress every N artworks (default: 10)
+- `npm run 5-generate-siglip2-embeddings-met` - Generate SigLIP 2 cross-modal embeddings
+  - `--limit=N` - Only process N artworks
+  - `--batch-size=N` - Save progress every N artworks (default: 16)
+- `npm run 6-index-artworks` - Index artworks into Elasticsearch
+  - `--force` - Force recreate the index (WARNING: deletes all existing data)
+  - `--limit N` - Only index N artworks (useful for testing)
+- `npm run 7-generate-similar-artworks-met` - Generate AI-curated similar artwork recommendations
+  - `--limit=N` - Only process N artworks
+  - `--artwork-ids=id1,id2` - Process specific artwork IDs (comma-separated)
+- `npm run 8-update-similarities-met` - Update Elasticsearch with AI-curated similar artworks
   - `--limit=N` - Only update N artworks
+- `npm run setup-siglip2` - Install Python dependencies for SigLIP 2 (one-time setup)
 - `npm run dev` - Start the development server
 - `npm run build` - Build for production
 - `npm run start` - Start production server
@@ -311,6 +326,8 @@ Open [http://localhost:3000](http://localhost:3000) to use the application.
 3. **Artwork images** → Generate SigLIP 2 embeddings (local Python script)
 4. **Metadata + descriptions** → Generate Jina v3 embeddings (local Python script)
 5. **All data** → Index to Elasticsearch with embeddings
+6. **Optional but recommended** → Generate AI-curated similar artworks (Gemini 2.5 Flash)
+7. **Similar artwork data** → Update Elasticsearch documents with curated recommendations
 
 ### Search Pipeline  
 1. **User query** → Modal API (single call) → Both embeddings

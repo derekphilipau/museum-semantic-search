@@ -55,86 +55,138 @@ export function createElasticsearchClient(): Client {
 
 export const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || 'artworks_semantic';
 
-// Index mapping for artworks with embeddings
+// Index mapping for universal artworks with embeddings
 export const INDEX_MAPPING = {
   mappings: {
     properties: {
+      // Core fields (previously in metadata)
       id: { type: 'keyword' as const },
-      metadata: {
+      title: { type: 'text' as const, analyzer: 'standard' },
+      titles: { type: 'text' as const, analyzer: 'standard' },
+      artist: { type: 'text' as const, analyzer: 'standard' },
+      date: { type: 'text' as const },
+      medium: { type: 'text' as const },
+      dimensions: { type: 'text' as const },
+      creditLine: { type: 'text' as const },
+      
+      // Collection info
+      collection: { type: 'keyword' as const },
+      collectionId: { type: 'keyword' as const },
+      sourceUrl: { type: 'keyword' as const },
+      
+      // Additional common fields
+      department: { type: 'keyword' as const },
+      classification: { type: 'keyword' as const },
+      objectName: { type: 'keyword' as const },
+      culture: { type: 'keyword' as const },
+      period: { type: 'keyword' as const },
+      dynasty: { type: 'keyword' as const },
+      
+      // Geographic origin
+      geographyType: { type: 'keyword' as const },
+      city: { type: 'keyword' as const },
+      state: { type: 'keyword' as const },
+      country: { type: 'keyword' as const },
+      region: { type: 'keyword' as const },
+      locale: { type: 'keyword' as const },
+      excavation: { type: 'text' as const },
+      
+      // Museum-specific fields
+      objectNumber: { type: 'keyword' as const },
+      accessionYear: { type: 'integer' as const },
+      galleryNumber: { type: 'keyword' as const },
+      portfolio: { type: 'text' as const },
+      rightsAndReproduction: { type: 'text' as const },
+      
+      // Artists array
+      artists: {
+        type: 'nested' as const,
         properties: {
-          // Core fields
-          id: { type: 'keyword' as const },
-          title: { type: 'text' as const, analyzer: 'standard' },
-          artist: { type: 'text' as const, analyzer: 'standard' },
-          date: { type: 'text' as const },
-          medium: { type: 'text' as const },
-          dimensions: { type: 'text' as const },
-          creditLine: { type: 'text' as const },
-          
-          // Collection info
-          collection: { type: 'keyword' as const },
-          collectionId: { type: 'keyword' as const },
-          sourceUrl: { type: 'keyword' as const },
-          
-          // Additional common fields
-          department: { type: 'keyword' as const },
-          classification: { type: 'keyword' as const },
-          culture: { type: 'keyword' as const },
-          period: { type: 'keyword' as const },
-          dynasty: { type: 'keyword' as const },
-          
-          // Artist info
-          artistBio: { type: 'text' as const },
-          artistNationality: { type: 'keyword' as const },
-          artistBeginDate: { type: 'integer' as const },
-          artistEndDate: { type: 'integer' as const },
-          artistGender: { type: 'keyword' as const },
-          
-          // Dates
-          dateBegin: { type: 'integer' as const },
-          dateEnd: { type: 'integer' as const },
-          
-          // Physical properties
-          width: { type: 'float' as const },
-          height: { type: 'float' as const },
-          depth: { type: 'float' as const },
-          diameter: { type: 'float' as const },
-          weight: { type: 'float' as const },
-          
-          // Status flags
-          isHighlight: { type: 'boolean' as const },
-          isPublicDomain: { type: 'boolean' as const },
-          onView: { type: 'boolean' as const },
-          
-          // Flexible additional data
-          additionalData: { type: 'object' as const, enabled: false }
-        },
+          constituentId: { type: 'keyword' as const },
+          role: { type: 'keyword' as const },
+          prefix: { type: 'keyword' as const },
+          displayName: { type: 'text' as const, analyzer: 'standard' },
+          displayBio: { type: 'text' as const },
+          suffix: { type: 'keyword' as const },
+          alphaSort: { type: 'keyword' as const },
+          nationality: { type: 'keyword' as const },
+          beginDate: { type: 'integer' as const },
+          endDate: { type: 'integer' as const },
+          gender: { type: 'keyword' as const },
+          ulanUrl: { type: 'keyword' as const },
+          wikidataUrl: { type: 'keyword' as const }
+        }
       },
+      
+      // DEPRECATED single artist fields (kept for backwards compatibility)
+      artistId: { type: 'keyword' as const },
+      artistBio: { type: 'text' as const },
+      artistNationality: { type: 'keyword' as const },
+      artistBeginDate: { type: 'integer' as const },
+      artistEndDate: { type: 'integer' as const },
+      artistGender: { type: 'keyword' as const },
+      
+      // Dates
+      dateBegin: { type: 'integer' as const },
+      dateEnd: { type: 'integer' as const },
+      
+      // Physical properties
+      width: { type: 'float' as const },
+      height: { type: 'float' as const },
+      depth: { type: 'float' as const },
+      diameter: { type: 'float' as const },
+      weight: { type: 'float' as const },
+      
+      // Status flags
+      isHighlight: { type: 'boolean' as const },
+      isPublicDomain: { type: 'boolean' as const },
+      onView: { type: 'boolean' as const },
+      
+      // Tags
+      tags: { type: 'keyword' as const, index: true },
+      
+      // Flexible additional data
+      additionalData: { type: 'object' as const, enabled: false },
+      
+      // Image stays at root
       image: { 
         type: 'object' as const,
         enabled: false
       },
-      // Visual descriptions
-      visual_alt_text: { 
+      
+      // Visual descriptions container
+      visual_description: {
+        properties: {
+          alt_text: { 
+            type: 'text' as const,
+            analyzer: 'standard'
+          },
+          long_description: { 
+            type: 'text' as const,
+            analyzer: 'standard'
+          },
+          emoji_summary: {
+            type: 'keyword' as const,  // keyword for exact matching
+            index: true  // Enable search on emoji string
+          },
+          emoji_array: {
+            type: 'keyword' as const,  // Array of individual emojis
+            index: true
+          },
+          metadata: {
+            type: 'object' as const,
+            enabled: false
+          }
+        }
+      },
+      
+      // Combined text for search
+      searchText: {
         type: 'text' as const,
         analyzer: 'standard'
       },
-      visual_long_description: { 
-        type: 'text' as const,
-        analyzer: 'standard'
-      },
-      visual_emoji_summary: {
-        type: 'keyword' as const,  // keyword for exact matching
-        index: true  // Enable search on emoji string
-      },
-      visual_emoji_array: {
-        type: 'keyword' as const,  // Array of individual emojis
-        index: true
-      },
-      description_metadata: {
-        type: 'object' as const,
-        enabled: false
-      },
+      
+      // Embeddings
       embeddings: {
         properties: {
           // Cross-modal embedding models
@@ -153,6 +205,21 @@ export const INDEX_MAPPING = {
           },
         },
       },
+      
+      // Similar artworks (pre-computed by LLM)
+      similar_artworks: {
+        type: 'nested' as const,
+        properties: {
+          id: { type: 'keyword' as const },
+          similarity_type: { type: 'keyword' as const },
+          confidence: { type: 'float' as const },
+          explanation: { type: 'text' as const },
+          source: { type: 'keyword' as const }
+        }
+      },
+      
+      // Timestamp
+      indexed_at: { type: 'date' as const }
     },
   },
 } as const;

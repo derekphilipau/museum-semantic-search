@@ -111,7 +111,7 @@ async function processArtwork(
     
     // Get unique filename
     const ext = imageUrl.split('.').pop()?.split('?')[0] || 'jpg';
-    const tempFile = path.join('/tmp', `met_${artwork.metadata.id}_${Date.now()}.${ext}`);
+    const tempFile = path.join('/tmp', `met_${artwork.id}_${Date.now()}.${ext}`);
     
     await fs.writeFile(tempFile, imageBuffer);
     console.log(`  Image saved to: ${tempFile} (${(imageBuffer.length / 1024 / 1024).toFixed(2)} MB)`);
@@ -150,7 +150,7 @@ async function processArtwork(
     
     // Create record
     const record: DescriptionRecord = {
-      artwork_id: artwork.metadata.id,
+      artwork_id: artwork.id,
       alt_text: result.descriptions.altText,
       long_description: result.descriptions.longDescription,
       emoji_summary: result.descriptions.emojiSummary,
@@ -172,7 +172,7 @@ async function processArtwork(
           console.error('  Failed to write record:', err);
           resolve({ success: false, reason: 'Write failed' });
         } else {
-          console.log(`  ✓ Saved description for ${artwork.metadata.id}`);
+          console.log(`  ✓ Saved description for ${artwork.id}`);
           resolve({ success: true });
         }
       });
@@ -225,7 +225,7 @@ async function main() {
   
   // Load and process artworks
   const parser = new MetParser();
-  const csvPath = path.join(process.cwd(), 'data', 'met', 'MetObjects.csv');
+  const csvPath = path.join(process.cwd(), 'data', 'met', 'MetPaintingsWithImages.csv');
   const artworks = await parser.parseFile(csvPath);
   
   console.log(`\nTotal artworks available: ${artworks.length}`);
@@ -250,17 +250,17 @@ async function main() {
     }
     
     // Skip if already processed
-    if (existingIds.has(artwork.metadata.id)) {
+    if (existingIds.has(artwork.id)) {
       totalSkipped++;
       continue;
     }
     
     // Skip if specific IDs requested and this isn't one
-    if (options.artworkIds && !options.artworkIds.includes(artwork.metadata.id)) {
+    if (options.artworkIds && !options.artworkIds.includes(artwork.id)) {
       continue;
     }
     
-    console.log(`\n[${totalProcessed + 1}] Processing ${artwork.metadata.id}: ${artwork.title} by ${artwork.artist || 'Unknown'}`);
+    console.log(`\n[${totalProcessed + 1}] Processing ${artwork.id}: ${artwork.title} by ${artwork.artist || 'Unknown'}`);
     
     const result = await processArtwork(artwork, writer);
     

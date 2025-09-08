@@ -242,8 +242,7 @@ export interface EditDescriptionResult {
 }
 
 export async function editVisualDescription(
-  currentDescriptions: VisualDescription,
-  metadata?: any
+  currentDescriptions: VisualDescription
 ): Promise<EditDescriptionResult> {
   try {
     const client = getGeminiClient();

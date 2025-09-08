@@ -10,7 +10,7 @@ While AI can be used for "good" (See *["Improving the Search: Uncovering AI bias
 
 ## Dataset
 
-Project limited to ~5300 Open Access artworks with classification type "Paintings".
+Project limited to 5,280 Open Access artworks from The Metropolitan Museum of Art with classification type "Paintings" and available images.
 
 - [The Metropolitan Museum of Art Open Access CSV](https://github.com/metmuseum/openaccess)
 - [The Metropolitan Museum of Art Collection API](https://metmuseum.github.io/)
@@ -212,7 +212,6 @@ Finds artworks with similar structured metadata using art historical principles:
 - **Classification** (weight: 5) - Same artwork type (painting, sculpture, etc.)
 - **Department** (weight: 4) - Museum curatorial groupings
 - **Culture/Nationality** (weight: 4) - Cultural and geographic connections
-- **Dimensions** (weight: 3) - Similar physical scale (±20% tolerance)
 - **Period/Dynasty** (weight: 3) - Art historical movements
 
 ### 2. **Jina v3 Text Similarity**
@@ -235,6 +234,22 @@ Fuses all three similarity types using weighted Reciprocal Rank Fusion (RRF):
 - **30%** Elasticsearch metadata - art historical context
 
 *Note that Elasticsearch has [native RRF](https://www.elastic.co/docs/reference/elasticsearch/rest-apis/reciprocal-rank-fusion) but it's only available in the Enter­prise plan.*
+
+### 5. **AI Curated Similarity** (Pre-computed)
+
+Uses Gemini 2.5 Flash to intelligently select and rank similar artworks:
+- **Cross-cultural connections**: Discovers relationships across time periods and cultures (e.g., Gauguin's Tahitian Madonna with Renaissance Madonnas)
+- **Thematic relationships**: Identifies shared subjects and motifs beyond surface similarities
+- **Visual intelligence**: Considers composition, style, and emotional resonance
+- **Diversity-aware**: Limits over-representation of single artists or similarity types
+- **Explainable**: Each recommendation includes a brief explanation of the connection
+
+The AI curation process:
+1. Retrieves top 20 candidates from each algorithm (metadata, Jina v3, SigLIP 2)
+2. Removes duplicates and presents candidates without scores to avoid bias
+3. Applies art historical expertise to select truly meaningful connections
+4. Enforces diversity rules (max 3 per artist, max 8 per similarity type)
+5. Returns up to 20 curated recommendations with confidence scores
 
 ## Additional Features
 

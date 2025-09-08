@@ -2,11 +2,26 @@ import { Client } from '@elastic/elasticsearch';
 // @ts-expect-error - TypeScript can't find the module but it exists
 import type { SearchResponse as ESResponse } from '@elastic/elasticsearch/lib/api/types';
 import { ModelKey } from '@/lib/embeddings/types';
-import { SearchResponse, SearchHit, SearchResponseWithQuery, ESSearchQuery, ESHybridQuery, Artwork } from '@/app/types';
+import { SearchResponse, SearchHit, SearchResponseWithQuery, ESSearchQuery, ESHybridQuery, Artwork, SimilarArtwork } from '@/app/types';
 
 // ============================================================================
 // Constants
 // ============================================================================
+
+// Summary fields for artwork - essential data without full details
+const ARTWORK_SUMMARY_FIELDS = [
+  'id',
+  'title',
+  'artist',
+  'date',
+  'medium',
+  'classification',
+  'department',
+  'collection',
+  'image',
+  'visual_description.emoji_summary',
+  'visual_description.alt_text'
+];
 
 const SEARCH_CONSTANTS = {
   // Score thresholds for filtering results
@@ -38,17 +53,22 @@ const SEARCH_CONSTANTS = {
 // Search fields configuration
 const SEARCH_FIELDS = {
   BASE: [
-    'metadata.title^3',
-    'metadata.artist^2', 
-    'metadata.classification^1.5',
-    'metadata.medium',
-    'metadata.date',
-    'metadata.artistNationality',
-    'metadata.department'
+    'title^3',
+    'artist^2', 
+    'classification^1.5',
+    'tags^1.5',
+    'objectName^1.2',
+    'medium',
+    'date',
+    'artistNationality',
+    'department',
+    'culture',
+    'country',
+    'city'
   ],
   DESCRIPTIONS: [
-    'visual_alt_text^0.8',
-    'visual_long_description^0.5'
+    'visual_description.alt_text^0.8',
+    'visual_description.long_description^0.5'
   ]
 };
 
@@ -61,7 +81,6 @@ const METADATA_FIELD_WEIGHTS = {
   department: 4,
   culture: 4,
   artistNationality: 4,
-  dimensions: 3,
   period: 3,
   dynasty: 3
 };
@@ -149,16 +168,6 @@ function getScoreThreshold(model: ModelKey | 'keyword' | 'metadata' | 'similarit
   return thresholds[model] || 0;
 }
 
-/**
- * Builds base search configuration
- */
-function buildBaseSearchConfig(size: number, excludeEmbeddings: boolean = true) {
-  return {
-    size,
-    _source: excludeEmbeddings ? { excludes: ['embeddings'] } : undefined
-  };
-}
-
 export function getElasticsearchClient(): Client {
   const esUrl = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
   const apiKey = process.env.ELASTICSEARCH_API_KEY;
@@ -211,8 +220,8 @@ export async function performKeywordSearch(
       ? [...SEARCH_FIELDS.BASE, ...SEARCH_FIELDS.DESCRIPTIONS]
       : SEARCH_FIELDS.BASE;
     
-    const searchBody = {
-      ...buildBaseSearchConfig(size),
+    const searchBody: ESSearchQuery = {
+      size,
       query: {
         bool: {
           must: [{
@@ -229,7 +238,8 @@ export async function performKeywordSearch(
 
     const response = await client.search({
       index: INDEX_NAME,
-      ...searchBody
+      ...searchBody,
+      _source: ARTWORK_SUMMARY_FIELDS
     });
 
     return buildSearchResponse(
@@ -257,7 +267,7 @@ export async function performEmojiSearch(
       ? {
           // Single emoji: find any artwork containing it
           term: {
-            visual_emoji_array: emojis[0]
+            'visual_description.emoji_array': emojis[0]
           }
         }
       : {
@@ -265,20 +275,21 @@ export async function performEmojiSearch(
           bool: {
             must: emojis.map(emoji => ({
               term: {
-                visual_emoji_array: emoji
+                'visual_description.emoji_array': emoji
               }
             }))
           }
         };
     
-    const searchBody = {
-      ...buildBaseSearchConfig(size),
+    const searchBody: ESSearchQuery = {
+      size,
       query
     };
 
     const response = await client.search({
       index: INDEX_NAME,
-      ...searchBody
+      ...searchBody,
+      _source: ARTWORK_SUMMARY_FIELDS
     });
 
     return buildSearchResponse(
@@ -292,6 +303,68 @@ export async function performEmojiSearch(
   }
 }
 
+// Helper function to perform tag search
+export async function performTagSearch(
+  tags: string[],
+  size: number = 20,
+  matchAll: boolean = true
+): Promise<SearchResponseWithQuery> {
+  try {
+    const client = getElasticsearchClient();
+    
+    // Create query based on matchAll flag
+    const query = tags.length === 1
+      ? {
+          // Single tag: simple term query
+          term: {
+            'tags': tags[0]
+          }
+        }
+      : matchAll
+      ? {
+          // Multiple tags: find artworks containing ALL tags
+          bool: {
+            must: tags.map(tag => ({
+              term: {
+                'tags': tag
+              }
+            }))
+          }
+        }
+      : {
+          // Multiple tags: find artworks containing ANY tag
+          bool: {
+            should: tags.map(tag => ({
+              term: {
+                'tags': tag
+              }
+            })),
+            minimum_should_match: 1
+          }
+        };
+    
+    const searchBody: ESSearchQuery = {
+      size,
+      query
+    };
+
+    const response = await client.search({
+      index: INDEX_NAME,
+      ...searchBody,
+      _source: ARTWORK_SUMMARY_FIELDS
+    });
+
+    return buildSearchResponse(
+      response,
+      mapESResponseToSearchHits(response.hits.hits as ESResponse['hits']['hits']),
+      { esQuery: searchBody }
+    );
+  } catch (error) {
+    console.error('Tag search error:', error);
+    return { took: 0, total: 0, hits: [] };
+  }
+}
+
 // Helper function to perform semantic search with pre-computed embedding
 export async function performSemanticSearchWithEmbedding(
   embedding: number[],
@@ -301,8 +374,8 @@ export async function performSemanticSearchWithEmbedding(
   try {
     const client = getElasticsearchClient();
 
-    const searchBody = {
-      ...buildBaseSearchConfig(size),
+    const searchBody: ESSearchQuery = {
+      size,
       knn: {
         field: `embeddings.${model}`,
         query_vector: embedding,
@@ -313,15 +386,18 @@ export async function performSemanticSearchWithEmbedding(
 
     const response = await client.search({
       index: INDEX_NAME,
-      ...searchBody
+      ...searchBody,
+      _source: ARTWORK_SUMMARY_FIELDS
     });
 
-    const esQuery = {
+    const esQuery: ESSearchQuery = {
       ...searchBody,
-      knn: {
-        ...searchBody.knn,
+      knn: searchBody.knn ? {
+        field: searchBody.knn.field,
+        k: searchBody.knn.k,
+        num_candidates: searchBody.knn.num_candidates,
         query_vector: '[embedding vector]' // Don't include full vector in UI
-      }
+      } : undefined
     };
 
     return buildSearchResponse(
@@ -665,10 +741,10 @@ export async function findSimilarArtworks(
     }
 
     // Search for similar artworks
-    const searchConfig = buildBaseSearchConfig(size + 1); // +1 to exclude self
     const response = await client.search({
       index: INDEX_NAME,
-      ...searchConfig,
+      size: size + 1, // +1 to exclude self
+      _source: ARTWORK_SUMMARY_FIELDS,
       knn: {
         field: `embeddings.${model}`,
         query_vector: embedding,
@@ -709,9 +785,9 @@ export async function findMetadataSimilarArtworks(
       id: artworkId,
     });
 
-    const metadata = (sourceArtwork._source as SearchHit['_source'])?.metadata;
-    if (!metadata) {
-      throw new Error(`No metadata found for artwork ${artworkId}`);
+    const source = sourceArtwork._source as SearchHit['_source'];
+    if (!source) {
+      throw new Error(`No source data found for artwork ${artworkId}`);
     }
 
     // Build a complex query based on metadata similarity
@@ -719,29 +795,87 @@ export async function findMetadataSimilarArtworks(
     const shouldClauses: Array<Record<string, unknown>> = [];
     
     // 1. Artist - Highest weight (same artist = very similar)
-    if (metadata.artist && metadata.artist !== 'Unknown') {
-      shouldClauses.push({
-        match: {
-          'metadata.artist': {
-            query: metadata.artist,
-            boost: METADATA_FIELD_WEIGHTS.artist
+    // Check nested artists array if available
+    if (source.artists && source.artists.length > 0) {
+      // Match any artist by constituentId (most precise)
+      const artistIds = source.artists
+        .filter(a => a.constituentId)
+        .map(a => a.constituentId);
+      
+      if (artistIds.length > 0) {
+        shouldClauses.push({
+          nested: {
+            path: 'artists',
+            query: {
+              terms: {
+                'artists.constituentId': artistIds,
+                boost: METADATA_FIELD_WEIGHTS.artist * 1.5
+              }
+            }
           }
-        }
-      });
+        });
+      }
+      
+      // Also match on artist names
+      const artistNames = source.artists
+        .map(a => a.displayName)
+        .filter(name => name && name !== 'Unknown');
+      
+      if (artistNames.length > 0) {
+        shouldClauses.push({
+          nested: {
+            path: 'artists',
+            query: {
+              bool: {
+                should: artistNames.map(name => ({
+                  match: {
+                    'artists.displayName': {
+                      query: name,
+                      boost: METADATA_FIELD_WEIGHTS.artist
+                    }
+                  }
+                }))
+              }
+            }
+          }
+        });
+      }
+    } else {
+      // Fallback to deprecated single artist fields
+      if (source.artistId) {
+        shouldClauses.push({
+          term: {
+            'artistId': {
+              value: source.artistId,
+              boost: METADATA_FIELD_WEIGHTS.artist * 1.2
+            }
+          }
+        });
+      }
+      if (source.artist && source.artist !== 'Unknown') {
+        shouldClauses.push({
+          match: {
+            'artist': {
+              query: source.artist,
+              boost: METADATA_FIELD_WEIGHTS.artist
+            }
+          }
+        });
+      }
     }
     
     // 2. Date range - Very important (works from same period)
-    if (metadata.dateBegin || metadata.dateEnd) {
-      const centerYear = metadata.dateBegin && metadata.dateEnd 
-        ? Math.round((metadata.dateBegin + metadata.dateEnd) / 2)
-        : metadata.dateBegin || metadata.dateEnd;
+    if (source.dateBegin || source.dateEnd) {
+      const centerYear = source.dateBegin && source.dateEnd 
+        ? Math.round((source.dateBegin + source.dateEnd) / 2)
+        : source.dateBegin || source.dateEnd;
       
       // Gaussian decay function: full score within 10 years, decaying over 50 years
       shouldClauses.push({
         function_score: {
           functions: [{
             gauss: {
-              'metadata.dateBegin': {
+              'dateBegin': {
                 origin: centerYear,
                 scale: 25,  // 25 years is the "scale" where score = 0.5
                 decay: 0.5
@@ -754,11 +888,11 @@ export async function findMetadataSimilarArtworks(
     }
     
     // 3. Medium - Important (same materials/technique)
-    if (metadata.medium) {
+    if (source.medium) {
       shouldClauses.push({
         match: {
-          'metadata.medium': {
-            query: metadata.medium,
+          'medium': {
+            query: source.medium,
             boost: METADATA_FIELD_WEIGHTS.medium,
             fuzziness: 'AUTO'
           }
@@ -767,11 +901,11 @@ export async function findMetadataSimilarArtworks(
     }
     
     // 4. Classification - Important (painting, sculpture, etc.)
-    if (metadata.classification) {
+    if (source.classification) {
       shouldClauses.push({
         term: {
-          'metadata.classification': {
-            value: metadata.classification,
+          'classification': {
+            value: source.classification,
             boost: METADATA_FIELD_WEIGHTS.classification
           }
         }
@@ -779,11 +913,11 @@ export async function findMetadataSimilarArtworks(
     }
     
     // 5. Department - Moderately important
-    if (metadata.department) {
+    if (source.department) {
       shouldClauses.push({
         term: {
-          'metadata.department': {
-            value: metadata.department,
+          'department': {
+            value: source.department,
             boost: METADATA_FIELD_WEIGHTS.department
           }
         }
@@ -791,73 +925,45 @@ export async function findMetadataSimilarArtworks(
     }
     
     // 6. Culture/Nationality - Moderately important
-    if (metadata.culture) {
+    if (source.culture) {
       shouldClauses.push({
         term: {
-          'metadata.culture': {
-            value: metadata.culture,
+          'culture': {
+            value: source.culture,
             boost: METADATA_FIELD_WEIGHTS.culture
           }
         }
       });
     }
     
-    if (metadata.artistNationality) {
+    if (source.artistNationality) {
       shouldClauses.push({
         term: {
-          'metadata.artistNationality': {
-            value: metadata.artistNationality,
+          'artistNationality': {
+            value: source.artistNationality,
             boost: METADATA_FIELD_WEIGHTS.artistNationality
           }
         }
       });
     }
     
-    // 7. Dimensions - Less important but relevant (similar scale)
-    if (metadata.width && metadata.height) {
-      // Similar dimensions (within 20%)
-      shouldClauses.push({
-        bool: {
-          must: [
-            {
-              range: {
-                'metadata.width': {
-                  gte: metadata.width * 0.8,
-                  lte: metadata.width * 1.2
-                }
-              }
-            },
-            {
-              range: {
-                'metadata.height': {
-                  gte: metadata.height * 0.8,
-                  lte: metadata.height * 1.2
-                }
-              }
-            }
-          ],
-          boost: METADATA_FIELD_WEIGHTS.dimensions
-        }
-      });
-    }
-    
-    // 8. Period/Dynasty - Less important
-    if (metadata.period) {
+    // 7. Period/Dynasty - Less important
+    if (source.period) {
       shouldClauses.push({
         term: {
-          'metadata.period': {
-            value: metadata.period,
+          'period': {
+            value: source.period,
             boost: METADATA_FIELD_WEIGHTS.period
           }
         }
       });
     }
     
-    if (metadata.dynasty) {
+    if (source.dynasty) {
       shouldClauses.push({
         term: {
-          'metadata.dynasty': {
-            value: metadata.dynasty,
+          'dynasty': {
+            value: source.dynasty,
             boost: METADATA_FIELD_WEIGHTS.dynasty
           }
         }
@@ -871,8 +977,8 @@ export async function findMetadataSimilarArtworks(
     }
 
     // Execute the search
-    const searchBody = {
-      ...buildBaseSearchConfig(size + 1), // +1 to exclude self
+    const searchBody: ESSearchQuery = {
+      size: size + 1, // +1 to exclude self
       query: {
         bool: {
           should: shouldClauses,
@@ -886,7 +992,8 @@ export async function findMetadataSimilarArtworks(
 
     const response = await client.search({
       index: INDEX_NAME,
-      ...searchBody
+      ...searchBody,
+      _source: ARTWORK_SUMMARY_FIELDS
     });
 
     const hits = mapESResponseToSearchHits(response.hits.hits as ESResponse['hits']['hits']).slice(0, size);
@@ -895,10 +1002,11 @@ export async function findMetadataSimilarArtworks(
       note: 'Metadata-based similarity using art historical principles',
       sourceArtwork: {
         id: artworkId,
-        artist: metadata.artist,
-        date: `${metadata.dateBegin || '?'}-${metadata.dateEnd || '?'}`,
-        medium: metadata.medium,
-        classification: metadata.classification
+        artistId: source.artistId,
+        artist: source.artist,
+        date: `${source.dateBegin || '?'}-${source.dateEnd || '?'}`,
+        medium: source.medium,
+        classification: source.classification
       }
     } as ESSearchQuery & { note: string; sourceArtwork: Record<string, unknown> };
 
@@ -955,11 +1063,11 @@ export async function findCombinedSimilarArtworks(
     // Embedding searches
     const searchSize = size * SEARCH_CONSTANTS.MULTIPLIERS.RESULTS;
     availableModels.forEach(model => {
-      const searchConfig = buildBaseSearchConfig(searchSize);
       searchPromises.push(
         client.search({
           index: INDEX_NAME,
-          ...searchConfig,
+          size: searchSize,
+          _source: ARTWORK_SUMMARY_FIELDS,
           knn: {
             field: `embeddings.${model}`,
             query_vector: embeddings[model],
@@ -1104,6 +1212,52 @@ export async function getArtworkById(id: string): Promise<Artwork | null> {
   }
 }
 
+// Hydrate similar artworks with full document data
+export async function hydrateSimilarArtworks(
+  similarArtworks: SimilarArtwork[] | undefined
+): Promise<SearchHit[]> {
+  if (!similarArtworks || similarArtworks.length === 0) {
+    return [];
+  }
+
+  const client = getElasticsearchClient();
+  
+  try {
+    // Fetch all similar artworks in one query
+    const response = await client.mget({
+      index: INDEX_NAME,
+      ids: similarArtworks.map(sa => sa.id),
+      _source: ARTWORK_SUMMARY_FIELDS
+    });
+
+    // Convert to SearchHit format with similarity info
+    const hits: SearchHit[] = [];
+    
+    similarArtworks.forEach((sim, index) => {
+      const doc = response.docs[index];
+      // Check if doc is a successful response (not an error)
+      if ('_source' in doc && doc._source) {
+        // Add similarity info to the artwork
+        const enhancedArtwork = {
+          ...doc._source as Artwork,
+          _similarityInfo: sim
+        };
+        
+        hits.push({
+          _id: sim.id,
+          _score: sim.confidence,
+          _source: enhancedArtwork as Artwork
+        });
+      }
+    });
+    
+    return hits;
+  } catch (error) {
+    console.error('Error hydrating similar artworks:', error);
+    return [];
+  }
+}
+
 // Get all unique emojis in the collection
 export async function getAllEmojis(): Promise<{ emoji: string; count: number }[]> {
   try {
@@ -1117,16 +1271,16 @@ export async function getAllEmojis(): Promise<{ emoji: string; count: number }[]
       size: 1,
       query: {
         exists: {
-          field: 'visual_emoji_array'
+          field: 'visual_description.emoji_array'
         }
       },
-      _source: ['visual_emoji_array']
+      _source: ['visual_description.emoji_array']
     });
     
-    console.log('Documents with visual_emoji_array:', (checkField.hits.total as { value: number }).value);
+    console.log('Documents with visual_description.emoji_array:', (checkField.hits.total as { value: number }).value);
     
     if (checkField.hits.hits.length > 0) {
-      console.log('Sample visual_emoji_array:', checkField.hits.hits[0]._source);
+      console.log('Sample visual_description.emoji_array:', checkField.hits.hits[0]._source);
     }
     
     const response = await client.search({
@@ -1135,7 +1289,7 @@ export async function getAllEmojis(): Promise<{ emoji: string; count: number }[]
       aggs: {
         unique_emojis: {
           terms: {
-            field: 'visual_emoji_array',
+            field: 'visual_description.emoji_array',
             size: 1000  // Get up to 1000 unique emojis
           }
         }
@@ -1162,6 +1316,40 @@ export async function getAllEmojis(): Promise<{ emoji: string; count: number }[]
       console.error('Error details:', error.message);
       console.error('Error stack:', error.stack);
     }
+    return [];
+  }
+}
+
+// Get all unique tags in the collection
+export async function getAllTags(): Promise<{ tag: string; count: number }[]> {
+  try {
+    const client = getElasticsearchClient();
+    
+    const response = await client.search({
+      index: INDEX_NAME,
+      size: 0,
+      aggs: {
+        unique_tags: {
+          terms: {
+            field: 'tags',
+            size: 5000  // Get up to 5000 unique tags
+          }
+        }
+      }
+    });
+
+    // Type guard to check if the aggregation has buckets
+    const agg = response.aggregations?.unique_tags;
+    const buckets = (agg && 'buckets' in agg) ? 
+      (agg.buckets as Array<{ key: string; doc_count: number }>) : 
+      [];
+    
+    return buckets.map(bucket => ({
+      tag: bucket.key,
+      count: bucket.doc_count
+    })).sort((a, b) => b.count - a.count); // Sort by count descending
+  } catch (error) {
+    console.error('Error fetching tags:', error);
     return [];
   }
 }

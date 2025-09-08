@@ -15,11 +15,11 @@ interface ArtworkDetailProps {
 }
 
 export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
-  const { metadata, image } = artwork;
+  const { image } = artwork;
   const imageUrl = typeof image === 'string' ? image : image.url;
   
   // Get institution name
-  const institutionName = metadata.collection ? getCollectionShortName(metadata.collection) : '';
+  const institutionName = artwork.collection ? getCollectionShortName(artwork.collection) : '';
 
   return (
     <>
@@ -32,7 +32,7 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
               <div className="relative h-72 bg-muted rounded-lg overflow-hidden">
                 <Image
                   src={imageUrl}
-                  alt={metadata.title}
+                  alt={artwork.title}
                   fill
                   className="object-contain"
                   sizes="(max-width: 768px) 100vw, 33vw"
@@ -43,7 +43,7 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
             
             {/* Metadata on right */}
             <div className="md:col-span-2 space-y-3">
-              <h1 className="text-2xl font-bold">{metadata.title}</h1>
+              <h1 className="text-2xl font-bold">{artwork.title}</h1>
               {institutionName && (
                 <div className="text-lg font-medium text-muted-foreground">
                   {institutionName}
@@ -53,59 +53,59 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                 <div className="sm:col-span-2">
                   <span className="font-semibold">Artist:</span>{' '}
-                  {metadata.artist || 'Unknown'}
-                  {metadata.artistBio && (
+                  {artwork.artist || 'Unknown'}
+                  {artwork.artistBio && (
                     <span className="text-sm text-muted-foreground ml-1">
-                      ({metadata.artistBio})
+                      ({artwork.artistBio})
                     </span>
                   )}
                 </div>
-                {metadata.date && (
+                {artwork.date && (
                   <div>
                     <span className="font-semibold">Date:</span>{' '}
-                    {metadata.date}
+                    {artwork.date}
                   </div>
                 )}
-                {metadata.department && (
+                {artwork.department && (
                   <div>
                     <span className="font-semibold">Department:</span>{' '}
-                    {metadata.department}
+                    {artwork.department}
                   </div>
                 )}
-                {metadata.classification && (
+                {artwork.classification && (
                   <div>
                     <span className="font-semibold">Classification:</span>{' '}
-                    {metadata.classification}
+                    {artwork.classification}
                   </div>
                 )}
-                {metadata.medium && (
+                {artwork.medium && (
                   <div className="sm:col-span-2">
                     <span className="font-semibold">Medium:</span>{' '}
-                    {metadata.medium}
+                    {artwork.medium}
                   </div>
                 )}
-                {metadata.dimensions && (
+                {artwork.dimensions && (
                   <div className="sm:col-span-2">
                     <span className="font-semibold">Dimensions:</span>{' '}
-                    {metadata.dimensions}
+                    {artwork.dimensions}
                   </div>
                 )}
-                {metadata.creditLine && (
+                {artwork.creditLine && (
                   <div className="sm:col-span-2">
                     <span className="font-semibold">Credit Line:</span>{' '}
-                    {metadata.creditLine}
+                    {artwork.creditLine}
                   </div>
                 )}
               </div>
 
               {/* Museum link */}
-              {metadata.sourceUrl && (
+              {artwork.sourceUrl && (
                 <Button 
                   variant="outline"
                   size="sm"
                   asChild
                 >
-                  <a href={metadata.sourceUrl} target="_blank" rel="noopener noreferrer">
+                  <a href={artwork.sourceUrl} target="_blank" rel="noopener noreferrer">
                     View on {institutionName || 'Museum'} Website
                     <ExternalLink className="w-4 h-4 ml-2" />
                   </a>
@@ -117,7 +117,7 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
       </Card>
 
       {/* AI-generated descriptions */}
-      {(artwork.visual_alt_text || artwork.visual_long_description || artwork.visual_emoji_summary) && (
+      {artwork.visual_description && (
         <Card className="mb-6">
           <CardContent className="">
             <div className="space-y-4">
@@ -126,30 +126,30 @@ export default function ArtworkDetail({ artwork }: ArtworkDetailProps) {
                 <Badge variant="secondary" className="text-base font-medium text-muted-foreground">AI Generated</Badge>
               </div>
               
-              {artwork.visual_emoji_summary && (
+              {artwork.visual_description.emoji_summary && (
                 <div>
                   <h3 className="font-semibold text-sm mb-1">Visual Summary</h3>
-                  <ClickableEmojis emojis={artwork.visual_emoji_summary} size="3xl" />
+                  <ClickableEmojis emojis={artwork.visual_description.emoji_summary} size="3xl" />
                 </div>
               )}
               
-              {artwork.visual_alt_text && (
+              {artwork.visual_description.alt_text && (
                 <div>
                   <h3 className="font-semibold text-sm mb-1">Brief Description</h3>
-                  <p className="text-sm text-muted-foreground">{artwork.visual_alt_text}</p>
+                  <p className="text-sm text-muted-foreground">{artwork.visual_description.alt_text}</p>
                 </div>
               )}
               
-              {artwork.visual_long_description && (
+              {artwork.visual_description.long_description && (
                 <div>
                   <h3 className="font-semibold text-sm mb-1">Detailed Description</h3>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{artwork.visual_long_description}</p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{artwork.visual_description.long_description}</p>
                 </div>
               )}
               
-              {artwork.description_metadata && (
+              {artwork.visual_description.metadata && (
                 <div className="text-xs text-muted-foreground pt-2 border-t">
-                  Generated by {artwork.description_metadata.model}
+                  Generated by {artwork.visual_description.metadata.model}
                 </div>
               )}
               

@@ -1,9 +1,28 @@
+// Artist information
+export interface Artist {
+  constituentId?: string;        // Unique artist ID
+  role?: string;                 // e.g., "Artist", "After", "In the manner of"
+  prefix?: string;               // e.g., "After", "Attributed to"
+  displayName: string;           // Full display name
+  displayBio?: string;           // Biographical info
+  suffix?: string;               // Name suffix
+  alphaSort?: string;            // Name for alphabetical sorting
+  nationality?: string;          // Artist nationality
+  beginDate?: number;            // Birth/start year
+  endDate?: number;              // Death/end year
+  gender?: string;               // Artist gender
+  ulanUrl?: string;              // Getty ULAN URL
+  wikidataUrl?: string;          // Wikidata URL
+}
+
 // Generic artwork metadata that can work across different collections
 export interface ArtworkMetadata {
   // Core fields that most collections have
   id: string;                    // Unique ID within the collection
-  title: string;
-  artist: string;                // Primary artist/creator
+  title: string;                 // Primary title (first in array if multiple)
+  titles?: string[];             // All titles (multiple languages, alternate titles)
+  artist: string;                // Primary artist/creator display string
+  artists?: Artist[];            // Array of all artists with full metadata
   date: string;                  // Display date (e.g., "1889", "ca. 1900", "1950-1960")
   medium: string;                // Materials/technique
   dimensions: string;            // Physical dimensions as string
@@ -17,11 +36,30 @@ export interface ArtworkMetadata {
   // Additional common fields (optional)
   department?: string;           // Museum department
   classification?: string;       // Type of artwork (painting, sculpture, etc.)
+  objectName?: string;           // Specific object type (e.g., "Coin", "Vase", "Portrait")
   culture?: string;              // Cultural context (mainly for historical works)
   period?: string;               // Art historical period
   dynasty?: string;              // For Asian art
   
-  // Artist information
+  // Geographic origin
+  geographyType?: string;        // Type of geography (e.g., "Made in", "From")
+  city?: string;                 // City of origin
+  state?: string;                // State/province of origin
+  country?: string;              // Country of origin
+  region?: string;               // Broader region (e.g., "Europe", "East Asia")
+  locale?: string;               // Specific locale
+  excavation?: string;           // Archaeological excavation site
+  
+  // Museum-specific
+  objectNumber?: string;         // Museum's catalog number
+  accessionYear?: number;        // Year acquired by museum
+  galleryNumber?: string;        // Current gallery location
+  portfolio?: string;            // Part of a portfolio/series
+  rightsAndReproduction?: string; // Copyright and usage rights
+  
+  // DEPRECATED: Single artist fields kept for backwards compatibility
+  // Use artists[] array instead
+  artistId?: string;             // Artist identifier (e.g., Constituent ID)
   artistBio?: string;            // Artist biographical info
   artistNationality?: string;    // Artist nationality
   artistBeginDate?: number;      // Artist birth year
@@ -44,6 +82,9 @@ export interface ArtworkMetadata {
   isPublicDomain?: boolean;      // Copyright status
   onView?: boolean;              // Currently on display
   
+  // Tags/keywords
+  tags?: string[];               // Tags/keywords for the artwork
+  
   // Additional metadata as key-value pairs for flexibility
   additionalData?: Record<string, string | number | boolean | null>;
 }
@@ -59,18 +100,49 @@ export interface ArtworkImage {
   copyright?: string;            // Image rights information
 }
 
-export interface Artwork {
-  id: string;                    // Elasticsearch document ID
-  metadata: ArtworkMetadata;
-  image: ArtworkImage | string;  // Can be object or simple URL string
-  embeddings: Record<string, number[]>;  // Model name -> embedding vector
-  visual_alt_text?: string;      // AI-generated alt text
-  visual_long_description?: string; // AI-generated detailed description
-  visual_emoji_summary?: string; // AI-generated emoji summary (2-8 emojis)
-  description_metadata?: {
+// Visual description object for AI-generated content
+export interface VisualDescription {
+  alt_text: string;              // AI-generated alt text
+  long_description: string;      // AI-generated detailed description
+  emoji_summary: string;         // AI-generated emoji summary (2-8 emojis)
+  emoji_array: string[];         // Individual emojis as array
+  metadata: {
     model: string;
     generated_at: string;
+    edited_model?: string;
+    edited_at?: string;
+    changes_made?: string[];
   };
+}
+
+// Similar artwork found by LLM curation
+export interface SimilarArtwork {
+  id: string;                    // Artwork ID
+  similarity_type: string;       // style, subject, mood, technique, period, multiple
+  confidence: number;            // 0-1 confidence score
+  explanation: string;           // Human-readable explanation
+  source: string;                // metadata, jina_v3, siglip2
+}
+
+// Flattened artwork structure for Elasticsearch
+export interface Artwork extends ArtworkMetadata {
+  // image stays at root level
+  image: ArtworkImage | string;  // Can be object or simple URL string
+  
+  // Embeddings for different models
+  embeddings: Record<string, number[]>;  // Model name -> embedding vector
+  
+  // Visual descriptions container
+  visual_description?: VisualDescription;
+  
+  // Combined text for search
+  searchText?: string;
+  
+  // Pre-computed similar artworks from LLM curation
+  similar_artworks?: SimilarArtwork[];
+  
+  // Indexing timestamp
+  indexed_at?: string;
 }
 
 export interface SearchHit {
