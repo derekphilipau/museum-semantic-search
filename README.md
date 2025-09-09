@@ -243,7 +243,14 @@ Fuses all three similarity types using weighted Reciprocal Rank Fusion (RRF):
 
 *Note that Elasticsearch has [native RRF](https://www.elastic.co/docs/reference/elasticsearch/rest-apis/reciprocal-rank-fusion) but it's only available in the Enter­prise plan.*
 
-### 5. **AI Curated Similarity** (Pre-computed)
+### 5. **AI Curated Similarity** (Pre-computed LLM Reranking)
+
+The AI curation process:
+1. Retrieves top 20 candidates from metadata and text embeddings searches, 5 candidates from image embeddings search
+2. Removes duplicates and presents candidates without scores to avoid bias
+3. Applies art historical expertise to select truly meaningful connections
+4. Enforces diversity rules (max 3 per artist, max 8 per similarity type)
+5. Returns up to 20 curated recommendations with confidence scores
 
 Uses Gemini 2.5 Flash to intelligently select and rank similar artworks:
 - **Cross-cultural connections**: Discovers relationships across time periods and cultures (e.g., Gauguin's Tahitian Madonna with Renaissance Madonnas)
@@ -252,12 +259,15 @@ Uses Gemini 2.5 Flash to intelligently select and rank similar artworks:
 - **Diversity-aware**: Limits over-representation of single artists or similarity types
 - **Explainable**: Each recommendation includes a brief explanation of the connection
 
-The AI curation process:
-1. Retrieves top 20 candidates from each algorithm (metadata, Jina v3, SigLIP 2)
-2. Removes duplicates and presents candidates without scores to avoid bias
-3. Applies art historical expertise to select truly meaningful connections
-4. Enforces diversity rules (max 3 per artist, max 8 per similarity type)
-5. Returns up to 20 curated recommendations with confidence scores
+[Full prompt here.](scripts/met/7-generate-similar-artworks-met.ts#L259)
+
+### AI-Curated Similarity Example
+
+See Example here: [Holy Family with Saint Anne, French Painter (17th century)](https://museum-semantic-search.vercel.app/artwork/met_436344)
+
+![Diagram of AI-Curated Similarity (LLM Reranking)](docs/images/AI_Similarity.jpg)
+
+For this example, relying only on metadata, the keyword search does a poor job of finding relevant similar artworks, pulling in various works by unknown "French Painter".  Text & image embeddings results are better, especially with theme and style.  The AI-curated results are perhaps best in my opinion, but I'm not an art historian and not familiar enough with the collection to make an educated judgment.
 
 ## Additional Features
 
