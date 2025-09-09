@@ -98,7 +98,7 @@ function ArtworkCard({
                 <div className="mt-1">
                   <span className="inline-flex items-center gap-1 text-xs">
                     <Badge variant="secondary" className="size-5 text-xs font-medium text-muted-foreground">AI</Badge>
-                    <span className="line-clamp-2 italic">{artwork.visual_description.alt_text}</span>
+                    <span className="italic">{artwork.visual_description.alt_text}</span>
                   </span>
                 </div>
               )}
@@ -107,7 +107,9 @@ function ArtworkCard({
           
           {/* Similarity info for AI curated results */}
           {artwork._similarityInfo && (
-            <div className="pt-2 mt-auto border-t space-y-1">
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <Badge variant="secondary" className="size-5 text-xs font-medium text-muted-foreground mr-1">AI</Badge>
+              Curated Similarity Reasoning
               <div className="flex items-center justify-between text-xs">
                 <span className="capitalize font-medium text-muted-foreground">
                   {artwork._similarityInfo.similarity_type}
@@ -116,7 +118,7 @@ function ArtworkCard({
                   {Math.round(artwork._similarityInfo.confidence * 100)}%
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground line-clamp-2 italic">
+              <p className="text-xs text-muted-foreground italic">
                 {artwork._similarityInfo.explanation}
               </p>
             </div>
