@@ -14,9 +14,10 @@
 - Description editing: `scripts/met/3-edit-descriptions-met.ts`
 - Jina text embeddings: `scripts/met/4-generate-jina-text-embeddings-met.py`
 - SigLIP2 image embeddings: `scripts/met/5-generate-siglip2-image-embeddings-met.py`
-- Elasticsearch indexing: `scripts/met/6-index-artworks.ts`
 - Similar artworks generation: `scripts/met/7-generate-similar-artworks-met.ts`
 - Similarity index update: `scripts/met/8-update-similarities-met.ts`
+- UMAP projections: `scripts/met/9-generate-umap-projections-met.py` - Generates 2D/3D projections from embeddings
+- Elasticsearch indexing: `scripts/met/10-index-artworks.ts` - Final step, indexes all data including projections
 - Gemini integration: `lib/descriptions/gemini.ts`
 
 ### Key Design Decisions

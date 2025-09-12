@@ -219,7 +219,41 @@ export const INDEX_MAPPING = {
       },
       
       // Timestamp
-      indexed_at: { type: 'date' as const }
+      indexed_at: { type: 'date' as const },
+      
+      // UMAP projections for visualization
+      projections: {
+        type: 'object' as const,
+        properties: {
+          jina_v3: {
+            type: 'object' as const,
+            properties: {
+              standard_2d: { type: 'float' as const },
+              tight_2d: { type: 'float' as const },
+              loose_2d: { type: 'float' as const },
+              standard_3d: { type: 'float' as const }
+            }
+          },
+          siglip2: {
+            type: 'object' as const,
+            properties: {
+              standard_2d: { type: 'float' as const },
+              tight_2d: { type: 'float' as const },
+              loose_2d: { type: 'float' as const },
+              standard_3d: { type: 'float' as const }
+            }
+          }
+        }
+      },
+      
+      // Projection metadata
+      projection_metadata: {
+        type: 'object' as const,
+        properties: {
+          last_updated: { type: 'date' as const },
+          generation_params: { type: 'object' as const, enabled: false }
+        }
+      }
     },
   },
 } as const;
