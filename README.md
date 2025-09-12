@@ -179,14 +179,6 @@ Sometimes strangely accurate revealing details I missed, at other times question
 
 ![AI-Generated Emojis](docs/images/Emojis.jpg)
 
-## Architecture Overview
-
-The system uses a modern, scalable architecture:
-- **Unified Embeddings API**: Single Modal deployment serving both SigLIP 2 and Jina v3 embeddings
-- **Optimized Search**: Each user query makes exactly ONE API call to get all needed embeddings
-- **Pre-computed Embeddings**: Image embeddings are generated offline and stored in Elasticsearch
-- **Real-time Query Processing**: Text queries are embedded on-demand via Modal's GPU infrastructure
-
 ## Visualize Embeddings
 
 The `/visualize` page lets you explore how artworks cluster in the embedding space. You can see the entire collection as dots on a 2D map, where similar artworks appear near each other. Uses UMAP to reduce the 768-dimensional embeddings down to 2D while preserving relationships.
@@ -201,9 +193,9 @@ The `/visualize` page lets you explore how artworks cluster in the embedding spa
 ### Example Journeys
 
 Try these search progressions to see how the embedding space organizes concepts:
-- **"landscape"** > **"mountain"** > **"snowy mountain"**: watch the cluster narrow
-- **"woman"** > **"woman smiling"** > **"woman with hat"**: see portraits organize by attributes
-- **"blue"** > **"blue sky"** > **"stormy sky"**: explore how color and mood interact
+- **"landscape"** > **"mountain"** > **"snowy mountain"**
+- **"woman"** > **"woman smiling"** > **"woman with hat"**
+- **"blue"** > **"blue sky"** > **"stormy sky"**
 
 ![Visualization Journey Example](docs/images/VisualizeMountain.jpg)
 
