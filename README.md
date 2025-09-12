@@ -187,6 +187,26 @@ The system uses a modern, scalable architecture:
 - **Pre-computed Embeddings**: Image embeddings are generated offline and stored in Elasticsearch
 - **Real-time Query Processing**: Text queries are embedded on-demand via Modal's GPU infrastructure
 
+## Visualize Embeddings
+
+The `/visualize` page lets you explore how artworks cluster in the embedding space. You can see the entire collection as dots on a 2D map, where similar artworks appear near each other. Uses UMAP to reduce the 768-dimensional embeddings down to 2D while preserving relationships.
+
+![Visualization Screenshot](docs/images/VisualizeScreenshot.jpg)
+
+- Each dot represents one artwork in the collection
+- Distance between dots shows semantic similarity, closer dots are more similar
+- Search to highlight relevant results. Larger, brighter dots rank higher
+- Color dots by artist, period, or tags to reveal patterns
+
+### Example Journeys
+
+Try these search progressions to see how the embedding space organizes concepts:
+- **"landscape"** > **"mountain"** > **"snowy mountain"**: watch the cluster narrow
+- **"woman"** > **"woman smiling"** > **"woman with hat"**: see portraits organize by attributes
+- **"blue"** > **"blue sky"** > **"stormy sky"**: explore how color and mood interact
+
+![Visualization Journey Example](docs/images/VisualizeMountain.jpg)
+
 ## Search Types
 
 ### 1. **Keyword Search**
@@ -302,13 +322,6 @@ Eventually I found that separate image-only embeddings and text-only embeddings 
 ## Installation
 
 See [INSTALLATION.md](INSTALLATION.md) for detailed setup instructions including prerequisites, environment configuration, and deployment steps.
-
-## Possible Future Improvements
-
-- Native Elasticsearch integration for embeddings via Open Inference API
-- Support for additional collections
-- Real-time embedding generation during indexing
-- Fine-tuned models
 
 ## License
 
