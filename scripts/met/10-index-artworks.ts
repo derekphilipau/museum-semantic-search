@@ -42,6 +42,20 @@ interface EmbeddingRecord {
   };
 }
 
+interface ProjectionRecord {
+  artwork_id: string;
+  embedding_type: string;
+  projection_type: string;
+  coordinates: number[];
+  timestamp: string;
+}
+
+interface ProjectionData {
+  [embeddingType: string]: {
+    [projectionType: string]: number[];
+  };
+}
+
 interface DescriptionRecord {
   artwork_id: string;
   alt_text: string;
@@ -120,6 +134,75 @@ async function loadDescriptionsMap(filePath: string): Promise<Map<string, Descri
   return descriptions;
 }
 
+async function loadProjections(): Promise<Map<string, ProjectionData>> {
+  console.log('Loading projection files...');
+  const projectionsMap = new Map<string, ProjectionData>();
+  
+  const projectionsDir = path.join(process.cwd(), 'data', 'met', 'projections');
+  const embeddingTypes = ['jina_v3', 'siglip2'];
+  const projectionTypes = ['standard_2d', 'tight_2d', 'loose_2d', 'standard_3d'];
+  
+  for (const embeddingType of embeddingTypes) {
+    const embeddingDir = path.join(projectionsDir, embeddingType);
+    
+    // Check if directory exists
+    try {
+      await fs.access(embeddingDir);
+    } catch {
+      console.log(`  Skipping ${embeddingType} projections - directory not found`);
+      continue;
+    }
+    
+    for (const projectionType of projectionTypes) {
+      const filePath = path.join(embeddingDir, `${projectionType}.jsonl`);
+      
+      try {
+        await fs.access(filePath);
+        console.log(`  Loading ${embeddingType}/${projectionType}.jsonl...`);
+        
+        const fileStream = createReadStream(filePath);
+        const rl = readline.createInterface({
+          input: fileStream,
+          crlfDelay: Infinity
+        });
+        
+        let count = 0;
+        for await (const line of rl) {
+          if (line.trim()) {
+            try {
+              const record = JSON.parse(line) as ProjectionRecord;
+              const artworkId = record.artwork_id;
+              
+              // Initialize structure if needed
+              if (!projectionsMap.has(artworkId)) {
+                projectionsMap.set(artworkId, {});
+              }
+              const artworkProjections = projectionsMap.get(artworkId)!;
+              
+              if (!artworkProjections[embeddingType]) {
+                artworkProjections[embeddingType] = {};
+              }
+              
+              // Store coordinates
+              artworkProjections[embeddingType][projectionType] = record.coordinates;
+              count++;
+            } catch (error) {
+              console.warn(`  Failed to parse line: ${line.substring(0, 50)}...`);
+            }
+          }
+        }
+        
+        console.log(`    Loaded ${count} projections`);
+      } catch {
+        // File doesn't exist, skip silently
+      }
+    }
+  }
+  
+  console.log(`  Total artworks with projections: ${projectionsMap.size}`);
+  return projectionsMap;
+}
+
 async function createIndex(esClient: any, forceRecreate: boolean = false) {
   const exists = await esClient.indices.exists({ index: INDEX_NAME });
   
@@ -146,7 +229,8 @@ async function indexArtworks(
   esClient: any,
   artworks: ParsedArtwork[], 
   embeddings: { [key in ModelKey]?: Map<string, EmbeddingRecord> },
-  descriptions: Map<string, DescriptionRecord>
+  descriptions: Map<string, DescriptionRecord>,
+  projections: Map<string, ProjectionData>
 ) {
   const BATCH_SIZE = 100;
   let indexed = 0;
@@ -171,6 +255,9 @@ async function indexArtworks(
       // Get description for this artwork
       const description = descriptions.get(artworkId);
       
+      // Get projections for this artwork
+      const artworkProjections = projections.get(artworkId);
+      
       // Create document - artwork is already flattened from parser
       const doc: any = {
         // Spread all artwork fields (already flattened)
@@ -181,6 +268,14 @@ async function indexArtworks(
         embeddings: artworkEmbeddings,
         indexed_at: new Date().toISOString()
       };
+      
+      // Add projections if available
+      if (artworkProjections) {
+        doc.projections = artworkProjections;
+        doc.projection_metadata = {
+          last_updated: new Date().toISOString()
+        };
+      }
       
       // Add visual descriptions in container if available
       if (description) {
@@ -285,7 +380,7 @@ async function main() {
   
   // Connect to Elasticsearch
   console.log('\nConnecting to Elasticsearch...');
-  const esClient = await createElasticsearchClient();
+  const esClient = createElasticsearchClient();
   
   try {
     const health = await esClient.cluster.health({});
@@ -380,9 +475,13 @@ async function main() {
   const descCoverage = artworks.filter(a => descriptions.has(a.id)).length;
   console.log(`  descriptions: ${descCoverage}/${artworks.length} (${(descCoverage/artworks.length*100).toFixed(1)}%)`);
   
+  // Load projections
+  console.log('\nLoading projections...');
+  const projections = await loadProjections();
+  
   // Index artworks
   console.log('\nIndexing artworks...');
-  const { indexed, failed } = await indexArtworks(esClient, artworks, embeddings, descriptions);
+  const { indexed, failed } = await indexArtworks(esClient, artworks, embeddings, descriptions, projections);
   
   console.log('\n✅ Indexing complete!');
   console.log(`   Indexed: ${indexed}`);

@@ -129,14 +129,26 @@ ELASTICSEARCH_API_KEY=your-api-key
 
 The client will automatically detect and use cloud credentials when available.
 
-### 7. Index the artworks
+### 7. Generate UMAP projections for visualization
+
+Generate 2D and 3D projections of embeddings for the explore/visualize page:
+
+```bash
+# Generate projections for visualization
+npm run 9-generate-umap-projections-met -- --limit 100  # Test with 100
+npm run 9-generate-umap-projections-met                  # Process all
+```
+
+This creates dimensionality-reduced projections for interactive visualization of the embedding space.
+
+### 8. Index the artworks
 
 ```bash
 # First time setup - creates new index
-npm run index-artworks -- --force --limit 100
+npm run 10-index-artworks -- --force --limit 100
 
 # Subsequent runs - preserves existing data
-npm run index-artworks
+npm run 10-index-artworks
 ```
 
 **Important**: 
@@ -179,7 +191,7 @@ The system supports multiple museum collections through a parser architecture. T
    - Current dataset: ~$0.94 per model
    - Total for both models: ~$1.88
 
-### 8. Generate embeddings
+### 9. Generate embeddings
 
 The system generates multimodal embeddings using both text metadata and artwork images for enhanced semantic understanding.
 
@@ -257,16 +269,20 @@ npm run 5-generate-siglip2-embeddings-met                   # Process all (resum
 npm run 4-generate-jina-embeddings-met -- --limit 100      # Test with 100 (resumes by default)
 npm run 4-generate-jina-embeddings-met                     # Process all (resumes by default)
 
-# 5. Index everything to Elasticsearch (includes embeddings and descriptions)
-npm run 6-index-artworks -- --force
+# 5. Generate AI-curated similar artworks (optional but recommended)
+npm run 6-generate-similar-artworks-met -- --limit 100  # Test with 100
+npm run 6-generate-similar-artworks-met                  # Process all
 
-# 6. Generate AI-curated similar artworks (optional but recommended)
-npm run 7-generate-similar-artworks-met -- --limit 100  # Test with 100
-npm run 7-generate-similar-artworks-met                  # Process all
+# 6. Update Elasticsearch with similar artwork data
+npm run 7-update-similarities-met -- --limit 100        # Update 100
+npm run 7-update-similarities-met                        # Update all
 
-# 7. Update Elasticsearch with similar artwork data
-npm run 8-update-similarities-met -- --limit 100        # Update 100
-npm run 8-update-similarities-met                        # Update all
+# 7. Generate UMAP projections for visualization
+npm run 9-generate-umap-projections-met -- --limit 100  # Test with 100
+npm run 9-generate-umap-projections-met                  # Process all
+
+# 8. Index everything to Elasticsearch (includes embeddings, descriptions, and projections)
+npm run 10-index-artworks -- --force
 ```
 
 **Quality Control**: Use `npm run compare-met-coverage` periodically to ensure all eligible artworks have been processed. The script identifies paintings from MetObjects.csv that are missing descriptions, helping maintain complete coverage.
@@ -275,7 +291,7 @@ npm run 8-update-similarities-met                        # Update all
 
 The file-based approach allows for resumable generation and easier data portability between environments.
 
-### 9. Start the application
+### 10. Start the application
 
 ```bash
 npm run dev
@@ -305,14 +321,17 @@ All Met scripts are numbered to indicate the recommended execution order:
 - `npm run 5-generate-siglip2-embeddings-met` - Generate SigLIP 2 cross-modal embeddings
   - `--limit=N` - Only process N artworks
   - `--batch-size=N` - Save progress every N artworks (default: 16)
-- `npm run 6-index-artworks` - Index artworks into Elasticsearch
-  - `--force` - Force recreate the index (WARNING: deletes all existing data)
-  - `--limit N` - Only index N artworks (useful for testing)
-- `npm run 7-generate-similar-artworks-met` - Generate AI-curated similar artwork recommendations
+- `npm run 6-generate-similar-artworks-met` - Generate AI-curated similar artwork recommendations
   - `--limit=N` - Only process N artworks
   - `--artwork-ids=id1,id2` - Process specific artwork IDs (comma-separated)
-- `npm run 8-update-similarities-met` - Update Elasticsearch with AI-curated similar artworks
+- `npm run 7-update-similarities-met` - Update Elasticsearch with AI-curated similar artworks
   - `--limit=N` - Only update N artworks
+- `npm run 9-generate-umap-projections-met` - Generate UMAP projections for visualization
+  - `--limit=N` - Only process N artworks
+  - Creates 2D and 3D projections for each embedding type
+- `npm run 10-index-artworks` - Index artworks into Elasticsearch
+  - `--force` - Force recreate the index (WARNING: deletes all existing data)
+  - `--limit N` - Only index N artworks (useful for testing)
 - `npm run setup-siglip2` - Install Python dependencies for SigLIP 2 (one-time setup)
 - `npm run dev` - Start the development server
 - `npm run build` - Build for production
@@ -325,9 +344,10 @@ All Met scripts are numbered to indicate the recommended execution order:
 2. **Optional but recommended** → Edit descriptions for quality and consistency (Gemini)
 3. **Artwork images** → Generate SigLIP 2 embeddings (local Python script)
 4. **Metadata + descriptions** → Generate Jina v3 embeddings (local Python script)
-5. **All data** → Index to Elasticsearch with embeddings
-6. **Optional but recommended** → Generate AI-curated similar artworks (Gemini 2.5 Flash)
-7. **Similar artwork data** → Update Elasticsearch documents with curated recommendations
+5. **Optional but recommended** → Generate AI-curated similar artworks (Gemini 2.5 Flash)
+6. **Similar artwork data** → Update Elasticsearch documents with curated recommendations
+7. **Embeddings** → Generate UMAP projections for visualization (2D/3D dimensionality reduction)
+8. **All data** → Index to Elasticsearch with embeddings, descriptions, and projections
 
 ### Search Pipeline  
 1. **User query** → Modal API (single call) → Both embeddings

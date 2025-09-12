@@ -248,3 +248,25 @@ export interface MultiSearchResponse {
 }
 
 export type SearchMode = 'keyword' | 'semantic' | 'hybrid';
+
+// UMAP Projection types
+export interface ProjectionPoint {
+  artwork_id: string;
+  embedding_type: string;
+  projection_type: string;
+  coordinates: [number, number] | [number, number, number];
+  metadata: {
+    title: string;
+    artist: string;
+    date: string;
+    medium: string;
+    tags: string[];
+    primaryImageSmall: string;
+    alt_text: string;
+  };
+  timestamp: string;
+}
+
+export type ProjectionType = 'standard_2d' | 'tight_2d' | 'loose_2d' | 'standard_3d';
+export type EmbeddingType = 'jina_v3' | 'siglip2';
+export type ColorByOption = 'artist' | 'period' | 'tags';
