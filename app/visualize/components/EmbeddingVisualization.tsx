@@ -316,14 +316,21 @@ export function EmbeddingVisualization({
       if (searchResults.length > 0) {
         const score = searchResultsMap.get(point.artwork_id);
         if (score !== undefined) {
-          // Map score to opacity (0.3 to 1.0)
-          alpha = 0.3 + (score / maxScore) * 0.7;
-          // Slightly larger for high-relevance results
-          pointSize = score / maxScore > 0.8 ? 4 : 3;
+          // Find the rank of this result (1-based)
+          const rank = searchResults.findIndex(r => r.id === point.artwork_id) + 1;
+          const normalizedRank = rank / searchResults.length; // 0 to 1, where 0 is best
+          
+          // Opacity: top results are fully opaque, bottom results more transparent
+          // Range: 0.2 to 1.0 (broader range than before)
+          alpha = 1.0 - (normalizedRank * 0.8);
+          
+          // Size: top results are larger, with smooth scaling
+          // Range: 2 to 6 pixels
+          pointSize = 6 - (normalizedRank * 4);
         } else {
-          // Not in search results
-          alpha = 0.05;
-          pointSize = 2;
+          // Not in search results - very faint and small
+          alpha = 0.1;
+          pointSize = 1.5;
         }
       }
       
@@ -363,24 +370,35 @@ export function EmbeddingVisualization({
       const x = (e.clientX - rect.left - offset.x - rect.width / 2) / scale;
       const y = (e.clientY - rect.top - offset.y - rect.height / 2) / scale;
       
-      let found = false;
+      // Find all points within hover radius, accounting for zoom
+      const hoverRadius = Math.max(5 / scale, 2); // Adjust radius based on zoom
+      const candidates: Array<{point: ProjectionPoint, dist: number, score: number}> = [];
+      
       for (const point of data) {
         const px = ((point as ProjectionPoint & {normalizedCoords: number[]}).normalizedCoords[0] - 0.5) * rect.width * 0.8;
         const py = ((point as ProjectionPoint & {normalizedCoords: number[]}).normalizedCoords[1] - 0.5) * rect.height * 0.8;
         const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
         
-        if (dist < 5) {
-          setHoveredPoint(point);
-          found = true;
-          break;
+        if (dist < hoverRadius) {
+          const score = searchResultsMap.get(point.artwork_id) || 0;
+          candidates.push({ point, dist, score });
         }
       }
       
-      if (!found) {
+      if (candidates.length > 0) {
+        // Sort by: 1) search relevance (higher first), 2) distance (closer first)
+        candidates.sort((a, b) => {
+          if (searchResults.length > 0 && a.score !== b.score) {
+            return b.score - a.score; // Higher scores first
+          }
+          return a.dist - b.dist; // Closer points first
+        });
+        setHoveredPoint(candidates[0].point);
+      } else {
         setHoveredPoint(null);
       }
     }
-  }, [isDragging, dragStart, data, scale, offset]);
+  }, [isDragging, dragStart, data, scale, offset, searchResults.length, searchResultsMap]);
   
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -391,13 +409,34 @@ export function EmbeddingVisualization({
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     
     // Calculate minimum zoom to fit content in viewport
-    // The content is drawn with coordinates multiplied by 0.8
-    // So to fill the viewport, we need scale = 1 / 0.8 = 1.25
-    // We'll use 1.2 to have a tiny bit of padding
     const effectiveMinScale = 1.2;
     
-    setScale(s => Math.max(effectiveMinScale, Math.min(10, s * delta)));
-  }, []);
+    // Get mouse position relative to canvas
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // Calculate new scale
+    const newScale = Math.max(effectiveMinScale, Math.min(50, scale * delta));
+    
+    // Adjust offset to zoom towards mouse position
+    // The mouse position in world coordinates should remain the same after zoom
+    // worldX = (mouseX - offset.x - rect.width/2) / scale
+    // After zoom: worldX = (mouseX - newOffset.x - rect.width/2) / newScale
+    // Solving for newOffset.x:
+    // newOffset.x = mouseX - rect.width/2 - worldX * newScale
+    const worldX = (mouseX - offset.x - rect.width / 2) / scale;
+    const worldY = (mouseY - offset.y - rect.height / 2) / scale;
+    
+    const newOffsetX = mouseX - rect.width / 2 - worldX * newScale;
+    const newOffsetY = mouseY - rect.height / 2 - worldY * newScale;
+    
+    setScale(newScale);
+    setOffset({ x: newOffsetX, y: newOffsetY });
+  }, [scale, offset]);
   
   if (loading) {
     return (

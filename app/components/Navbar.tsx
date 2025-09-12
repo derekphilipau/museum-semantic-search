@@ -39,9 +39,9 @@ export default function Navbar() {
                   <span className="hidden sm:inline">Search</span>
                 </Button>
               </Link>
-              <Link href="/explore">
+              <Link href="/visualize">
                 <Button
-                  variant={pathname === '/explore' ? 'default' : 'ghost'}
+                  variant={pathname === '/visualize' ? 'default' : 'ghost'}
                   size="sm"
                   className="gap-1 sm:gap-2 px-2 sm:px-4"
                 >

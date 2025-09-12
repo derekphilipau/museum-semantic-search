@@ -3,8 +3,6 @@
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
 import { Loader2, Search, Palette, Layers, SlidersHorizontal } from 'lucide-react';
 import { ProjectionType, EmbeddingType, ColorByOption } from '@/app/types';
 
@@ -15,13 +13,11 @@ interface VisualizationControlsProps {
   searchTerm: string;
   artworkCount: number;
   searchResultsCount?: number;
-  searchBalance?: number;
   isSearching?: boolean;
   onEmbeddingTypeChange: (value: EmbeddingType) => void;
   onProjectionTypeChange: (value: ProjectionType) => void;
   onColorByChange: (value: ColorByOption) => void;
   onSearchChange: (value: string) => void;
-  onSearchBalanceChange?: (value: number) => void;
 }
 
 export function VisualizationControls({
@@ -31,13 +27,11 @@ export function VisualizationControls({
   searchTerm,
   artworkCount,
   searchResultsCount = 0,
-  searchBalance = 0.5,
   isSearching = false,
   onEmbeddingTypeChange,
   onProjectionTypeChange,
   onColorByChange,
-  onSearchChange,
-  onSearchBalanceChange
+  onSearchChange
 }: VisualizationControlsProps) {
   return (
     <div className="container mx-auto px-3 sm:px-4 py-2 sm:py-3">
@@ -105,22 +99,6 @@ export function VisualizationControls({
           </Select>
         </div>
 
-        {/* Search Balance Slider - hidden on mobile */}
-        {onSearchBalanceChange && (
-          <div className="hidden md:flex items-center gap-3 min-w-[200px]">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">Keyword</span>
-            <Slider
-              min={0}
-              max={1}
-              step={0.1}
-              value={[searchBalance]}
-              onValueChange={([value]) => onSearchBalanceChange(value)}
-              className="w-[100px]"
-            />
-            <span className="text-xs text-muted-foreground whitespace-nowrap">Semantic</span>
-          </div>
-        )}
-
         {/* Artwork count */}
         <div className="text-sm text-muted-foreground whitespace-nowrap">
           {searchResultsCount > 0 && (
@@ -132,23 +110,6 @@ export function VisualizationControls({
           <span>{artworkCount.toLocaleString()} artworks</span>
         </div>
       </div>
-
-      {/* Mobile-only: Search balance below */}
-      {onSearchBalanceChange && (
-        <div className="flex md:hidden items-center gap-3 mt-3 pt-3 border-t">
-          <Label className="text-xs">Search Mode:</Label>
-          <span className="text-xs text-muted-foreground">Keyword</span>
-          <Slider
-            min={0}
-            max={1}
-            step={0.1}
-            value={[searchBalance]}
-            onValueChange={([value]) => onSearchBalanceChange(value)}
-            className="flex-1"
-          />
-          <span className="text-xs text-muted-foreground">Semantic</span>
-        </div>
-      )}
     </div>
   );
 }

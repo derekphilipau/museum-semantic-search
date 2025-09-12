@@ -22,7 +22,6 @@ export default function ExplorePage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [maxScore, setMaxScore] = useState(1);
   const [isSearching, setIsSearching] = useState(false);
-  const [searchBalance, setSearchBalance] = useState(0.5);
   
   // Ensure client-side only rendering
   useEffect(() => {
@@ -31,7 +30,7 @@ export default function ExplorePage() {
   
   // Debounced search function
   const performSearch = useMemo(
-    () => debounce(async (query: string, balance: number) => {
+    () => debounce(async (query: string, embeddingType: EmbeddingType) => {
       if (!query.trim()) {
         setSearchResults([]);
         setIsSearching(false);
@@ -41,7 +40,7 @@ export default function ExplorePage() {
       setIsSearching(true);
       try {
         const response = await fetch(
-          `/api/explore/search?query=${encodeURIComponent(query)}&balance=${balance}`
+          `/api/visualize/search?query=${encodeURIComponent(query)}&embeddingType=${embeddingType}`
         );
         const data = await response.json();
         
@@ -57,10 +56,10 @@ export default function ExplorePage() {
     []
   );
   
-  // Trigger search when search term changes
+  // Trigger search when search term or embedding type changes
   useEffect(() => {
-    performSearch(searchTerm, searchBalance);
-  }, [searchTerm, searchBalance, performSearch]);
+    performSearch(searchTerm, embeddingType);
+  }, [searchTerm, embeddingType, performSearch]);
   
   // Show loading state until client-side hydration is complete
   if (!isMounted) {
@@ -78,13 +77,11 @@ export default function ExplorePage() {
           searchTerm={searchTerm}
           artworkCount={artworkCount}
           searchResultsCount={searchResults.length}
-          searchBalance={searchBalance}
           isSearching={isSearching}
           onEmbeddingTypeChange={setEmbeddingType}
           onProjectionTypeChange={setProjectionType}
           onColorByChange={setColorBy}
           onSearchChange={setSearchTerm}
-          onSearchBalanceChange={setSearchBalance}
         />
       </div>
       
