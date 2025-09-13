@@ -17,7 +17,6 @@ interface EmbeddingVisualizationProps {
   projectionType: ProjectionType;
   colorBy: ColorByOption;
   searchResults?: SearchResult[];
-  maxScore?: number;
   onDataLoaded?: (count: number) => void;
   highlightedArtworkId?: string | null;
 }
@@ -27,7 +26,6 @@ export function EmbeddingVisualization({
   projectionType,
   colorBy,
   searchResults = [],
-  maxScore = 1,
   onDataLoaded,
   highlightedArtworkId
 }: EmbeddingVisualizationProps) {
@@ -37,18 +35,29 @@ export function EmbeddingVisualization({
   const [loading, setLoading] = useState(true);
   const [hoveredPoint, setHoveredPoint] = useState<ProjectionPoint | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  
-  // Canvas state
-  const [scale, setScale] = useState(1.2);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const [transform, setTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
+  
+  // D3 zoom behavior ref
+  const zoomRef = useRef<d3.ZoomBehavior<HTMLDivElement, unknown> | null>(null);
+  // Ref for hovered point to avoid re-initializing zoom
+  const hoveredPointRef = useRef<ProjectionPoint | null>(null);
   
   // Reset zoom function
   const resetZoom = useCallback(() => {
-    setScale(1.2);
-    setOffset({ x: 0, y: 0 });
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas || !zoomRef.current) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const newTransform = d3.zoomIdentity
+      .translate(rect.width / 2, rect.height / 2)
+      .scale(1.2);
+    setTransform(newTransform);
+    d3.select(container)
+      .transition()
+      .duration(500)
+      .call(zoomRef.current.transform, newTransform);
   }, []);
   
   // Load data
@@ -113,22 +122,16 @@ export function EmbeddingVisualization({
 
   // Track previous search to detect changes
   const prevSearchResultsRef = useRef<typeof searchResults>([]);
-  const animationRef = useRef<number | undefined>(undefined);
   
   // Zoom to search results
   useEffect(() => {
-    if (searchResults.length === 0 || data.length === 0 || canvasSize.width === 0) return;
+    if (searchResults.length === 0 || data.length === 0 || canvasSize.width === 0 || !zoomRef.current) return;
     
     // Check if search results have actually changed
     const searchChanged = searchResults.length !== prevSearchResultsRef.current.length ||
       searchResults.some((r, i) => r.id !== prevSearchResultsRef.current[i]?.id);
     
     if (!searchChanged) return;
-    
-    // Cancel any ongoing animation
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-    }
     
     // Update previous search results
     prevSearchResultsRef.current = searchResults;
@@ -158,50 +161,24 @@ export function EmbeddingVisualization({
     const scaleX = (canvasSize.width - padding) / width;
     const scaleY = (canvasSize.height - padding) / height;
     const targetScale = Math.max(1.2, Math.min(scaleX, scaleY, 5)); // Min zoom of 1.2x, max zoom of 5x
-    const targetOffset = {
-      x: -centerX * targetScale,
-      y: -centerY * targetScale
-    };
     
-    // Capture current values at animation start
-    const currentScale = scale;
-    const currentOffset = { ...offset };
+    // Calculate translation to center the results
+    const targetTranslateX = canvasSize.width / 2 - centerX * targetScale;
+    const targetTranslateY = canvasSize.height / 2 - centerY * targetScale;
     
-    // Animate to new position
-    const animationDuration = 500;
-    const startTime = Date.now();
-    
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / animationDuration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3); // Ease out cubic
-      
-      const newScale = currentScale + (targetScale - currentScale) * eased;
-      const newOffset = {
-        x: currentOffset.x + (targetOffset.x - currentOffset.x) * eased,
-        y: currentOffset.y + (targetOffset.y - currentOffset.y) * eased
-      };
-      
-      setScale(newScale);
-      setOffset(newOffset);
-      
-      if (progress < 1) {
-        animationRef.current = requestAnimationFrame(animate);
-      } else {
-        animationRef.current = undefined;
-      }
-    };
-    
-    animate();
-    
-    // Cleanup animation on unmount
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchResults, data, canvasSize.width, canvasSize.height, searchResultsMap]); // Removed scale and offset from dependencies
+    // Use d3-zoom to animate to the new transform
+    const container = containerRef.current;
+    if (container) {
+      const newTransform = d3.zoomIdentity
+        .translate(targetTranslateX, targetTranslateY)
+        .scale(targetScale);
+      setTransform(newTransform);
+      d3.select(container)
+        .transition()
+        .duration(500)
+        .call(zoomRef.current.transform, newTransform);
+    }
+  }, [searchResults, data, canvasSize.width, canvasSize.height, searchResultsMap]);
 
   // Update canvas size on mount and resize
   useEffect(() => {
@@ -218,6 +195,124 @@ export function EmbeddingVisualization({
     window.addEventListener('resize', updateCanvasSize);
     return () => window.removeEventListener('resize', updateCanvasSize);
   }, []);
+  
+  // Calculate default transform for reset button visibility
+  const getDefaultTransform = useCallback(() => {
+    if (!canvasRef.current) return { x: 0, y: 0 };
+    const rect = canvasRef.current.getBoundingClientRect();
+    return { x: rect.width / 2, y: rect.height / 2 };
+  }, []);
+  
+  // Update hovered point based on mouse position
+  const updateHoveredPoint = useCallback((x: number, y: number, transform: d3.ZoomTransform) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    
+    // Find all points within hover radius
+    // Match the partial scaling of points
+    const hoverRadius = 5 * Math.sqrt(transform.k) / transform.k;
+    const candidates: Array<{point: ProjectionPoint, dist: number, score: number}> = [];
+    
+    for (const point of data) {
+      const px = ((point as ProjectionPoint & {normalizedCoords: number[]}).normalizedCoords[0] - 0.5) * rect.width * 0.8;
+      const py = ((point as ProjectionPoint & {normalizedCoords: number[]}).normalizedCoords[1] - 0.5) * rect.height * 0.8;
+      const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
+      
+      if (dist < hoverRadius) {
+        const score = searchResultsMap.get(point.artwork_id) || 0;
+        candidates.push({ point, dist, score });
+      }
+    }
+    
+    if (candidates.length > 0) {
+      // Find which point is actually visible (drawn last) at the cursor position
+      // We need to respect the same drawing order as in the render function
+      const sortedCandidates = candidates.sort((a, b) => {
+        // Always prefer highlighted point (drawn last)
+        if (highlightedArtworkId === a.point.artwork_id) return -1;
+        if (highlightedArtworkId === b.point.artwork_id) return 1;
+        
+        // Then sort by relevance score (higher scores drawn later, so should be selected)
+        const scoreA = a.score;
+        const scoreB = b.score;
+        if (scoreA !== scoreB) {
+          return scoreB - scoreA; // Higher scores first (drawn last, on top)
+        }
+        
+        // If same score, closest to cursor
+        return a.dist - b.dist;
+      });
+      
+      // Select the first point (highest priority based on drawing order)
+      const newHoveredPoint = sortedCandidates[0].point;
+      hoveredPointRef.current = newHoveredPoint;
+      setHoveredPoint(newHoveredPoint);
+    } else {
+      hoveredPointRef.current = null;
+      setHoveredPoint(null);
+    }
+  }, [data, searchResultsMap, highlightedArtworkId]);
+  
+  // Initialize d3-zoom
+  useEffect(() => {
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+    
+    // Create zoom behavior
+    const zoom = d3.zoom<HTMLDivElement, unknown>()
+      .scaleExtent([1.2, 100])
+      .on('zoom', (event) => {
+        setTransform(event.transform);
+      });
+    
+    // Apply zoom behavior to container (not canvas)
+    const selection = d3.select(container);
+    selection.call(zoom);
+    
+    // Set initial transform with proper centering
+    // The visualization is drawn centered at (0,0) with scale 0.8 of canvas size
+    // So we need to translate to center of canvas
+    const rect = canvas.getBoundingClientRect();
+    const initialTransform = d3.zoomIdentity
+      .translate(rect.width / 2, rect.height / 2)
+      .scale(1.2);
+    selection.call(zoom.transform, initialTransform);
+    
+    // Add mousemove handler for hover detection on canvas
+    d3.select(canvas).on('mousemove.hover', (event) => {
+      const [x, y] = d3.pointer(event);
+      setMousePos({ x: event.clientX, y: event.clientY });
+      
+      const currentTransform = d3.zoomTransform(container);
+      const worldX = (x - currentTransform.x) / currentTransform.k;
+      const worldY = (y - currentTransform.y) / currentTransform.k;
+      
+      updateHoveredPoint(worldX, worldY, currentTransform);
+    });
+    
+    // Add click handler on canvas
+    d3.select(canvas).on('click.open', (event) => {
+      // Prevent click from triggering during drag
+      if (event.defaultPrevented) return;
+      
+      if (hoveredPointRef.current) {
+        window.open(`/artwork/${hoveredPointRef.current.artwork_id}`, '_blank', 'noopener,noreferrer');
+      }
+    });
+    
+    // Store zoom behavior reference
+    zoomRef.current = zoom;
+    
+    return () => {
+      // Clean up all listeners
+      selection.on('.zoom', null);
+      d3.select(canvas).on('mousemove.hover', null);
+      d3.select(canvas).on('click.open', null);
+    };
+  }, [updateHoveredPoint, data]);
   
   // Color utility functions
   const getColorValue = useCallback((point: ProjectionPoint, colorBy: ColorByOption): string => {
@@ -273,8 +368,8 @@ export function EmbeddingVisualization({
     return colorScale[value] || '#999';
   }, [getColorValue]);
   
-  // Draw canvas
-  useEffect(() => {
+  // Draw canvas function
+  const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !data.length) return;
     
@@ -291,10 +386,10 @@ export function EmbeddingVisualization({
     // Clear canvas
     ctx.clearRect(0, 0, rect.width, rect.height);
     
-    // Apply transformations
+    // Apply d3-zoom transformations
     ctx.save();
-    ctx.translate(offset.x + rect.width / 2, offset.y + rect.height / 2);
-    ctx.scale(scale, scale);
+    ctx.translate(transform.x, transform.y);
+    ctx.scale(transform.k, transform.k);
     
     // Create color scale
     const colorScale = createColorScale(data, colorBy);
@@ -345,7 +440,7 @@ export function EmbeddingVisualization({
       // At scale 1: pointSize = basePointSize
       // At scale 4: pointSize = basePointSize * 2  
       // At scale 16: pointSize = basePointSize * 4
-      const pointSize = basePointSize * Math.sqrt(scale) / scale;
+      const pointSize = basePointSize * Math.sqrt(transform.k) / transform.k;
       
       // Check if this point is highlighted
       const isHighlighted = highlightedArtworkId === point.artwork_id;
@@ -362,131 +457,22 @@ export function EmbeddingVisualization({
       // Draw highlight ring if this is the highlighted artwork
       if (isHighlighted) {
         ctx.strokeStyle = '#ff0000'; // Red highlight
-        ctx.lineWidth = 2 * Math.sqrt(scale) / scale; // Use same scaling as points
+        ctx.lineWidth = 2 * Math.sqrt(transform.k) / transform.k; // Use same scaling as points
         ctx.globalAlpha = 1;
         ctx.beginPath();
-        ctx.arc(x, y, pointSize + (4 * Math.sqrt(scale) / scale), 0, 2 * Math.PI);
+        ctx.arc(x, y, pointSize + (4 * Math.sqrt(transform.k) / transform.k), 0, 2 * Math.PI);
         ctx.stroke();
       }
     });
     
     ctx.restore();
-  }, [data, scale, offset, colorBy, searchResults, searchResultsMap, maxScore, createColorScale, getPointColor, highlightedArtworkId]);
+  }, [data, colorBy, searchResults, searchResultsMap, createColorScale, getPointColor, highlightedArtworkId, transform]);
   
-  // Mouse event handlers
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    // If we're hovering over a point, don't start dragging
-    if (hoveredPoint) {
-      return;
-    }
-    setIsDragging(true);
-    setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
-  }, [offset, hoveredPoint]);
+  // Draw canvas on data or transform changes
+  useEffect(() => {
+    drawCanvas();
+  }, [drawCanvas, transform]);
   
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    setMousePos({ x: e.clientX, y: e.clientY });
-    
-    if (isDragging) {
-      setOffset({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y
-      });
-    } else {
-      // Check for hover
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      
-      const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX - rect.left - offset.x - rect.width / 2) / scale;
-      const y = (e.clientY - rect.top - offset.y - rect.height / 2) / scale;
-      
-      // Find all points within hover radius
-      // Match the partial scaling of points
-      const hoverRadius = 5 * Math.sqrt(scale) / scale;
-      const candidates: Array<{point: ProjectionPoint, dist: number, score: number}> = [];
-      
-      for (const point of data) {
-        const px = ((point as ProjectionPoint & {normalizedCoords: number[]}).normalizedCoords[0] - 0.5) * rect.width * 0.8;
-        const py = ((point as ProjectionPoint & {normalizedCoords: number[]}).normalizedCoords[1] - 0.5) * rect.height * 0.8;
-        const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
-        
-        if (dist < hoverRadius) {
-          const score = searchResultsMap.get(point.artwork_id) || 0;
-          candidates.push({ point, dist, score });
-        }
-      }
-      
-      if (candidates.length > 0) {
-        // Find which point is actually visible (drawn last) at the cursor position
-        // We need to respect the same drawing order as in the render function
-        const sortedCandidates = candidates.sort((a, b) => {
-          // Always prefer highlighted point (drawn last)
-          if (highlightedArtworkId === a.point.artwork_id) return -1;
-          if (highlightedArtworkId === b.point.artwork_id) return 1;
-          
-          // Then sort by relevance score (higher scores drawn later, so should be selected)
-          const scoreA = a.score;
-          const scoreB = b.score;
-          if (scoreA !== scoreB) {
-            return scoreB - scoreA; // Higher scores first (drawn last, on top)
-          }
-          
-          // If same score, closest to cursor
-          return a.dist - b.dist;
-        });
-        
-        // Select the first point (highest priority based on drawing order)
-        setHoveredPoint(sortedCandidates[0].point);
-      } else {
-        setHoveredPoint(null);
-      }
-    }
-  }, [isDragging, dragStart, data, scale, offset, searchResults, searchResultsMap, highlightedArtworkId]);
-  
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-  
-  const handleClick = useCallback(() => {
-    // Open artwork page if we're hovering over a point
-    if (hoveredPoint) {
-      window.open(`/artwork/${hoveredPoint.artwork_id}`, '_blank', 'noopener,noreferrer');
-    }
-  }, [hoveredPoint]);
-  
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    
-    // Calculate minimum zoom to fit content in viewport
-    const effectiveMinScale = 1.2;
-    
-    // Get mouse position relative to canvas
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    
-    // Calculate new scale
-    const newScale = Math.max(effectiveMinScale, Math.min(100, scale * delta));
-    
-    // Adjust offset to zoom towards mouse position
-    // The mouse position in world coordinates should remain the same after zoom
-    // worldX = (mouseX - offset.x - rect.width/2) / scale
-    // After zoom: worldX = (mouseX - newOffset.x - rect.width/2) / newScale
-    // Solving for newOffset.x:
-    // newOffset.x = mouseX - rect.width/2 - worldX * newScale
-    const worldX = (mouseX - offset.x - rect.width / 2) / scale;
-    const worldY = (mouseY - offset.y - rect.height / 2) / scale;
-    
-    const newOffsetX = mouseX - rect.width / 2 - worldX * newScale;
-    const newOffsetY = mouseY - rect.height / 2 - worldY * newScale;
-    
-    setScale(newScale);
-    setOffset({ x: newOffsetX, y: newOffsetY });
-  }, [scale, offset]);
   
   if (loading) {
     return (
@@ -497,22 +483,23 @@ export function EmbeddingVisualization({
   }
   
   return (
-    <div ref={containerRef} className="relative h-full overflow-hidden">
+    <div ref={containerRef} className="relative h-full overflow-hidden" style={{ touchAction: 'none' }}>
       <canvas
         ref={canvasRef}
-        className={`w-full h-full touch-none ${
+        className={`w-full h-full ${
           hoveredPoint ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
         }`}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onClick={handleClick}
-        onWheel={handleWheel}
       />
       
       {/* Reset zoom button */}
-      {(Math.abs(scale - 1.2) > 0.01 || Math.abs(offset.x) > 1 || Math.abs(offset.y) > 1) && (
+      {(() => {
+        const defaultTransform = getDefaultTransform();
+        return (
+          Math.abs(transform.k - 1.2) > 0.01 || 
+          Math.abs(transform.x - defaultTransform.x) > 1 || 
+          Math.abs(transform.y - defaultTransform.y) > 1
+        );
+      })() && (
         <button
           onClick={resetZoom}
           className="absolute top-4 right-4 px-3 py-1 bg-background/80 backdrop-blur-sm border rounded-md text-sm hover:bg-background/90 transition-colors"

@@ -37,7 +37,7 @@ export function VisualizationControls({
     <div className="container mx-auto px-3 sm:px-4 py-2 sm:py-3">
       <div className="flex flex-wrap gap-2 sm:gap-4 items-end">
         {/* Search input - takes more space */}
-        <div className="flex-1 min-w-[200px]">
+        <div className="flex-1 min-w-[210px]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
@@ -57,7 +57,7 @@ export function VisualizationControls({
         <div className="flex items-center gap-1 sm:gap-2">
           <Layers className="h-4 w-4 text-muted-foreground hidden sm:block" />
           <Select value={embeddingType} onValueChange={onEmbeddingTypeChange}>
-            <SelectTrigger className="w-[110px] sm:w-[140px]">
+            <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -73,7 +73,7 @@ export function VisualizationControls({
         <div className="flex items-center gap-1 sm:gap-2">
           <SlidersHorizontal className="h-4 w-4 text-muted-foreground hidden sm:block" />
           <Select value={projectionType} onValueChange={onProjectionTypeChange}>
-            <SelectTrigger className="w-[100px] sm:w-[120px]">
+            <SelectTrigger className="w-[130px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -88,7 +88,7 @@ export function VisualizationControls({
         <div className="flex items-center gap-1 sm:gap-2">
           <Palette className="h-4 w-4 text-muted-foreground hidden sm:block" />
           <Select value={colorBy} onValueChange={onColorByChange}>
-            <SelectTrigger className="w-[80px] sm:w-[100px]">
+            <SelectTrigger className="w-[120px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

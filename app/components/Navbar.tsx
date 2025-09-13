@@ -17,21 +17,18 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4 md:px-6">
-        <div className="flex h-14 items-center justify-between">
+        <div className="flex h-14 items-center justify-between gap-2 sm:gap-4">
           {/* Left side - Title and navigation */}
           <div className="flex items-center gap-6">
             <Link href="/" className="flex flex-col">
-              <h1 className="text-lg font-bold">Museum Semantic Search</h1>
-              <p className="text-xs text-muted-foreground">
-                Explore art through AI-powered visual and textual similarity
-              </p>
+              <h1 className="text-base sm:text-lg font-bold">Museum Semantic Search</h1>
             </Link>
             
             {/* Navigation links */}
             <nav className="flex items-center gap-2 sm:gap-4">
               <Link href="/">
                 <Button
-                  variant={pathname === '/' ? 'default' : 'ghost'}
+                  variant={pathname === '/' ? 'default' : 'outline'}
                   size="sm"
                   className="gap-1 sm:gap-2 px-2 sm:px-4"
                 >
@@ -41,7 +38,7 @@ export default function Navbar() {
               </Link>
               <Link href="/visualize">
                 <Button
-                  variant={pathname === '/visualize' ? 'default' : 'ghost'}
+                  variant={pathname === '/visualize' ? 'default' : 'outline'}
                   size="sm"
                   className="gap-1 sm:gap-2 px-2 sm:px-4"
                 >

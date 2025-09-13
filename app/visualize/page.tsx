@@ -30,7 +30,6 @@ export default function ExplorePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [artworkCount, setArtworkCount] = useState(0);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [maxScore, setMaxScore] = useState(1);
   const [isSearching, setIsSearching] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [hoveredArtworkId, setHoveredArtworkId] = useState<string | null>(null);
@@ -64,7 +63,6 @@ export default function ExplorePage() {
         const data = await response.json();
         
         setSearchResults(data.hits || []);
-        setMaxScore(data.maxScore || 1);
       } catch (error) {
         console.error('Search error:', error);
         setSearchResults([]);
@@ -114,7 +112,6 @@ export default function ExplorePage() {
               projectionType={projectionType}
               colorBy={colorBy}
               searchResults={searchResults.map(r => ({ id: r.id, score: r.score }))}
-              maxScore={maxScore}
               onDataLoaded={setArtworkCount}
               highlightedArtworkId={hoveredArtworkId}
             />
