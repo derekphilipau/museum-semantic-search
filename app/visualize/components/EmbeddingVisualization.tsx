@@ -19,6 +19,7 @@ interface EmbeddingVisualizationProps {
   searchResults?: SearchResult[];
   maxScore?: number;
   onDataLoaded?: (count: number) => void;
+  highlightedArtworkId?: string | null;
 }
 
 export function EmbeddingVisualization({
@@ -27,7 +28,8 @@ export function EmbeddingVisualization({
   colorBy,
   searchResults = [],
   maxScore = 1,
-  onDataLoaded
+  onDataLoaded,
+  highlightedArtworkId
 }: EmbeddingVisualizationProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -297,8 +299,12 @@ export function EmbeddingVisualization({
     // Create color scale
     const colorScale = createColorScale(data, colorBy);
     
-    // Sort points by relevance (draw less relevant first)
+    // Sort points by relevance (draw less relevant first), but always draw highlighted last
     const sortedData = [...data].sort((a, b) => {
+      // Always draw highlighted point last
+      if (highlightedArtworkId === a.artwork_id) return 1;
+      if (highlightedArtworkId === b.artwork_id) return -1;
+      
       const scoreA = searchResultsMap.get(a.artwork_id) || 0;
       const scoreB = searchResultsMap.get(b.artwork_id) || 0;
       return scoreA - scoreB;
@@ -311,7 +317,7 @@ export function EmbeddingVisualization({
       
       // Calculate opacity based on search results
       let alpha = 0.8;
-      let pointSize = 3;
+      let basePointSize = 3;
       
       if (searchResults.length > 0) {
         const score = searchResultsMap.get(point.artwork_id);
@@ -326,13 +332,23 @@ export function EmbeddingVisualization({
           
           // Size: top results are larger, with smooth scaling
           // Range: 2 to 6 pixels
-          pointSize = 6 - (normalizedRank * 4);
+          basePointSize = 6 - (normalizedRank * 4);
         } else {
           // Not in search results - very faint and small
           alpha = 0.1;
-          pointSize = 1.5;
+          basePointSize = 2;
         }
       }
+      
+      // Scale point size partially with zoom
+      // Using square root gives a nice balance - points grow but at a slower rate than zoom
+      // At scale 1: pointSize = basePointSize
+      // At scale 4: pointSize = basePointSize * 2  
+      // At scale 16: pointSize = basePointSize * 4
+      const pointSize = basePointSize * Math.sqrt(scale) / scale;
+      
+      // Check if this point is highlighted
+      const isHighlighted = highlightedArtworkId === point.artwork_id;
       
       // Get color
       ctx.fillStyle = getPointColor(point, colorBy, colorScale);
@@ -342,10 +358,20 @@ export function EmbeddingVisualization({
       ctx.beginPath();
       ctx.arc(x, y, pointSize, 0, 2 * Math.PI);
       ctx.fill();
+      
+      // Draw highlight ring if this is the highlighted artwork
+      if (isHighlighted) {
+        ctx.strokeStyle = '#ff0000'; // Red highlight
+        ctx.lineWidth = 2 * Math.sqrt(scale) / scale; // Use same scaling as points
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(x, y, pointSize + (4 * Math.sqrt(scale) / scale), 0, 2 * Math.PI);
+        ctx.stroke();
+      }
     });
     
     ctx.restore();
-  }, [data, scale, offset, colorBy, searchResults, searchResultsMap, maxScore, createColorScale, getPointColor]);
+  }, [data, scale, offset, colorBy, searchResults, searchResultsMap, maxScore, createColorScale, getPointColor, highlightedArtworkId]);
   
   // Mouse event handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -370,8 +396,9 @@ export function EmbeddingVisualization({
       const x = (e.clientX - rect.left - offset.x - rect.width / 2) / scale;
       const y = (e.clientY - rect.top - offset.y - rect.height / 2) / scale;
       
-      // Find all points within hover radius, accounting for zoom
-      const hoverRadius = Math.max(5 / scale, 2); // Adjust radius based on zoom
+      // Find all points within hover radius
+      // Match the partial scaling of points
+      const hoverRadius = 5 * Math.sqrt(scale) / scale;
       const candidates: Array<{point: ProjectionPoint, dist: number, score: number}> = [];
       
       for (const point of data) {
@@ -386,19 +413,31 @@ export function EmbeddingVisualization({
       }
       
       if (candidates.length > 0) {
-        // Sort by: 1) search relevance (higher first), 2) distance (closer first)
-        candidates.sort((a, b) => {
-          if (searchResults.length > 0 && a.score !== b.score) {
-            return b.score - a.score; // Higher scores first
+        // Find which point is actually visible (drawn last) at the cursor position
+        // We need to respect the same drawing order as in the render function
+        const sortedCandidates = candidates.sort((a, b) => {
+          // Always prefer highlighted point (drawn last)
+          if (highlightedArtworkId === a.point.artwork_id) return -1;
+          if (highlightedArtworkId === b.point.artwork_id) return 1;
+          
+          // Then sort by relevance score (higher scores drawn later, so should be selected)
+          const scoreA = a.score;
+          const scoreB = b.score;
+          if (scoreA !== scoreB) {
+            return scoreB - scoreA; // Higher scores first (drawn last, on top)
           }
-          return a.dist - b.dist; // Closer points first
+          
+          // If same score, closest to cursor
+          return a.dist - b.dist;
         });
-        setHoveredPoint(candidates[0].point);
+        
+        // Select the first point (highest priority based on drawing order)
+        setHoveredPoint(sortedCandidates[0].point);
       } else {
         setHoveredPoint(null);
       }
     }
-  }, [isDragging, dragStart, data, scale, offset, searchResults.length, searchResultsMap]);
+  }, [isDragging, dragStart, data, scale, offset, searchResults, searchResultsMap, highlightedArtworkId]);
   
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -420,7 +459,7 @@ export function EmbeddingVisualization({
     const mouseY = e.clientY - rect.top;
     
     // Calculate new scale
-    const newScale = Math.max(effectiveMinScale, Math.min(50, scale * delta));
+    const newScale = Math.max(effectiveMinScale, Math.min(100, scale * delta));
     
     // Adjust offset to zoom towards mouse position
     // The mouse position in world coordinates should remain the same after zoom
@@ -450,7 +489,9 @@ export function EmbeddingVisualization({
     <div ref={containerRef} className="relative h-full overflow-hidden">
       <canvas
         ref={canvasRef}
-        className="w-full h-full cursor-grab active:cursor-grabbing touch-none"
+        className={`w-full h-full touch-none ${
+          hoveredPoint ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+        }`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

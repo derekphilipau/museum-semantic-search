@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { EmbeddingVisualization } from './components/EmbeddingVisualization';
 import { VisualizationControls } from './components/VisualizationControls';
+import { SearchResultsPanel } from './components/SearchResultsPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ProjectionType, EmbeddingType, ColorByOption } from '@/app/types';
 import debounce from 'lodash/debounce';
@@ -10,6 +11,15 @@ import debounce from 'lodash/debounce';
 interface SearchResult {
   id: string;
   score: number;
+  artwork?: {
+    id: string;
+    title: string;
+    artist?: string;
+    date?: string;
+    primaryImageSmall?: string;
+    medium?: string;
+    department?: string;
+  };
 }
 
 export default function ExplorePage() {
@@ -22,10 +32,19 @@ export default function ExplorePage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [maxScore, setMaxScore] = useState(1);
   const [isSearching, setIsSearching] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [hoveredArtworkId, setHoveredArtworkId] = useState<string | null>(null);
   
-  // Ensure client-side only rendering
+  // Check if mobile on mount
   useEffect(() => {
     setIsMounted(true);
+    // Default to expanded on desktop
+    const checkScreenSize = () => {
+      setIsExpanded(window.innerWidth >= 1024);
+    };
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
   
   // Debounced search function
@@ -52,7 +71,7 @@ export default function ExplorePage() {
       } finally {
         setIsSearching(false);
       }
-    }, 300),
+    }, 500),
     []
   );
   
@@ -85,18 +104,41 @@ export default function ExplorePage() {
         />
       </div>
       
-      {/* Visualization area */}
-      <div className="flex-1 p-4 overflow-hidden">
-        <ErrorBoundary>
-          <EmbeddingVisualization
-            embeddingType={embeddingType}
-            projectionType={projectionType}
-            colorBy={colorBy}
-            searchResults={searchResults}
-            maxScore={maxScore}
-            onDataLoaded={setArtworkCount}
-          />
-        </ErrorBoundary>
+      {/* Main content area with visualization and results */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Visualization area */}
+        <div className="flex-1 p-4 overflow-hidden">
+          <ErrorBoundary>
+            <EmbeddingVisualization
+              embeddingType={embeddingType}
+              projectionType={projectionType}
+              colorBy={colorBy}
+              searchResults={searchResults.map(r => ({ id: r.id, score: r.score }))}
+              maxScore={maxScore}
+              onDataLoaded={setArtworkCount}
+              highlightedArtworkId={hoveredArtworkId}
+            />
+          </ErrorBoundary>
+        </div>
+        
+        {/* Search results sidebar */}
+        {searchTerm && (
+          <div className={`border-l bg-background overflow-hidden transition-all duration-300 ${
+            isExpanded ? 'w-96' : 'w-32'
+          }`}>
+            <SearchResultsPanel
+              searchResults={searchResults}
+              searchTerm={searchTerm}
+              isSearching={isSearching}
+              artworks={searchResults
+                .map(r => r.artwork)
+                .filter((artwork): artwork is NonNullable<typeof artwork> => artwork !== undefined)}
+              isExpanded={isExpanded}
+              onToggleExpanded={() => setIsExpanded(!isExpanded)}
+              onHoverArtwork={setHoveredArtworkId}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

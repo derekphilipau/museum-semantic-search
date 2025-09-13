@@ -36,10 +36,21 @@ export async function GET(request: NextRequest) {
       200 // Get more results for visualization
     );
     
-    // Extract artwork IDs and scores
+    // Extract artwork IDs, scores, and basic metadata
     const hits = results.hits.map(hit => ({
       id: hit._source.id,
-      score: hit._score
+      score: hit._score,
+      artwork: {
+        id: hit._source.id,
+        title: hit._source.title,
+        artist: hit._source.artist,
+        date: hit._source.date,
+        primaryImageSmall: typeof hit._source.image === 'object' && hit._source.image?.thumbnailUrl 
+          ? hit._source.image.thumbnailUrl 
+          : typeof hit._source.image === 'string' ? hit._source.image : '',
+        medium: hit._source.medium,
+        department: hit._source.department
+      }
     }));
     
     const maxScore = hits[0]?.score || 1;
