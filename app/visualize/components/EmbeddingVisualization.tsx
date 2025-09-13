@@ -375,9 +375,13 @@ export function EmbeddingVisualization({
   
   // Mouse event handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // If we're hovering over a point, don't start dragging
+    if (hoveredPoint) {
+      return;
+    }
     setIsDragging(true);
     setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
-  }, [offset]);
+  }, [offset, hoveredPoint]);
   
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     setMousePos({ x: e.clientX, y: e.clientY });
@@ -443,6 +447,13 @@ export function EmbeddingVisualization({
     setIsDragging(false);
   }, []);
   
+  const handleClick = useCallback(() => {
+    // Open artwork page if we're hovering over a point
+    if (hoveredPoint) {
+      window.open(`/artwork/${hoveredPoint.artwork_id}`, '_blank', 'noopener,noreferrer');
+    }
+  }, [hoveredPoint]);
+  
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
@@ -496,6 +507,7 @@ export function EmbeddingVisualization({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onClick={handleClick}
         onWheel={handleWheel}
       />
       

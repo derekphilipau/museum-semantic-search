@@ -190,6 +190,10 @@ The `/visualize` page lets you explore how artworks cluster in the embedding spa
 - Search to highlight relevant results. Larger, brighter dots rank higher
 - Color dots by artist, period, or tags to reveal patterns
 
+The map visualizes patterns in the text embeddings, grouping artworks into clusters based on shared themes, styles, and subjects. For example, "Portraits of Men" and "Portraits of Women" are clustered near each other, as are "Horses" and "Men on Horses". Distinct traditions like "Ancient Indian Manuscripts" form their own separate regions.  Some clusters represent very specific subjects, like bamboo, dragons, and tigers. This 2D projection is just a simplified view, showing only a fraction of the more complex relationships that exist in the higher-dimensional embeddings space.
+
+![Embeddings Clusters](docs/images/EmbeddingsClusters.jpg)
+
 ### Example Journeys
 
 Try these search progressions to see how the embedding space organizes concepts:
