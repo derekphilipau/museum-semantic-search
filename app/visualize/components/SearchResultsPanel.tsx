@@ -18,6 +18,10 @@ interface PartialArtwork {
   artist?: string;
   date?: string;
   primaryImageSmall?: string;
+  image?: {
+    url?: string;
+    thumbnailUrl?: string;
+  } | string;
   medium?: string;
   department?: string;
 }
@@ -143,20 +147,28 @@ export function SearchResultsPanel({
                   onMouseEnter={() => onHoverArtwork?.(artwork.id)}
                   onMouseLeave={() => onHoverArtwork?.(null)}
                 >
-                  {artwork.primaryImageSmall ? (
-                    <Image
-                      src={artwork.primaryImageSmall}
-                      alt={artwork.title}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 80px, 120px"
-                      unoptimized
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-muted flex items-center justify-center">
-                      <span className="text-xs text-muted-foreground">No image</span>
-                    </div>
-                  )}
+                  {(() => {
+                    const imageUrl = artwork.image 
+                      ? (typeof artwork.image === 'string' 
+                          ? artwork.image 
+                          : artwork.image.thumbnailUrl || artwork.image.url)
+                      : artwork.primaryImageSmall;
+                    
+                    return imageUrl ? (
+                      <Image
+                        src={imageUrl}
+                        alt={artwork.title}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 80px, 120px"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-muted flex items-center justify-center">
+                        <span className="text-xs text-muted-foreground">No image</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </Link>
             );
@@ -241,18 +253,26 @@ export function SearchResultsPanel({
               >
                 <div className="flex gap-2">
                   {/* Thumbnail */}
-                  {artwork.primaryImageSmall && (
-                    <div className="relative w-16 h-16 flex-shrink-0">
-                      <Image
-                        src={artwork.primaryImageSmall}
-                        alt={artwork.title}
-                        fill
-                        className="object-cover rounded"
-                        sizes="64px"
-                        unoptimized
-                      />
-                    </div>
-                  )}
+                  {(() => {
+                    const imageUrl = artwork.image 
+                      ? (typeof artwork.image === 'string' 
+                          ? artwork.image 
+                          : artwork.image.thumbnailUrl || artwork.image.url)
+                      : artwork.primaryImageSmall;
+                    
+                    return imageUrl ? (
+                      <div className="relative w-16 h-16 flex-shrink-0">
+                        <Image
+                          src={imageUrl}
+                          alt={artwork.title}
+                          fill
+                          className="object-cover rounded"
+                          sizes="64px"
+                          unoptimized
+                        />
+                      </div>
+                    ) : null;
+                  })()}
                   
                   {/* Content */}
                   <div className="flex-1 min-w-0">

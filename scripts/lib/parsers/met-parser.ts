@@ -230,10 +230,13 @@ export class MetParser extends BaseParser {
           tagsWikidata: row['Tags Wikidata URL'] || ''
         },
         
-        // Image data directly from CSV
-        image: {
-          url: row.primaryImageSmall || row.primaryImage,
-          thumbnailUrl: row.primaryImageSmall || row.primaryImage
+        // Image data with proper sizes
+        image: row.primaryImageSmall ? {
+          url: row.primaryImageSmall,  // web-large version
+          thumbnailUrl: row.primaryImageSmall.replace('/web-large/', '/mobile-large/')  // mobile-large version
+        } : {
+          url: row.primaryImage || '',  // Fallback to original if no web-large
+          thumbnailUrl: row.primaryImage || ''
         }
       };
       

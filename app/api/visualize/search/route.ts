@@ -45,6 +45,9 @@ export async function GET(request: NextRequest) {
         title: hit._source.title,
         artist: hit._source.artist,
         date: hit._source.date,
+        // Include the full image object to support thumbnailUrl
+        image: hit._source.image,
+        // Keep primaryImageSmall for backwards compatibility
         primaryImageSmall: typeof hit._source.image === 'object' && hit._source.image?.thumbnailUrl 
           ? hit._source.image.thumbnailUrl 
           : typeof hit._source.image === 'string' ? hit._source.image : '',

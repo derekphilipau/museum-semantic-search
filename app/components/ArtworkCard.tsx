@@ -31,7 +31,10 @@ function ArtworkCard({
   
   const { image } = artwork;
   // Handle both full image objects and simple string URLs
-  const imageUrl = typeof image === 'string' ? image : image?.url;
+  // Use thumbnailUrl for performance in card displays
+  const imageUrl = typeof image === 'string' 
+    ? image 
+    : image?.thumbnailUrl || image?.url;
   
   // Get institution name
   const institutionName = artwork.collection ? getCollectionShortName(artwork.collection) : '';

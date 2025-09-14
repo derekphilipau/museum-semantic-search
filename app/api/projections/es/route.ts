@@ -72,13 +72,14 @@ export async function GET(request: Request) {
       const coordinates = source.projections?.[embeddingType]?.[projectionType];
       
       // Get image URL - handle both string and object formats
+      // Prefer thumbnailUrl for performance in visualization
       let imageUrl = '';
       if (typeof source.image === 'string') {
         imageUrl = source.image;
-      } else if (source.image?.url) {
-        imageUrl = source.image.url;
       } else if (source.image?.thumbnailUrl) {
         imageUrl = source.image.thumbnailUrl;
+      } else if (source.image?.url) {
+        imageUrl = source.image.url;
       }
       
       return {
