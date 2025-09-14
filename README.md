@@ -2,20 +2,26 @@
 
 Proof-of-concept for searching museum collections using AI embeddings and AI-generated visual descriptions. Cross-modal search capabilities via SigLIP 2 and text search via Jina v3. Deployed on Vercel and Modal for GPU inference.
 
-## Disclaimer
+This application has two main pages: "Search" for comparing search techniques, and "Visualize" for exploring the embedding space.
+
+![Screenshot](docs/images/Screenshots.jpg)
+
+### Disclaimer
 
 ***This project is meant as a starting point for experimentation and discussion around the use of AI in museum collections search, and should not be taken as advocating a specific approach.***  
 
-While AI can be used for "good" (See *["Improving the Search: Uncovering AI bias in digital collections"](https://www.aam-us.org/2025/06/29/improving-the-search-uncovering-ai-bias-in-digital-collections/)*), it can also perpetuate existing biases or create new ones.  My current personal experience is that AI-generated content can augment existing metadata but must be verified and edited by human experts.
+While AI can be used for "good" (See *["Improving the Search: Uncovering AI bias in digital collections"](https://www.aam-us.org/2025/06/29/improving-the-search-uncovering-ai-bias-in-digital-collections/)*), it can also perpetuate existing biases or create new ones.  My current personal experience is that AI-generated content can augment existing metadata but ideally should be verified and/or edited by human experts.
 
-## Dataset
+AI was used to help develop this software for the purpose of quickly prototyping and experimenting with different semantic search techniques.  It should not be taken as a good example of Next.js/React or proper Elasticsearch indexing or querying.  Museum collections search is much more complex and nuanced.  The [Musefully](https://musefully.org/) project is more reflective of good faceted search practices.
+
+### Dataset
 
 Project limited to 5,280 Open Access artworks from The Metropolitan Museum of Art with classification type "Paintings" and available images.
 
 - [The Metropolitan Museum of Art Open Access CSV](https://github.com/metmuseum/openaccess)
 - [The Metropolitan Museum of Art Collection API](https://metmuseum.github.io/)
 
-## Related
+### Previous Work
 
 - Musefully ([website](https://musefully.org/), [github](https://github.com/derekphilipau/musefully)): Search across museums using Elasticsearch and Next.js
 - [“Accessible Art Tags” GPT](https://www.derekau.net/this-vessel-does-not-exist/2023/12/21/accessible-art-ai-gpt): a specialized GPT that generates alt text and long descriptions following [Cooper Hewitt Guidelines for Image Description](https://www.cooperhewitt.org/cooper-hewitt-guidelines-for-image-description/).
@@ -28,9 +34,7 @@ Project limited to 5,280 Open Access artworks from The Metropolitan Museum of Ar
 - Semantic Art Search ([Github](https://github.com/KristianMSchmidt/semantic-art-search), [Website](https://semantic-art-search.com/)): Explore art through meaning-driven search 
 - Sketchy Collections ([Github](https://github.com/psologub/sketchycollections), [Website](http://134.209.182.231:8000/)): CLIP-based image search tool that lets you explore artworks by drawing or uploading a picture
 
-## Use of AI
-
-### Visual Descriptions
+## AI Visual Descriptions
 
 Gemini 2.5 Flash was used to generate three types of visual descriptions: alt text, long description, and emoji summary. The prompt was inspired by [Cooper Hewitt Guidelines for Image Description](https://www.cooperhewitt.org/cooper-hewitt-guidelines-for-image-description/).
 
@@ -144,7 +148,7 @@ Besides enabling better semantic search, the AI-generated visual descriptions ca
    - Emoji Summary: Removed "😭" emoji as it represents an emotion, which is explicitly forbidden.
    - Emoji Summary: Added "👥" emoji to represent the group of multiple figures, ensuring all main visual elements are covered objectively.
 
-### Embeddings
+## Embeddings
 
 Off-the-shelf models were used, presumably fine-tuning could produce more accurate and contextually relevant results.
 
@@ -155,10 +159,6 @@ Jina v3 ([`jinaai/jina-embeddings-v3`](https://jina.ai/embeddings/)) - 768 dimen
 **2. Image Embeddings**
 
 SigLIP 2 ([`google/siglip2-base-patch16-224`](https://huggingface.co/google/siglip2-base-patch16-224)) - 768 dimensions. Cross-modal embeddings enabling text-to-image search in shared vector space. Allows multilingual natural language queries like *"woman looking into mirror"* or *"女人照镜子"* to find visually matching artworks.
-
-### Software Development
-
-AI was used to help quickly develop this software for the purpose of quickly prototyping and experimenting with different semantic search techniques.  It should not be taken as a good example of Next.js or proper Elasticsearch indexing or querying.  Museum collections search is much more complex and nuanced.  The [Musefully](https://musefully.org/) project is more reflective of good faceted search practices.
 
 ## Search Comparison
 
@@ -244,7 +244,7 @@ Searches:
 - ["A person with a dog"](https://museum-semantic-search.vercel.app/?q=a+person+with+a+dog)
 - ["Flowers in a vase"](https://museum-semantic-search.vercel.app/?q=flowers+in+a+vase)
 
-### AI-Generated Emojis
+## AI-Generated Emojis
 
 Sometimes strangely accurate revealing details I missed, at other times questionable and problematic, and often hilarious.  Dubious practical use but fun.
 
