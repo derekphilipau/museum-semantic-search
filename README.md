@@ -42,6 +42,77 @@ The system uses a two-pass approach:
 - In practice, the initial generation often deviates from the guidelines, and often contains cultural assumptions, interpretations, or subjective language. The secondary editorial pass is very helpful in ensuring high-quality, objective descriptions that strictly adhere to the Cooper Hewitt Guidelines.
 - When combined with text embeddings search, visual descriptions significantly improve search relevance for queries in comparison to basic metadata keyword searches.  E.g. *"woman holding a fan"*, "man fighting a monster"*, etc.  See *"Mining Archetypes"* below for more examples.
 
+### Textual Analysis
+
+Besides enabling better semantic search, the AI-generated visual descriptions can be used as a dataset for textual analysis. Below are some examples of frequent words used in the Met Paintings.
+
+<table style="width:100%; table-layout:fixed;">
+ <tr>
+  <td>
+    <strong>COLORS</strong>
+    <ol>
+      <li>"dark" - 15672</li>
+      <li>"light" - 11173</li>
+      <li>"red" - 8175</li>
+      <li>"white" - 7778</li>
+      <li>"brown" - 7256</li>
+      <li>"green" - 6400</li>
+      <li>"blue" - 5273</li>
+      <li>"black" - 4225</li>
+      <li>"gold" - 3706</li>
+      <li>"gray" - 1907</li>
+    </ol>
+  </td>
+  <td>
+    <strong>EMOJIS</strong>
+    <ol>
+      <li>🌳 - 1112</li>
+      <li>⛰ - 1060</li>
+      <li>👩 - 985</li>
+      <li>📜 - 891</li>
+      <li>🌊 - 795</li>
+      <li>🧔 - 781</li>
+      <li>✍ - 652</li>
+      <li>🌸 - 582</li>
+      <li>☁ - 580</li>
+      <li>🌲 - 548</li>
+    </ol>
+  </td>
+</tr>
+<tr>
+  <td>
+    <strong>ANIMALS</strong>
+    <ol>
+      <li>"bird" - 1305</li>
+      <li>"horse" - 853</li>
+      <li>"dog" - 380</li>
+      <li>"fish" - 210</li>
+      <li>"fly" - 146</li>
+      <li>"deer" - 144</li>
+      <li>"monkey" - 142</li>
+      <li>"elephant" - 122</li>
+      <li>"crane" - 116</li>
+      <li>"lion" - 114</li>
+    </ol>
+  </td>
+  <td>
+    <strong>MYTHOLOGICAL</strong>
+    <ol>
+      <li>"creature" - 317</li>
+      <li>"dragon" - 126</li>
+      <li>"beast" - 12</li>
+      <li>"demon" - 11</li>
+      <li>"griffin" - 6</li>
+      <li>"sphinx" - 3</li>
+      <li>"centaur" - 3</li>
+      <li>"monster" - 3</li>
+      <li>"satyr" - 3</li>
+      <li>"devil" - 3</li>
+    </ol>
+  </td>
+ </tr>
+</table>
+
 ### Visual Descriptions Example: [*The Death of Socrates*, Jacques Louis David, 1787](https://www.metmuseum.org/art/collection/search/436105)
 
 ![The Death of Socrates, Jacques Louis David, 1787](docs/images/DP-13139-001.jpg)
