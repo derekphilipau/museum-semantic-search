@@ -260,6 +260,7 @@ export interface ProjectionPoint {
     artist: string;
     date: string;
     medium: string;
+    department?: string;
     tags: string[];
     image: ArtworkImage | string;  // Use consistent image structure
     alt_text: string;
@@ -271,5 +272,5 @@ export interface ProjectionPoint {
 
 export type ProjectionType = 'standard_2d' | 'tight_2d' | 'loose_2d' | 'standard_3d';
 export type EmbeddingType = 'jina_v3' | 'siglip2';
-export type ColorByOption = 'artist' | 'period' | 'tags';
+export type ColorByOption = 'artist' | 'period' | 'tags' | 'department';
 export type DisplayMode = 'points' | 'thumbnails';

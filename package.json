@@ -38,6 +38,7 @@
     "@types/d3": "^7.4.3",
     "@types/lodash": "^4.17.20",
     "@upstash/redis": "^1.35.3",
+    "@vercel/analytics": "^1.5.0",
     "@vercel/kv": "^3.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

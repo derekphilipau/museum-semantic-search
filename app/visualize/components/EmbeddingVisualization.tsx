@@ -337,6 +337,8 @@ export function EmbeddingVisualization({
         return extractPeriod(metadata.date || '');
       case 'tags':
         return metadata.tags[0] || 'Untagged';
+      case 'department':
+        return metadata.department || 'Unknown';
       default:
         return '';
     }

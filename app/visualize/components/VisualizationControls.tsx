@@ -99,6 +99,7 @@ export function VisualizationControls({
               <SelectItem value="artist">Artist</SelectItem>
               <SelectItem value="period">Period</SelectItem>
               <SelectItem value="tags">Tags</SelectItem>
+              <SelectItem value="department">Department</SelectItem>
             </SelectContent>
           </Select>
         </div>

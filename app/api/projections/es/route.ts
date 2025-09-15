@@ -10,6 +10,7 @@ interface ElasticsearchArtwork {
   medium?: string;
   tags?: string[];
   image?: string | { url?: string; thumbnailUrl?: string };
+  department?: string;
   objectName?: string;
   classification?: string;
   culture?: string;
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
         'medium',
         'tags',
         'image',
+        'department',
         'objectName',
         'classification',
         'culture',
@@ -85,6 +87,7 @@ export async function GET(request: Request) {
           image: source.image || '',  // Pass through the entire image object/string
           alt_text: source.visual_description?.alt_text || '',
           // Additional metadata fields
+          department: source.department || '',
           objectName: source.objectName || '',
           classification: source.classification || '',
           culture: source.culture || '',
