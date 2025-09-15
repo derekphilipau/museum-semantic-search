@@ -127,8 +127,8 @@ export async function GET(request: Request) {
           country: csvData?.country || '',
           // Visual description
           alt_text: description?.alt_text || point.metadata.alt_text || '',
-          // Use image URL from CSV
-          primaryImageSmall: csvData?.primaryImageSmall || point.metadata.primaryImageSmall || ''
+          // Use image from metadata
+          image: point.metadata.image || ''
         },
         enhancedMetadata: {
           visual_description: description ? {

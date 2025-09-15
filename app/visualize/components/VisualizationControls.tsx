@@ -3,13 +3,14 @@
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Loader2, Search, Palette, Layers, SlidersHorizontal } from 'lucide-react';
-import { ProjectionType, EmbeddingType, ColorByOption } from '@/app/types';
+import { Loader2, Search, Palette, Layers, SlidersHorizontal, Circle, Image } from 'lucide-react';
+import { ProjectionType, EmbeddingType, ColorByOption, DisplayMode } from '@/app/types';
 
 interface VisualizationControlsProps {
   embeddingType: EmbeddingType;
   projectionType: ProjectionType;
   colorBy: ColorByOption;
+  displayMode: DisplayMode;
   searchTerm: string;
   artworkCount: number;
   searchResultsCount?: number;
@@ -17,6 +18,7 @@ interface VisualizationControlsProps {
   onEmbeddingTypeChange: (value: EmbeddingType) => void;
   onProjectionTypeChange: (value: ProjectionType) => void;
   onColorByChange: (value: ColorByOption) => void;
+  onDisplayModeChange: (value: DisplayMode) => void;
   onSearchChange: (value: string) => void;
 }
 
@@ -24,6 +26,7 @@ export function VisualizationControls({
   embeddingType,
   projectionType,
   colorBy,
+  displayMode,
   searchTerm,
   artworkCount,
   searchResultsCount = 0,
@@ -31,6 +34,7 @@ export function VisualizationControls({
   onEmbeddingTypeChange,
   onProjectionTypeChange,
   onColorByChange,
+  onDisplayModeChange,
   onSearchChange
 }: VisualizationControlsProps) {
   return (
@@ -95,6 +99,32 @@ export function VisualizationControls({
               <SelectItem value="artist">Artist</SelectItem>
               <SelectItem value="period">Period</SelectItem>
               <SelectItem value="tags">Tags</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Display Mode */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          <div className="h-4 w-4 text-muted-foreground hidden sm:block">
+            {displayMode === 'points' ? <Circle className="h-4 w-4" /> : <Image className="h-4 w-4" />}
+          </div>
+          <Select value={displayMode} onValueChange={onDisplayModeChange}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="points">
+                <div className="flex items-center gap-2">
+                  <Circle className="h-3 w-3" />
+                  <span>Points</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="thumbnails">
+                <div className="flex items-center gap-2">
+                  <Image className="h-3 w-3" />
+                  <span>Thumbnails</span>
+                </div>
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -71,17 +71,6 @@ export async function GET(request: Request) {
       const source = hit._source as ElasticsearchArtwork;
       const coordinates = source.projections?.[embeddingType]?.[projectionType];
       
-      // Get image URL - handle both string and object formats
-      // Prefer thumbnailUrl for performance in visualization
-      let imageUrl = '';
-      if (typeof source.image === 'string') {
-        imageUrl = source.image;
-      } else if (source.image?.thumbnailUrl) {
-        imageUrl = source.image.thumbnailUrl;
-      } else if (source.image?.url) {
-        imageUrl = source.image.url;
-      }
-      
       return {
         artwork_id: source.id,
         embedding_type: embeddingType,
@@ -93,7 +82,7 @@ export async function GET(request: Request) {
           date: source.date || '',
           medium: source.medium || '',
           tags: source.tags || [],
-          primaryImageSmall: imageUrl,
+          image: source.image || '',  // Pass through the entire image object/string
           alt_text: source.visual_description?.alt_text || '',
           // Additional metadata fields
           objectName: source.objectName || '',
@@ -103,14 +92,6 @@ export async function GET(request: Request) {
           dynasty: source.dynasty || '',
           reign: source.reign || '',
           country: source.country || ''
-        },
-        enhancedMetadata: {
-          visual_description: source.visual_description ? {
-            alt_text: source.visual_description.alt_text || '',
-            long_description: source.visual_description.long_description || ''
-          } : undefined,
-          primaryImage: imageUrl,
-          primaryImageSmall: imageUrl
         },
         timestamp: new Date().toISOString()
       };

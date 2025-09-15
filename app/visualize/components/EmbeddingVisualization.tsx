@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { ProjectionPoint, ProjectionType, EmbeddingType, ColorByOption } from '@/app/types';
+import { ProjectionPoint, ProjectionType, EmbeddingType, ColorByOption, DisplayMode } from '@/app/types';
 import { Card } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import * as d3 from 'd3';
+import debounce from 'lodash/debounce';
 import { ArtworkTooltip } from './ArtworkTooltipPortal';
 
 interface SearchResult {
@@ -16,6 +17,7 @@ interface EmbeddingVisualizationProps {
   embeddingType: EmbeddingType;
   projectionType: ProjectionType;
   colorBy: ColorByOption;
+  displayMode: DisplayMode;
   searchResults?: SearchResult[];
   onDataLoaded?: (count: number) => void;
   highlightedArtworkId?: string | null;
@@ -25,6 +27,7 @@ export function EmbeddingVisualization({
   embeddingType,
   projectionType,
   colorBy,
+  displayMode,
   searchResults = [],
   onDataLoaded,
   highlightedArtworkId
@@ -140,8 +143,8 @@ export function EmbeddingVisualization({
     const resultPoints = data.filter(point => searchResultsMap.has(point.artwork_id));
     if (resultPoints.length === 0) return;
     
-    const xCoords = resultPoints.map(p => ((p as ProjectionPoint & {normalizedCoords: number[]}).normalizedCoords[0] - 0.5) * canvasSize.width * 0.8);
-    const yCoords = resultPoints.map(p => ((p as ProjectionPoint & {normalizedCoords: number[]}).normalizedCoords[1] - 0.5) * canvasSize.height * 0.8);
+    const xCoords = resultPoints.map(p => ((p.normalizedCoords?.[0] || 0) - 0.5) * canvasSize.width * 0.8);
+    const yCoords = resultPoints.map(p => ((p.normalizedCoords?.[1] || 0) - 0.5) * canvasSize.height * 0.8);
     
     const minX = Math.min(...xCoords);
     const maxX = Math.max(...xCoords);
@@ -216,8 +219,8 @@ export function EmbeddingVisualization({
     const candidates: Array<{point: ProjectionPoint, dist: number, score: number}> = [];
     
     for (const point of data) {
-      const px = ((point as ProjectionPoint & {normalizedCoords: number[]}).normalizedCoords[0] - 0.5) * rect.width * 0.8;
-      const py = ((point as ProjectionPoint & {normalizedCoords: number[]}).normalizedCoords[1] - 0.5) * rect.height * 0.8;
+      const px = ((point.normalizedCoords?.[0] || 0) - 0.5) * rect.width * 0.8;
+      const py = ((point.normalizedCoords?.[1] || 0) - 0.5) * rect.height * 0.8;
       const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
       
       if (dist < hoverRadius) {
@@ -263,7 +266,7 @@ export function EmbeddingVisualization({
     
     // Create zoom behavior
     const zoom = d3.zoom<HTMLDivElement, unknown>()
-      .scaleExtent([1.2, 100])
+      .scaleExtent([1.2, 200])
       .on('zoom', (event) => {
         setTransform(event.transform);
       });
@@ -368,6 +371,108 @@ export function EmbeddingVisualization({
     return colorScale[value] || '#999';
   }, [getColorValue]);
   
+  // Image cache for thumbnails with visibility tracking
+  const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
+  const visibleImages = useRef<Set<string>>(new Set());
+  
+  // Trigger redraw flag
+  const [redrawTrigger, setRedrawTrigger] = useState(0);
+  
+  // Debounced image loading function
+  const loadVisibleImages = useMemo(
+    () => debounce((
+      data: ProjectionPoint[], 
+      transform: d3.ZoomTransform,
+      canvas: HTMLCanvasElement
+    ) => {
+      const rect = canvas.getBoundingClientRect();
+      const visibleBounds = {
+        minX: (-transform.x / transform.k - rect.width * 0.1) / (rect.width * 0.8) + 0.5,
+        maxX: ((-transform.x + rect.width) / transform.k + rect.width * 0.1) / (rect.width * 0.8) + 0.5,
+        minY: (-transform.y / transform.k - rect.height * 0.1) / (rect.height * 0.8) + 0.5,
+        maxY: ((-transform.y + rect.height) / transform.k + rect.height * 0.1) / (rect.height * 0.8) + 0.5
+      };
+      
+      // Track newly visible images
+      const newVisibleImages = new Set<string>();
+      
+      // Adjust max images based on zoom level
+      const MAX_IMAGES = Math.max(50, Math.min(300, Math.floor(200 / Math.sqrt(transform.k))));
+      let imagesToLoad = 0;
+      
+      data.forEach(point => {
+        // Check if point is in visible bounds
+        const coords = point.normalizedCoords;
+        if (!coords || 
+            coords[0] < visibleBounds.minX || coords[0] > visibleBounds.maxX ||
+            coords[1] < visibleBounds.minY || coords[1] > visibleBounds.maxY) {
+          return;
+        }
+        
+        // Get image URL from the image field
+        let imageUrl = '';
+        if (typeof point.metadata.image === 'string') {
+          imageUrl = point.metadata.image;
+        } else if (point.metadata.image?.thumbnailUrl) {
+          imageUrl = point.metadata.image.thumbnailUrl;
+        } else if (point.metadata.image?.url) {
+          imageUrl = point.metadata.image.url;
+        }
+        
+        if (!imageUrl) return;
+        
+        newVisibleImages.add(imageUrl);
+        
+        // Only load if not already cached and under limit
+        if (!imageCache.current.has(imageUrl) && imagesToLoad < MAX_IMAGES) {
+          imagesToLoad++;
+          const img = new Image();
+          // Don't set crossOrigin to avoid CORS issues with Met images
+          // This means we can't read pixel data from the images, but we can still draw them
+          img.onload = () => {
+            imageCache.current.set(imageUrl, img);
+            // Trigger redraw when image loads
+            setRedrawTrigger(prev => prev + 1);
+          };
+          img.onerror = () => {
+            // Don't log errors for now as many Met images might 404
+            // console.error('Failed to load image:', imageUrl);
+          };
+          img.src = imageUrl;
+        }
+      });
+      
+      // Clean up images that are no longer visible (keep a buffer)
+      if (imageCache.current.size > MAX_IMAGES * 2) {
+        const imagesToRemove: string[] = [];
+        imageCache.current.forEach((img, url) => {
+          if (!newVisibleImages.has(url)) {
+            imagesToRemove.push(url);
+          }
+        });
+        
+        // Remove oldest images first
+        imagesToRemove.slice(0, Math.max(0, imageCache.current.size - MAX_IMAGES * 1.5)).forEach(url => {
+          imageCache.current.delete(url);
+        });
+      }
+      
+      visibleImages.current = newVisibleImages;
+      console.log(`Loading ${imagesToLoad} new images, ${newVisibleImages.size} visible, ${imageCache.current.size} cached`);
+    }, 200), // 200ms debounce
+    [setRedrawTrigger]
+  );
+  
+  // Preload images when in thumbnail mode
+  useEffect(() => {
+    if (displayMode !== 'thumbnails') return;
+    
+    const canvas = canvasRef.current;
+    if (!canvas || data.length === 0) return;
+    
+    loadVisibleImages(data, transform, canvas);
+  }, [data, displayMode, transform, loadVisibleImages]);
+  
   // Draw canvas function
   const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -407,8 +512,8 @@ export function EmbeddingVisualization({
     
     // Draw points
     sortedData.forEach(point => {
-      const x = ((point as ProjectionPoint & {normalizedCoords: number[]}).normalizedCoords[0] - 0.5) * rect.width * 0.8;
-      const y = ((point as ProjectionPoint & {normalizedCoords: number[]}).normalizedCoords[1] - 0.5) * rect.height * 0.8;
+      const x = ((point.normalizedCoords?.[0] || 0) - 0.5) * rect.width * 0.8;
+      const y = ((point.normalizedCoords?.[1] || 0) - 0.5) * rect.height * 0.8;
       
       // Calculate opacity based on search results
       let alpha = 0.8;
@@ -445,33 +550,99 @@ export function EmbeddingVisualization({
       // Check if this point is highlighted
       const isHighlighted = highlightedArtworkId === point.artwork_id;
       
-      // Get color
-      ctx.fillStyle = getPointColor(point, colorBy, colorScale);
-      ctx.globalAlpha = alpha;
-      
-      // Draw point
-      ctx.beginPath();
-      ctx.arc(x, y, pointSize, 0, 2 * Math.PI);
-      ctx.fill();
-      
-      // Draw highlight ring if this is the highlighted artwork
-      if (isHighlighted) {
-        ctx.strokeStyle = '#ff0000'; // Red highlight
-        ctx.lineWidth = 2 * Math.sqrt(transform.k) / transform.k; // Use same scaling as points
-        ctx.globalAlpha = 1;
+      if (displayMode === 'thumbnails') {
+        // Draw thumbnail
+        // Get image URL from the image field
+        let imageUrl = '';
+        if (typeof point.metadata.image === 'string') {
+          imageUrl = point.metadata.image;
+        } else if (point.metadata.image?.thumbnailUrl) {
+          imageUrl = point.metadata.image.thumbnailUrl;
+        } else if (point.metadata.image?.url) {
+          imageUrl = point.metadata.image.url;
+        }
+        const img = imageUrl ? imageCache.current.get(imageUrl) : null;
+        
+        // Calculate thumbnail size based on zoom
+        const baseThumbnailSize = 20;
+        // Cap the size at high zoom levels to prevent excessive overlap
+        const maxThumbnailSize = 30; // Maximum size in screen pixels
+        const calculatedSize = baseThumbnailSize * Math.sqrt(transform.k) / transform.k;
+        const thumbnailSize = Math.min(calculatedSize, maxThumbnailSize);
+        
+        if (img && img.complete) {
+          ctx.globalAlpha = alpha;
+          
+          // Draw image centered at point
+          ctx.drawImage(
+            img,
+            x - thumbnailSize / 2,
+            y - thumbnailSize / 2,
+            thumbnailSize,
+            thumbnailSize
+          );
+          
+          // Draw border
+          if (isHighlighted) {
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 3 * Math.sqrt(transform.k) / transform.k;
+            ctx.globalAlpha = 1;
+            ctx.strokeRect(
+              x - thumbnailSize / 2,
+              y - thumbnailSize / 2,
+              thumbnailSize,
+              thumbnailSize
+            );
+          } else {
+            // Subtle border for all thumbnails
+            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+            ctx.lineWidth = 1 * Math.sqrt(transform.k) / transform.k;
+            ctx.strokeRect(
+              x - thumbnailSize / 2,
+              y - thumbnailSize / 2,
+              thumbnailSize,
+              thumbnailSize
+            );
+          }
+        } else {
+          // Fallback to colored square if no image
+          ctx.fillStyle = getPointColor(point, colorBy, colorScale);
+          ctx.globalAlpha = alpha;
+          ctx.fillRect(
+            x - thumbnailSize / 2,
+            y - thumbnailSize / 2,
+            thumbnailSize,
+            thumbnailSize
+          );
+        }
+      } else {
+        // Draw point (original mode)
+        ctx.fillStyle = getPointColor(point, colorBy, colorScale);
+        ctx.globalAlpha = alpha;
+        
         ctx.beginPath();
-        ctx.arc(x, y, pointSize + (4 * Math.sqrt(transform.k) / transform.k), 0, 2 * Math.PI);
-        ctx.stroke();
+        ctx.arc(x, y, pointSize, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Draw highlight ring if this is the highlighted artwork
+        if (isHighlighted) {
+          ctx.strokeStyle = '#ff0000'; // Red highlight
+          ctx.lineWidth = 2 * Math.sqrt(transform.k) / transform.k; // Use same scaling as points
+          ctx.globalAlpha = 1;
+          ctx.beginPath();
+          ctx.arc(x, y, pointSize + (4 * Math.sqrt(transform.k) / transform.k), 0, 2 * Math.PI);
+          ctx.stroke();
+        }
       }
     });
     
     ctx.restore();
-  }, [data, colorBy, searchResults, searchResultsMap, createColorScale, getPointColor, highlightedArtworkId, transform]);
+  }, [data, colorBy, searchResults, searchResultsMap, createColorScale, getPointColor, highlightedArtworkId, transform, displayMode]);
   
   // Draw canvas on data or transform changes
   useEffect(() => {
     drawCanvas();
-  }, [drawCanvas, transform]);
+  }, [drawCanvas, transform, redrawTrigger]);
   
   
   if (loading) {

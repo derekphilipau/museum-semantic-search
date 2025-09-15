@@ -19,7 +19,14 @@ export function ArtworkTooltip({ point, mousePos }: ArtworkTooltipProps) {
   const metadata = point.metadata;
   
   // Get proper image URL
-  const imageUrl = metadata.primaryImageSmall;
+  let imageUrl = '';
+  if (typeof metadata.image === 'string') {
+    imageUrl = metadata.image;
+  } else if (metadata.image?.thumbnailUrl) {
+    imageUrl = metadata.image.thumbnailUrl;
+  } else if (metadata.image?.url) {
+    imageUrl = metadata.image.url;
+  }
   const hasValidImage = imageUrl && imageUrl.startsWith('https://');
   
   // Get visual description data

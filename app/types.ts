@@ -261,12 +261,15 @@ export interface ProjectionPoint {
     date: string;
     medium: string;
     tags: string[];
-    primaryImageSmall: string;
+    image: ArtworkImage | string;  // Use consistent image structure
     alt_text: string;
   };
   timestamp: string;
+  // Optional normalized coordinates for rendering
+  normalizedCoords?: [number, number];
 }
 
 export type ProjectionType = 'standard_2d' | 'tight_2d' | 'loose_2d' | 'standard_3d';
 export type EmbeddingType = 'jina_v3' | 'siglip2';
 export type ColorByOption = 'artist' | 'period' | 'tags';
+export type DisplayMode = 'points' | 'thumbnails';

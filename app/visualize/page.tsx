@@ -5,7 +5,7 @@ import { EmbeddingVisualization } from './components/EmbeddingVisualization';
 import { VisualizationControls } from './components/VisualizationControls';
 import { SearchResultsPanel } from './components/SearchResultsPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { ProjectionType, EmbeddingType, ColorByOption } from '@/app/types';
+import { ProjectionType, EmbeddingType, ColorByOption, DisplayMode } from '@/app/types';
 import debounce from 'lodash/debounce';
 
 interface SearchResult {
@@ -27,6 +27,7 @@ export default function ExplorePage() {
   const [embeddingType, setEmbeddingType] = useState<EmbeddingType>('jina_v3');
   const [projectionType, setProjectionType] = useState<ProjectionType>('standard_2d');
   const [colorBy, setColorBy] = useState<ColorByOption>('artist');
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('points');
   const [searchTerm, setSearchTerm] = useState('');
   const [artworkCount, setArtworkCount] = useState(0);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -91,6 +92,7 @@ export default function ExplorePage() {
           embeddingType={embeddingType}
           projectionType={projectionType}
           colorBy={colorBy}
+          displayMode={displayMode}
           searchTerm={searchTerm}
           artworkCount={artworkCount}
           searchResultsCount={searchResults.length}
@@ -98,6 +100,7 @@ export default function ExplorePage() {
           onEmbeddingTypeChange={setEmbeddingType}
           onProjectionTypeChange={setProjectionType}
           onColorByChange={setColorBy}
+          onDisplayModeChange={setDisplayMode}
           onSearchChange={setSearchTerm}
         />
       </div>
@@ -111,6 +114,7 @@ export default function ExplorePage() {
               embeddingType={embeddingType}
               projectionType={projectionType}
               colorBy={colorBy}
+              displayMode={displayMode}
               searchResults={searchResults.map(r => ({ id: r.id, score: r.score }))}
               onDataLoaded={setArtworkCount}
               highlightedArtworkId={hoveredArtworkId}
