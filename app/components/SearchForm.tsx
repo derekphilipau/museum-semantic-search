@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Info, Image as ImageIcon } from 'lucide-react';
 import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
-import { SearchResponse } from '@/app/types';
+import { SearchResponse, SearchMetadata } from '@/app/types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -80,7 +80,12 @@ function buildSearchParams(
 
 interface ImageSearchState {
   isSearching: boolean;
-  results: SearchResponse | null;
+  results: {
+    keyword: SearchResponse | null;
+    semantic: Record<string, SearchResponse>;
+    hybrid: { model: string; results: SearchResponse } | null;
+    metadata?: SearchMetadata;
+  } | null;
   error: string | null;
 }
 
@@ -131,11 +136,11 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
           throw new Error(error.error || 'Image search failed');
         }
         
-        const results = await response.json();
-        setImageSearchState({ isSearching: false, results, error: null });
+        const apiResults = await response.json();
+        setImageSearchState({ isSearching: false, results: apiResults, error: null });
         
         // Scroll to results if they exist
-        if (results.semantic?.siglip2?.hits?.length > 0) {
+        if (apiResults.semantic?.siglip2?.hits?.length > 0) {
           setTimeout(() => {
             document.getElementById('search-results')?.scrollIntoView({ behavior: 'smooth' });
           }, 100);
@@ -384,11 +389,7 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
       <div id="search-results" className="mt-6">
         <SearchResultsWrapper
           query="Image Search"
-          results={{
-            keyword: null,
-            semantic: { siglip2: imageSearchState.results },
-            hybrid: null
-          }}
+          results={imageSearchState.results}
         />
       </div>
     )}

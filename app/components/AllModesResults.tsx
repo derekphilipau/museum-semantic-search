@@ -58,10 +58,12 @@ export default function AllModesResults({
   }
 
   // Check if we have any results
-  const hasResults = 
-    (results.keyword && results.keyword.hits.length > 0) ||
-    Object.values(results.semantic).some(r => r && r.hits.length > 0) ||
-    (results.hybrid?.results && results.hybrid.results.hits.length > 0);
+  // Be defensive: different modes (text vs image) may omit some result buckets
+  const semanticBuckets = results?.semantic ? Object.values(results.semantic) : [];
+  const hasResults =
+    ((results.keyword?.hits?.length ?? 0) > 0) ||
+    semanticBuckets.some((r) => (r?.hits?.length ?? 0) > 0) ||
+    ((results.hybrid?.results?.hits?.length ?? 0) > 0);
 
   if (!hasResults) {
     return (
