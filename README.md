@@ -90,7 +90,29 @@ AI is used to generate three types of descriptions for each artwork that adhere 
 - Emoji Summary: Removed "😭" emoji as it represents an emotion, which is explicitly forbidden.
 - Emoji Summary: Added "👥" emoji to represent the group of multiple figures, ensuring all main visual elements are covered objectively.
 
-### Textual Analysis
+### Visual Descriptions Limitations
+
+The strict prompts & two-pass editorial process help reduce bias and subjective interpretation, but visual elements may be misidentified or missed entirely.  The primary consideration is if, in spite of minor inaccuracies, the descriptions still improve search relevance, especially when used in text embeddings.
+
+<table>
+<tr>
+<td width="200">
+<img src="docs/images/DP-27910-001.jpg" alt="The Penitent Magdalen by Georges de La Tour" width="100%">
+</td>
+<td>
+
+Excerpt from visual description of <a href="https://www.metmuseum.org/art/collection/search/436839">"The Penitent Magdalen" by Georges de La Tour</a>:
+
+*"The mirror reflects **two lit candles**, their flames appearing as elongated, bright vertical streaks against the dark background within the frame. One candle is visible on a dark, turned wooden candlestick directly in front of the mirror, while the other is only seen as a reflection."*
+
+Here, the model seems confused by the mirror and incorrectly identifies two candles when there is only one.
+
+</td>
+</tr>
+
+</table>
+
+### Visual Descriptions Textual Analysis
 
 Besides enabling better semantic search, the AI-generated visual descriptions can be used as a dataset for textual analysis. Below are some examples of frequent words used in the Met Paintings.
 
