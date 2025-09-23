@@ -183,6 +183,12 @@ Besides enabling better semantic search, the AI-generated visual descriptions ca
  </tr>
 </table>
 
+## AI-Generated Emojis
+
+Sometimes strangely accurate revealing details I missed, at other times questionable and problematic, and often hilarious.  Dubious practical use but fun.
+
+![AI-Generated Emojis](docs/images/Emojis.jpg)
+
 ## Search Comparison
 
 Below are comparisons of keyword search, text embedding search, and image embedding search for the query *"woman looking into mirror"*.  
@@ -241,12 +247,6 @@ Perhaps the woman is not looking into a mirror, but it does feel like a *mirrori
 </tr>
 </table>
 
-## AI-Generated Emojis
-
-Sometimes strangely accurate revealing details I missed, at other times questionable and problematic, and often hilarious.  Dubious practical use but fun.
-
-![AI-Generated Emojis](docs/images/Emojis.jpg)
-
 ## Visualize Embeddings
 
 ![Visualization Screenshot](docs/images/VisualizeScreenshot.jpg)
@@ -285,7 +285,27 @@ Combines keyword and semantic search with user-adjustable balance control:
 - Balance slider: 0% = pure keyword, 100% = pure semantic, 50% = equal weight
 
 ### 4. **Image Search**
-Upload an image to find visually similar artworks using SigLIP 2 embeddings.
+
+By clicking on "Image Search" in the search bar, you can upload an image to find visually similar artworks using SigLIP 2 cross-modal embeddings.  Such a feature could be useful for museum-goers to find more information about an artwork they see in person or projects like [Google Arts & Culture's "Art Selfie"](https://artsandculture.google.com/camera/selfie).
+
+<table>
+<tr>
+<td width="250">
+Uploaded Image:
+
+<img src="docs/images/gallerypainting.jpg" alt="Photo taken in the galleries" width="200">
+</td>
+<td>
+First Search Result:
+
+<img src="docs/images/DP-30758-001.jpg" alt="Aristotle with a Bust of Homer by Rembrandt (Rembrandt van Rijn)" width="200">
+
+<a href="https://www.metmuseum.org/art/collection/search/437394">"Aristotle with a Bust of Homer"</a> by Rembrandt (Rembrandt van Rijn)
+
+</td>
+</tr>
+
+</table>
 
 ## Similar Artworks Algorithms
 
