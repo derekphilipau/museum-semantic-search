@@ -1,5 +1,7 @@
 # Installation Guide
 
+This prototype was developed quickly and is not production-ready. 
+
 ## Prerequisites
 
 - Node.js 18+ 
@@ -443,10 +445,27 @@ These safety filters cannot distinguish between:
 
 **Affected artworks** will fail with `PROHIBITED_CONTENT` errors. The scripts will skip these and continue processing other artworks. Consider maintaining a separate list of blocked artworks for manual review or alternative processing approaches.
 
-## Future Improvements
+## Various Notes
 
-- Native Elasticsearch integration for embeddings via Open Inference API
-- Support for additional collections (Met, Rijksmuseum, etc.)
-- Real-time embedding generation during indexing
-- Multi-language support for queries
-- Image upload for similarity search
+In developing this project I tried out a number of different models:
+
+1. **Jina Embeddings** performed very well across all their models:
+   - **JinaCLIP v2** provided highly relevant results for visual art search
+   - **Jina v3** delivered excellent text-only semantic search capabilities
+   - **Jina v4** matched Google's performance for multimodal search with 2048-dimensional embeddings
+
+2. **SigLIP vs CLIP**: SigLIP 2 over CLIP for several reasons:
+   - Better performance on natural language queries
+   - Improved localization capabilities
+   - More robust to variations in query phrasing
+   - Consistent 768-dimensional output matching Jina v3
+
+3. **Cohere Embed 4** did not produce results as relevant as other models for art-related queries.
+
+4. **Voyage Multimodal 3** had significant rate limiting issues on the free tier (3 requests/minute). Search results were not as relevant as Jina models or Google Vertex AI for art-related queries.
+
+### Multimodal Embeddings
+
+I tested multimodal embeddings that combined artwork metadata (title, artist, medium, etc.) with images. Testing revealed that both Jina v4 and Google Vertex produce nearly identical embeddings whether using image-only or image+text inputs.  Apparently the image features dominate so heavily that text contributes negligibly to the final embedding. More research needed. 
+
+Eventually I found that separate image-only embeddings and text-only embeddings worked better.  And hybrid search that ranks results from keyword, image embedding, and text embedding searches, worked best.

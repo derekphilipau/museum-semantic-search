@@ -1,50 +1,94 @@
 # Museum Semantic Search
 
-Proof-of-concept for searching museum collections using AI embeddings and AI-generated visual descriptions. Cross-modal search capabilities via SigLIP 2 and text search via Jina v3. Deployed on Vercel and Modal for GPU inference.
-
-This application has two main pages: "Search" for comparing search techniques, and "Visualize" for exploring the embedding space.
+Prototype exploring semantic search for museum collections using AI-generated visual descriptions and embeddings.
 
 ![Screenshot](docs/images/Screenshots.jpg)
 
+## Features
+
+- Search artworks using multilingual natural language queries
+- Explore the embedding space with interactive visualizations
+- Compare traditional & semantic search techniques side-by-side
+- Upload an image to find similar artworks
+
+## Quick Links
+
+- [Try the Demo](https://museum-semantic-search.vercel.app/) - Search 5,280 Open Access Met paintings
+- [Explore the Embeddings Visualization](https://museum-semantic-search.vercel.app/visualize) - See how artworks cluster by text & image similarity
+- [Technical Guide & Setup](TECHNICAL_GUIDE.md) - Setup and development guide
+
+## Example Searches
+
+Try these queries to see how semantic search finds artworks that traditional keyword search might miss:
+
+["Three Women"](https://museum-semantic-search.vercel.app/?q=three+women), 
+["Gazing from the window"](https://museum-semantic-search.vercel.app/?q=gazing+from+the+window),
+["The gnarled tree"](https://museum-semantic-search.vercel.app/?q=the+gnarled+tree),
+["Mother and child"](https://museum-semantic-search.vercel.app/?q=mother+and+child),
+["Old man with a beard"](https://museum-semantic-search.vercel.app/?q=old+man+with+a+beard),
+["Person fighting a monster"](https://museum-semantic-search.vercel.app/?q=person+fighting+a+monster),
+["People on a bridge"](https://museum-semantic-search.vercel.app/?q=people+on+a+bridge),
+["A banquet scene"](https://museum-semantic-search.vercel.app/?q=a+banquet+scene),
+["Man on a horse"](https://museum-semantic-search.vercel.app/?q=man+on+a+horse),
+["Ruins in a landscape"](https://museum-semantic-search.vercel.app/?q=ruins+in+a+landscape),
+["Sleeping person"](https://museum-semantic-search.vercel.app/?q=sleeping+person),
+["The reclining nude"](https://museum-semantic-search.vercel.app/?q=the+reclining+nude),
+["Man in armor"](https://museum-semantic-search.vercel.app/?q=man+in+armor),
+["A person with a dog"](https://museum-semantic-search.vercel.app/?q=a+person+with+a+dog),
+["Flowers in a vase"](https://museum-semantic-search.vercel.app/?q=flowers+in+a+vase)
+
+![Curated Search Results for Various Archetypes](docs/images/Themes.jpg)
+
 ### Disclaimer
 
-***This project is meant as a starting point for experimentation and discussion around the use of AI in museum collections search, and should not be taken as advocating a specific approach.***  
-
-While AI can be used for "good" (See *["Improving the Search: Uncovering AI bias in digital collections"](https://www.aam-us.org/2025/06/29/improving-the-search-uncovering-ai-bias-in-digital-collections/)*), it can also perpetuate existing biases or create new ones.  My current personal experience is that AI-generated content can augment existing metadata but ideally should be verified and/or edited by human experts.
-
-AI was used to help develop this software for the purpose of quickly prototyping and experimenting with different semantic search techniques.  It should not be taken as a good example of Next.js/React or proper Elasticsearch indexing or querying.  Museum collections search is much more complex and nuanced.  The [Musefully](https://musefully.org/) project is more reflective of good faceted search practices.
+While AI can enhance search capabilities, it can also perpetuate existing biases or create new ones. (See *["Improving the Search: Uncovering AI bias in digital collections"](https://www.aam-us.org/2025/06/29/improving-the-search-uncovering-ai-bias-in-digital-collections/)*) AI-generated content should ideally be verified and edited by human experts. Museum collections search is complex and nuanced.  This project is a quick prototype, see the [Musefully](https://musefully.org/) project which is more reflective of proper faceted search.
 
 ### Dataset
 
-Project limited to 5,280 Open Access artworks from The Metropolitan Museum of Art with classification type "Paintings" and available images.
-
-- [The Metropolitan Museum of Art Open Access CSV](https://github.com/metmuseum/openaccess)
-- [The Metropolitan Museum of Art Collection API](https://metmuseum.github.io/)
-
-### Previous Work
-
-- Musefully ([website](https://musefully.org/), [github](https://github.com/derekphilipau/musefully)): Search across museums using Elasticsearch and Next.js
-- [“Accessible Art Tags” GPT](https://www.derekau.net/this-vessel-does-not-exist/2023/12/21/accessible-art-ai-gpt): a specialized GPT that generates alt text and long descriptions following [Cooper Hewitt Guidelines for Image Description](https://www.cooperhewitt.org/cooper-hewitt-guidelines-for-image-description/).
-- [OpenAI CLIP Embedding Similarity](https://www.derekau.net/this-vessel-does-not-exist/2023/8/11/openai-clip-embedding-similarity): Examples of [OpenAI CLIP](https://openai.com/index/clip/) Embeddings artwork similarity search.
-
-### Related Projects
-
-- [MuseRAG++: A Deep Retrieval-Augmented Generation Framework for Semantic Interaction and Multi-Modal Reasoning in Virtual Museums](https://www.researchsquare.com/article/rs-7281889/v1): RAG-powered museum chatbot
-- National Museum of Norway Semantic Collection Search ([Website](https://beta.nasjonalmuseet.no/collection/), [Article](https://beta.nasjonalmuseet.no/2023/08/add-semantic-search-to-a-online-collection/)): Search via embeddings of GPT-4 Vision image descriptions.
-- Semantic Art Search ([Github](https://github.com/KristianMSchmidt/semantic-art-search), [Website](https://semantic-art-search.com/)): Explore art through meaning-driven search 
-- Sketchy Collections ([Github](https://github.com/psologub/sketchycollections), [Website](http://134.209.182.231:8000/)): CLIP-based image search tool that lets you explore artworks by drawing or uploading a picture
+5,280 Open Access paintings with images from The Metropolitan Museum of Art's Open Access collection. *[View the full Met Open Access dataset](https://github.com/metmuseum/openaccess)*
 
 ## AI Visual Descriptions
 
-Gemini 2.5 Flash was used to generate three types of visual descriptions: alt text, long description, and emoji summary. The prompt was inspired by [Cooper Hewitt Guidelines for Image Description](https://www.cooperhewitt.org/cooper-hewitt-guidelines-for-image-description/).
+AI is used to generate three types of descriptions for each artwork that adhere to the [Cooper Hewitt Guidelines for Image Description](https://www.cooperhewitt.org/cooper-hewitt-guidelines-for-image-description/):
 
-The system uses a two-pass approach:
-1. **Generation Pass**: Multimodal Gemini 2.5 Flash with image and metadata input. Creates initial descriptions following accessibility guidelines.  [Full prompt here.](lib/descriptions/gemini.ts#L30)
-2. **Editorial Pass**: Prompts Gemini 2.5 Flash again, this time only with the initial text outputs and the guidelines. Refines descriptions for consistency, removes biases, and ensures strict adherence to museum standards including objectivity, consistent word counts, and appropriate emoji selection. [Full prompt here.](lib/descriptions/gemini.ts#L171)
+1. **Alt text** (~15 words) - Concise accessibility description
+2. **Long description** (100-300 words) - Detailed visual elements
+3. **Emoji summary** (3-8 emojis) - Visual elements as symbols
 
-**Personal Conclusions**:
-- In practice, the initial generation often deviates from the guidelines, and often contains cultural assumptions, interpretations, or subjective language. The secondary editorial pass is very helpful in ensuring high-quality, objective descriptions that strictly adhere to the Cooper Hewitt Guidelines.
-- When combined with text embeddings search, visual descriptions significantly improve search relevance for queries in comparison to basic metadata keyword searches.  E.g. *"woman holding a fan"*, "man fighting a monster"*, etc.  See *"Mining Archetypes"* below for more examples.
+**Two-pass quality control:**
+- **Generation pass** - AI creates initial descriptions from the image. [Full prompt](lib/descriptions/gemini.ts#L30)
+- **Editorial pass** - AI reviews and removes bias, interpretation, or cultural assumptions. [Full prompt](lib/descriptions/gemini.ts#L171)
+
+### Visual Descriptions Example: [*The Death of Socrates*, Jacques Louis David, 1787](https://www.metmuseum.org/art/collection/search/436105)
+
+![The Death of Socrates, Jacques Louis David, 1787](docs/images/DP-13139-001.jpg)
+
+#### 1. Generation Pass, Initial Visual Descriptions Multimodal Gemini 2.5 Flash output:
+
+- **Alt Text**: *"Socrates, surrounded by grieving students, reaches for a cup of hemlock in a dimly lit prison cell"*
+- **Long Description**: *"The painting depicts a dramatic scene within a dimly lit, stone-walled room. In the center, an elderly, muscular man with a white beard, identified as Socrates, sits upright on a bed, draped in a white cloth. He gestures upwards with his right hand, as if speaking, while his left hand reaches for a small, red cup offered by a younger, muscular man in a red tunic, who turns away with a pained expression. To the right of Socrates, several men are gathered, showing various states of distress. One man in a red robe sits on a stone block, looking down thoughtfully. Behind him, others express anguish, some covering their faces, others raising their hands in despair. To the left of Socrates, an older man with a white beard and gray robe sits slumped on a bench, his head bowed in sorrow. Further back, in a darker arched doorway, more figures are visible, including a woman being led away. On the floor in the foreground, near the slumped man, are two rolled scrolls and a broken chain. The room's architecture is simple, with stone blocks forming the walls and an arched opening leading to a darker area. A small, dark object hangs from the ceiling. The overall lighting is dim, with a subtle glow on the central figures."*
+- **Emojis**: 🧔🍷😭⛓️📜
+
+#### 2. Editorial Pass, Gemini 2.5 Flash Editorially Revised Output:
+
+- **Alt Text**: *"An elderly man reaches for a cup, surrounded by distressed figures in a dimly lit stone room"*
+- **Long Description**: *"A dimly lit, stone-walled room contains multiple figures. In the center, an elderly, muscular man with a white beard sits upright on a bed, draped in a white cloth. He gestures upwards with his right hand, while his left hand reaches for a small, red cup. A younger, muscular man in a red tunic offers the cup, turning his head away from the elderly man with a downturned mouth. To the right of the central elderly man, several men are gathered, displaying varied postures. One man in a red robe sits on a stone block, looking downwards. Behind him, other figures cover their faces or raise their hands. To the left of the central elderly man, an older man with a white beard and gray robe sits slumped on a bench, his head bowed. Further back, in a darker arched doorway, more figures are visible, including a woman standing near another figure. On the floor in the foreground, near the slumped man, are two rolled scrolls and a broken chain. The room features stone block walls and an arched opening leading to a darker area. A small, dark object hangs from the ceiling. The overall lighting is dim, with a subtle glow on the central figures."*
+- **Emojis**: 🧔🍷👥⛓️📜
+
+***Editorial Changes Made***:
+- Alt Text: Removed specific name "Socrates."
+- Alt Text: Removed interpretive terms "grieving students," "hemlock," and "prison cell."
+- Alt Text: Replaced with objective visual descriptions like "distressed figures" and "stone room."
+- Alt Text: Adjusted word count to be closer to 15 words.
+- Long Description: Removed subjective phrase "The painting depicts a dramatic scene."
+- Long Description: Removed specific name "Socrates" and the phrase "identified as Socrates."
+- Long Description: Removed interpretive phrases such as "as if speaking," "pained expression," "various states of distress," "looking down thoughtfully," "express anguish," "raising their hands in despair," and "bowed in sorrow."
+- Long Description: Replaced character-specific references like "To the right of Socrates" with neutral spatial references like "To the right of the central elderly man."
+- Long Description: Rephrased "a woman being led away" to "a woman standing near another figure" to remove implied action/intent.
+- Long Description: Removed subjective judgment "The room's architecture is simple."
+- Long Description: Replaced emotional descriptions of figures with objective descriptions of their postures and expressions (e.g., "downturned mouth," "displaying varied postures," "cover their faces").
+- Emoji Summary: Removed "😭" emoji as it represents an emotion, which is explicitly forbidden.
+- Emoji Summary: Added "👥" emoji to represent the group of multiple figures, ensuring all main visual elements are covered objectively.
 
 ### Textual Analysis
 
@@ -117,52 +161,7 @@ Besides enabling better semantic search, the AI-generated visual descriptions ca
  </tr>
 </table>
 
-### Visual Descriptions Example: [*The Death of Socrates*, Jacques Louis David, 1787](https://www.metmuseum.org/art/collection/search/436105)
-
-![The Death of Socrates, Jacques Louis David, 1787](docs/images/DP-13139-001.jpg)
-
-1. Generation Pass, Initial Visual Descriptions Multimodal Gemini 2.5 Flash output:
-
-- **Alt Text**: *"Socrates, surrounded by grieving students, reaches for a cup of hemlock in a dimly lit prison cell"*
-- **Long Description**: *"The painting depicts a dramatic scene within a dimly lit, stone-walled room. In the center, an elderly, muscular man with a white beard, identified as Socrates, sits upright on a bed, draped in a white cloth. He gestures upwards with his right hand, as if speaking, while his left hand reaches for a small, red cup offered by a younger, muscular man in a red tunic, who turns away with a pained expression. To the right of Socrates, several men are gathered, showing various states of distress. One man in a red robe sits on a stone block, looking down thoughtfully. Behind him, others express anguish, some covering their faces, others raising their hands in despair. To the left of Socrates, an older man with a white beard and gray robe sits slumped on a bench, his head bowed in sorrow. Further back, in a darker arched doorway, more figures are visible, including a woman being led away. On the floor in the foreground, near the slumped man, are two rolled scrolls and a broken chain. The room's architecture is simple, with stone blocks forming the walls and an arched opening leading to a darker area. A small, dark object hangs from the ceiling. The overall lighting is dim, with a subtle glow on the central figures."*
-- **Emojis**: 🧔🍷😭⛓️📜
-
-2. Editorial Pass, Gemini 2.5 Flash Editorially Revised Output:
-
-- **Alt Text**: *"An elderly man reaches for a cup, surrounded by distressed figures in a dimly lit stone room"*
-- **Long Description**: *"A dimly lit, stone-walled room contains multiple figures. In the center, an elderly, muscular man with a white beard sits upright on a bed, draped in a white cloth. He gestures upwards with his right hand, while his left hand reaches for a small, red cup. A younger, muscular man in a red tunic offers the cup, turning his head away from the elderly man with a downturned mouth. To the right of the central elderly man, several men are gathered, displaying varied postures. One man in a red robe sits on a stone block, looking downwards. Behind him, other figures cover their faces or raise their hands. To the left of the central elderly man, an older man with a white beard and gray robe sits slumped on a bench, his head bowed. Further back, in a darker arched doorway, more figures are visible, including a woman standing near another figure. On the floor in the foreground, near the slumped man, are two rolled scrolls and a broken chain. The room features stone block walls and an arched opening leading to a darker area. A small, dark object hangs from the ceiling. The overall lighting is dim, with a subtle glow on the central figures."*
-- **Emojis**: 🧔🍷👥⛓️📜
-
-- ***Editorial Changes Made***:
-   - Alt Text: Removed specific name "Socrates."
-   - Alt Text: Removed interpretive terms "grieving students," "hemlock," and "prison cell."
-   - Alt Text: Replaced with objective visual descriptions like "distressed figures" and "stone room."
-   - Alt Text: Adjusted word count to be closer to 15 words.
-   - Long Description: Removed subjective phrase "The painting depicts a dramatic scene."
-   - Long Description: Removed specific name "Socrates" and the phrase "identified as Socrates."
-   - Long Description: Removed interpretive phrases such as "as if speaking," "pained expression," "various states of distress," "looking down thoughtfully," "express anguish," "raising their hands in despair," and "bowed in sorrow."
-   - Long Description: Replaced character-specific references like "To the right of Socrates" with neutral spatial references like "To the right of the central elderly man."
-   - Long Description: Rephrased "a woman being led away" to "a woman standing near another figure" to remove implied action/intent.
-   - Long Description: Removed subjective judgment "The room's architecture is simple."
-   - Long Description: Replaced emotional descriptions of figures with objective descriptions of their postures and expressions (e.g., "downturned mouth," "displaying varied postures," "cover their faces").
-   - Emoji Summary: Removed "😭" emoji as it represents an emotion, which is explicitly forbidden.
-   - Emoji Summary: Added "👥" emoji to represent the group of multiple figures, ensuring all main visual elements are covered objectively.
-
-## Embeddings
-
-Off-the-shelf models were used, presumably fine-tuning could produce more accurate and contextually relevant results.
-
-**1. Text Embeddings**
-
-Jina v3 ([`jinaai/jina-embeddings-v3`](https://jina.ai/embeddings/)) - 768 dimensions. Combines Met artwork metadata (title, artist, date, medium) with the AI-generated visual descriptions described above. Uses task-specific embeddings: "retrieval.passage" for indexing, "retrieval.query" for search.
-
-**2. Image Embeddings**
-
-SigLIP 2 ([`google/siglip2-base-patch16-224`](https://huggingface.co/google/siglip2-base-patch16-224)) - 768 dimensions. Cross-modal embeddings enabling text-to-image search in shared vector space. Allows multilingual natural language queries like *"woman looking into mirror"* or *"女人照镜子"* to find visually matching artworks.
-
 ## Search Comparison
-
-Despite sometimes questionable results, text embedding search with AI-Generated visual descriptions seems to work well in practice.  Image embedding search also shows promise, although it seems less reliable and often produces strange results.
 
 Below are comparisons of keyword search, text embedding search, and image embedding search for the query *"woman looking into mirror"*.  
 
@@ -172,7 +171,7 @@ Out of a result set of 20:
 
 - The conventional Elasticsearch keyword search over Met Museum metadata produces only 3 results that I consider highly relevant.
 - Text embedding search using Jina v3 embeddings on combined metadata and AI-generated descriptions returns 13 excellent results, including a number of images where the reflection or mirror is not even visible.
-- Image embedding search using SigLIP 2 cross-modal embeddings returns 8 highly-relevant results, including artworks where there's no actual mirror, but rather the concept of mirroring, for example [*"Portrait of a Woman with a Man at a Casement"* by Fra Filippo Lippi](https://www.metmuseum.org/art/collection/search/436896) and [*"Dancers, Pink and Green"* by Edgar Degas](https://www.metmuseum.org/art/collection/search/436140).
+- Image embedding search returns 8 highly-relevant results, including artworks where there's no actual mirror, but perhaps the concept of mirroring, for example [*"Portrait of a Woman with a Man at a Casement"* by Fra Filippo Lippi](https://www.metmuseum.org/art/collection/search/436896) and [*"Dancers, Pink and Green"* by Edgar Degas](https://www.metmuseum.org/art/collection/search/436140).
 
 ![Highly Relevant Results for "woman looking into mirror"](docs/images/MirrorCompare.jpg)
 
@@ -220,30 +219,6 @@ Perhaps the woman is not looking into a mirror, but it does feel like a *mirrori
 </tr>
 </table>
 
-## Mining Archetypes
-
-Intrigued by the results for ["woman looking into mirror"](https://museum-semantic-search.vercel.app/?q=woman+looking+into+mirror), I started to search for other art history archetypes to explore across cultures & time.  Although the embedding searches are often inaccurate, interspersed are some surprisingly relevant results that would not have been possible with keyword search alone.
-
-![Curated Search Results for Various Archetypes](docs/images/Themes.jpg)
-
-Searches:
-
-- ["Three Women"](https://museum-semantic-search.vercel.app/?q=three+women)
-- ["Gazing from the window"](https://museum-semantic-search.vercel.app/?q=gazing+from+the+window)
-- ["The gnarled tree"](https://museum-semantic-search.vercel.app/?q=the+gnarled+tree)
-- ["Mother and child"](https://museum-semantic-search.vercel.app/?q=mother+and+child)
-- ["Old man with a beard"](https://museum-semantic-search.vercel.app/?q=old+man+with+a+beard)
-- ["Person fighting a monster"](https://museum-semantic-search.vercel.app/?q=person+fighting+a+monster)
-- ["People on a bridge"](https://museum-semantic-search.vercel.app/?q=people+on+a+bridge)
-- ["A banquet scene"](https://museum-semantic-search.vercel.app/?q=a+banquet+scene)
-- ["Man on a horse"](https://museum-semantic-search.vercel.app/?q=man+on+a+horse)
-- ["Ruins in a landscape"](https://museum-semantic-search.vercel.app/?q=ruins+in+a+landscape)
-- ["Sleeping person"](https://museum-semantic-search.vercel.app/?q=sleeping+person)
-- ["The reclining nude"](https://museum-semantic-search.vercel.app/?q=the+reclining+nude)
-- ["Man in armor"](https://museum-semantic-search.vercel.app/?q=man+in+armor)
-- ["A person with a dog"](https://museum-semantic-search.vercel.app/?q=a+person+with+a+dog)
-- ["Flowers in a vase"](https://museum-semantic-search.vercel.app/?q=flowers+in+a+vase)
-
 ## AI-Generated Emojis
 
 Sometimes strangely accurate revealing details I missed, at other times questionable and problematic, and often hilarious.  Dubious practical use but fun.
@@ -252,29 +227,20 @@ Sometimes strangely accurate revealing details I missed, at other times question
 
 ## Visualize Embeddings
 
-The `/visualize` page lets you explore how artworks cluster in the embedding space. You can see the entire collection as dots on a 2D map, where similar artworks appear near each other. Uses UMAP to reduce the 768-dimensional embeddings down to 2D while preserving relationships.
-
 ![Visualization Screenshot](docs/images/VisualizeScreenshot.jpg)
+
+The `/visualize` page shows the entire collection as dots on a 2D map, where similar artworks cluster together based on shared themes, styles, and subjects. For example, "Portraits of Men" and "Portraits of Women" appear near each other, as do "Horses" and "Men on Horses". Distinct traditions like "Indian Manuscripts" form separate regions.
 
 - Each dot represents one artwork in the collection
 - Distance between dots shows semantic similarity, closer dots are more similar
 - Search to highlight relevant results. Larger, brighter dots rank higher
-- Color dots by artist, period, or tags to reveal patterns
-
-The map visualizes patterns in the text embeddings, grouping artworks into clusters based on shared themes, styles, and subjects. For example, "Portraits of Men" and "Portraits of Women" are clustered near each other, as are "Horses" and "Men on Horses". Distinct traditions like "Indian Manuscripts" form their own separate regions.  Some clusters represent very specific subjects, like bamboo, dragons, and tigers. This 2D projection is just a simplified view, showing only a fraction of the more complex relationships that exist in the higher-dimensional embeddings space.
+- Color dots by artist, period, tags, or department to reveal patterns
 
 ![Text Embeddings Clusters](docs/images/EmbeddingsClusters.jpg)
 
 ![Image Embeddings Clusters](docs/images/ImageEmbeddingsClusters.jpg)
 
 ![Horses Clusters](docs/images/HorsesClusters.jpg)
-
-### Example Journeys
-
-Try these search progressions to see how the embedding space organizes concepts:
-- **"landscape"** > **"mountain"** > **"snowy mountain"**
-- **"woman"** > **"woman smiling"** > **"woman with hat"**
-- **"blue"** > **"blue sky"** > **"stormy sky"**
 
 ![Visualization Journey Example](docs/images/VisualizeMountain.jpg)
 
@@ -360,40 +326,23 @@ See Example here: [Holy Family with Saint Anne, French Painter (17th century)](h
 
 For this example, relying only on metadata, the keyword search does a poor job of finding relevant similar artworks, pulling in various works by unknown "French Painter".  Text & image embeddings results are better, especially with theme and style.  The AI-curated results are perhaps best in my opinion, but I'm not an art historian and not familiar enough with the collection to make an educated judgment.
 
-## Additional Features
+## Technical Guide & Setup
 
-- **Multi-model Comparison**: Side-by-side results from different search types
-- **Visual Search**: Search by image similarity using multimodal embeddings  
+See [TECHNICAL_GUIDE.md](TECHNICAL_GUIDE.md) for technical details & setup instructions including prerequisites, environment configuration, and deployment steps.
 
-## Model Performance Notes
+## Previous Work
 
-In developing this project I tried out a number of different models:
+- Musefully ([website](https://musefully.org/), [github](https://github.com/derekphilipau/musefully)): Search across museums using Elasticsearch and Next.js
+- [“Accessible Art Tags” GPT](https://www.derekau.net/this-vessel-does-not-exist/2023/12/21/accessible-art-ai-gpt): a specialized GPT that generates alt text and long descriptions following [Cooper Hewitt Guidelines for Image Description](https://www.cooperhewitt.org/cooper-hewitt-guidelines-for-image-description/).
+- [OpenAI CLIP Embedding Similarity](https://www.derekau.net/this-vessel-does-not-exist/2023/8/11/openai-clip-embedding-similarity): Examples of [OpenAI CLIP](https://openai.com/index/clip/) Embeddings artwork similarity search.
 
-1. **Jina Embeddings** performed very well across all their models:
-   - **JinaCLIP v2** provided highly relevant results for visual art search
-   - **Jina v3** delivered excellent text-only semantic search capabilities
-   - **Jina v4** matched Google's performance for multimodal search with 2048-dimensional embeddings
+## Related Projects
 
-2. **SigLIP vs CLIP**: SigLIP 2 over CLIP for several reasons:
-   - Better performance on natural language queries
-   - Improved localization capabilities
-   - More robust to variations in query phrasing
-   - Consistent 768-dimensional output matching Jina v3
-
-3. **Cohere Embed 4** did not produce results as relevant as other models for art-related queries.
-
-4. **Voyage Multimodal 3** had significant rate limiting issues on the free tier (3 requests/minute). Search results were not as relevant as Jina models or Google Vertex AI for art-related queries.
-
-### Multimodal Embeddings
-
-I tested multimodal embeddings that combined artwork metadata (title, artist, medium, etc.) with images. Testing revealed that both Jina v4 and Google Vertex produce nearly identical embeddings whether using image-only or image+text inputs.  Apparently the image features dominate so heavily that text contributes negligibly to the final embedding. More research needed. 
-
-Eventually I found that separate image-only embeddings and text-only embeddings worked better.  And hybrid search that ranks results from keyword, image embedding, and text embedding searches, worked best.
-
-## Installation
-
-See [INSTALLATION.md](INSTALLATION.md) for detailed setup instructions including prerequisites, environment configuration, and deployment steps.
+- [MuseRAG++: A Deep Retrieval-Augmented Generation Framework for Semantic Interaction and Multi-Modal Reasoning in Virtual Museums](https://www.researchsquare.com/article/rs-7281889/v1): RAG-powered museum chatbot
+- National Museum of Norway Semantic Collection Search ([Website](https://beta.nasjonalmuseet.no/collection/), [Article](https://beta.nasjonalmuseet.no/2023/08/add-semantic-search-to-a-online-collection/)): Search via embeddings of GPT-4 Vision image descriptions.
+- Semantic Art Search ([Github](https://github.com/KristianMSchmidt/semantic-art-search), [Website](https://semantic-art-search.com/)): Explore art through meaning-driven search 
+- Sketchy Collections ([Github](https://github.com/psologub/sketchycollections), [Website](http://134.209.182.231:8000/)): CLIP-based image search tool that lets you explore artworks by drawing or uploading a picture
 
 ## License
 
-This project is MIT licensed. Museum data is used according to each institution's open access policies.
+MIT licensed. Museum data used according to The Metropolitan Museum of Art's [open access policy](https://www.metmuseum.org/about-the-met/policies-and-documents/open-access).
