@@ -233,7 +233,7 @@ function summariseArtwork(source?: Artwork | SearchHit['_source']): SourceSummar
   const summary =
     source.visual_description?.alt_text ??
     source.visual_description?.long_description ??
-    source.emoji_summary;
+    source.visual_description?.emoji_summary;
 
   return {
     id: (source as Artwork).id || '',

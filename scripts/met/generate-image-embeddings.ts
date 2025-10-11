@@ -204,12 +204,13 @@ const MAX_JINA_RETRIES = Number(
 const BASE_RETRY_DELAY_MS = Number(
   process.env.JINA_CLIP_RETRY_DELAY_MS ?? '1000'
 );
-let sharpLoader: Promise<typeof import('sharp')['default'] | null> | null = null;
+type SharpModule = typeof import('sharp');
+let sharpLoader: Promise<SharpModule | null> | null = null;
 
-async function getSharpInstance() {
+async function getSharpInstance(): Promise<SharpModule | null> {
   if (!sharpLoader) {
     sharpLoader = import('sharp')
-      .then((mod) => mod.default)
+      .then((mod) => (mod.default ?? mod) as SharpModule)
       .catch(() => {
         console.warn(
           '[generate-image-embeddings] Install "sharp" to enable automatic image compression when Gemini payloads exceed 32KB.'
@@ -228,8 +229,8 @@ async function ensurePayloadLimit(
     return { buffer, mimeType };
   }
 
-  const sharp = await getSharpInstance();
-  if (!sharp) {
+  const sharpModule = await getSharpInstance();
+  if (!sharpModule) {
     throw new Error(
       `Image payload ${buffer.length} bytes exceeds configured limit (${MAX_PAYLOAD_BYTES}).`
     );
@@ -241,7 +242,7 @@ async function ensurePayloadLimit(
 
   for (const width of widthLevels) {
     for (const quality of qualityLevels) {
-      const candidate = await sharp(buffer)
+      const candidate = await sharpModule(buffer)
         .rotate()
         .resize({ width, withoutEnlargement: true })
         .jpeg({ quality, mozjpeg: true })

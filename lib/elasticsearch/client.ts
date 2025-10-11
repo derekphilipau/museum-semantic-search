@@ -640,6 +640,10 @@ async function performMultipleEmbeddingHybridSearchWithEmbeddings(
   
   console.log(`Final multi-model hybrid results: ${sortedHits.length} documents (from ${documentScores.size} unique)`);
   
+  const filteredSemanticQueries = semanticResults.flatMap((r, i) =>
+    r.esQuery ? [{ model: models[i], query: r.esQuery as ESSearchQuery }] : []
+  );
+
   return {
     took: Math.max(...results.map(r => r.took || 0)),
     total: documentScores.size,
@@ -661,12 +665,7 @@ async function performMultipleEmbeddingHybridSearchWithEmbeddings(
       },
       models: models,
       keywordQuery: keywordResults.esQuery as ESSearchQuery | undefined,
-      semanticQueries: semanticResults
-        .map((r, i) => ({
-          model: models[i],
-          query: r.esQuery as ESSearchQuery | undefined
-        }))
-        .filter((sq): sq is { model: string; query: ESSearchQuery } => sq.query !== undefined)
+      semanticQueries: filteredSemanticQueries.length ? filteredSemanticQueries : undefined
     }
   };
 }

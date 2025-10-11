@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { performSemanticSearchWithEmbedding } from '@/lib/elasticsearch/client';
-import { embedJinaText, embedJinaClipText, EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings';
+import { embedJinaText, embedJinaClipText, ModelKey } from '@/lib/embeddings';
 import { EmbeddingType } from '@/app/types';
 
 export async function GET(request: NextRequest) {
