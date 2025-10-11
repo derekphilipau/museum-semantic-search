@@ -4,6 +4,8 @@ Prototype exploring semantic search for museum collections using AI-generated vi
 
 ![Screenshot](docs/images/Screenshots.jpg)
 
+***Note: This project was recently switched to use Jina text (v3) and CLIP v2 embeddings, and uses Jina API rather than a custom Modal service. The demo website may have different results than the screenshots in this document.***
+
 ## Features
 
 - Search artworks using multilingual natural language queries
