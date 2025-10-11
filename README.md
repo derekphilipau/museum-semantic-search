@@ -16,6 +16,18 @@ Prototype exploring semantic search for museum collections using AI-generated vi
 - [Try the Demo](https://museum-semantic-search.vercel.app/) - Search 5,280 Open Access Met paintings
 - [Explore the Embeddings Visualization](https://museum-semantic-search.vercel.app/visualize) - See how artworks cluster by text & image similarity
 - [Technical Guide & Setup](TECHNICAL_GUIDE.md) - Setup and development guide
+- [Trusted Context Prototype Plan](docs/TrustedContextPrototypePlan.md) - Offline capsule pipeline for grounded chat answers
+
+## Capsule-Based Chat Prototype
+
+We are extending the project with an offline, citation-first chat experience for individual artworks. Each prototype artwork (starting with *The Death of Socrates*) receives a **capsule**: canonical metadata, visual description chunks we already generate, and vetted narrative snippets sourced from cached Wikipedia/Wikidata entries. Snippets are stored with embeddings in a dedicated Elasticsearch index so the runtime can retrieve 6–12 grounded passages, require inline citations, and gracefully deflect outside that approved scope—no live web calls, no human editors in the loop. See the [Trusted Context Prototype Plan](docs/TrustedContextPrototypePlan.md) for the full build pipeline and storage schema. (Getty vocabularies can be layered on later if we decide to expand beyond the MVP.)
+
+- Run `npx tsx scripts/trusted_context/suggest-links.ts --artifact-config …` (Gemini, loads `GOOGLE_GEMINI_API_KEY`/`GEMINI_API_KEY` from `.env*`) to identify the Wikipedia titles to mirror.
+- Mirror those pages once with `npx tsx scripts/trusted_context/fetch-wikipedia.ts --suggestions …` (the script will try a Wikipedia search fallback if the suggested title is slightly off).
+- Generate the capsule bundle and snippet JSONL with `node scripts/trusted_context/build-capsule.mjs --artifact-config …`, then ingest the snippets into Elasticsearch.
+- Create snippet embeddings locally with `python scripts/trusted_context/generate-snippet-embeddings.py --input …` (loads `jinaai/jina-embeddings-v3`; supports `--device cpu|cuda|mps`).
+- Index the snippets with `node scripts/trusted_context/index-snippets.mjs --artifact …` (defaults to `ELASTICSEARCH_KNOWLEDGE_INDEX=knowledge_snippets`).
+- Retrieve grounded passages at runtime via `POST /api/knowledge-search` (body: `{ artifactId, query, size? }`), which returns top snippets + citations for the chat prompt.
 
 ## Example Searches
 
