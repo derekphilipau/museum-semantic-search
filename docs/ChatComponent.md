@@ -16,7 +16,7 @@ Here’s a tight, build-ready plan for a “Death of Socrates” chat MVP that p
 
 ## 1.1 Index: `knowledge_snippets`
 
-Mapping (unchanged from earlier, 768 dims if you use the same model as your app):
+Mapping (matches Jina v3 defaults, 1024 dims if you use the same model as your app):
 
 ```json
 {
@@ -30,7 +30,7 @@ Mapping (unchanged from earlier, 768 dims if you use the same model as your app)
       "lang": {"type":"keyword"},
       "text": {"type":"text"},
       "entity_ids": {"type":"keyword"},
-      "embedding": {"type":"dense_vector","dims":768,"index":true,"similarity":"cosine"},
+      "embedding": {"type":"dense_vector","dims":1024,"index":true,"similarity":"cosine"},
       "cit_ref": {"type":"keyword"},            // e.g. enwiki|2025-09-20|rev:123456
       "capsule_family": {"type":"keyword"}      // artwork | subject
     }

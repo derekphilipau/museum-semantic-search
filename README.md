@@ -294,7 +294,7 @@ Traditional Elasticsearch text search using BM25 scoring across artwork metadata
 
 ### 2. **Semantic Search** 
 Vector similarity search using pre-computed embeddings:
-- **Jina Text v3**: Semantic search combining artwork metadata with AI-generated descriptions using `jina-embeddings-v3` (default 768 dimensions; set `JINA_TEXT_EMBED_DIM=1536` to experiment with higher precision)
+- **Jina Text v3**: Semantic search combining artwork metadata with AI-generated descriptions using `jina-embeddings-v3` (default 1024 dimensions; set `JINA_TEXT_EMBED_DIM=1536` to experiment with higher precision)
 - **Jina CLIP v2**: Cross-modal search powered by Jina's CLIP v2 model (default 1024 dimensions; adjust `JINA_CLIP_EMBED_DIM` to experiment with larger vectors) for natural language ↔ image matching
 
 ### 3. **Hybrid Search**

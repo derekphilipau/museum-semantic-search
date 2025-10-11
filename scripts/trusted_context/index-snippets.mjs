@@ -109,7 +109,11 @@ function getClient() {
   return new Client({ node: ES_URL });
 }
 
-const KNOWLEDGE_INDEX = process.env.ELASTICSEARCH_KNOWLEDGE_INDEX || 'knowledge_snippets';
+const KNOWLEDGE_INDEX =
+  process.env.ELASTICSEARCH_KNOWLEDGE_INDEX || 'knowledge_snippets';
+
+const TEXT_EMBED_DIM =
+  Number.parseInt(process.env.JINA_TEXT_EMBED_DIM || '1024', 10) || 1024;
 
 const KNOWLEDGE_MAPPING = {
   settings: {
@@ -143,12 +147,15 @@ const KNOWLEDGE_MAPPING = {
       sentence_count: { type: 'integer' },
       entity_ids: { type: 'keyword' },
       doc_path: { type: 'keyword' },
-      embedding: { type: 'dense_vector', dims: 768, similarity: 'cosine' },
+      embedding: { type: 'dense_vector', dims: TEXT_EMBED_DIM, similarity: 'cosine' },
     },
   },
 };
 
 async function ensureIndex(client, indexName, recreate) {
+  console.log(
+    `Ensuring index '${indexName}' (embedding dims=${TEXT_EMBED_DIM})...`
+  );
   const exists = await client.indices.exists({ index: indexName });
   if (exists && recreate) {
     console.log(`Deleting existing index '${indexName}'...`);
@@ -181,9 +188,36 @@ async function* readJsonl(filePath) {
   }
 }
 
+async function fileExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveSnippetPath(filePath) {
+  const absolute = path.isAbsolute(filePath) ? filePath : path.join(ROOT_DIR, filePath);
+
+  if (await fileExists(absolute)) {
+    return absolute;
+  }
+
+  if (absolute.toLowerCase().endsWith('.jsonl')) {
+    const withEmbeddings = absolute.replace(/\.jsonl$/i, '.with_embeddings.jsonl');
+    if (await fileExists(withEmbeddings)) {
+      return withEmbeddings;
+    }
+  }
+
+  throw new Error(`Snippet file not found: ${filePath}`);
+}
+
 async function bulkIndex(client, indexName, filePath) {
   let count = 0;
   const ops = [];
+  const displayPath = path.relative(ROOT_DIR, path.isAbsolute(filePath) ? filePath : path.join(ROOT_DIR, filePath));
 
   for await (const doc of readJsonl(filePath)) {
     ops.push({ index: { _index: indexName, _id: doc.snippet_id } });
@@ -209,20 +243,21 @@ async function bulkIndex(client, indexName, filePath) {
     throw new Error('Bulk indexing failed. See logs above.');
   }
 
-  console.log(`Indexed ${count} snippets from ${filePath}`);
+  console.log(`Indexed ${count} snippets from ${displayPath}`);
   return count;
 }
 
 async function main() {
   const args = parseArgs();
   const client = getClient();
-  const indexName = args.index || process.env.ELASTICSEARCH_KNOWLEDGE_INDEX || 'knowledge_snippets';
+  const indexName = args.index || KNOWLEDGE_INDEX;
 
   await ensureIndex(client, indexName, args.recreate);
 
   let total = 0;
   for (const filePath of args.snippets) {
-    total += await bulkIndex(client, indexName, filePath);
+    const resolvedPath = await resolveSnippetPath(filePath);
+    total += await bulkIndex(client, indexName, resolvedPath);
   }
 
   console.log(`Indexed total of ${total} snippets into '${indexName}'.`);

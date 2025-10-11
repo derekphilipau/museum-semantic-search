@@ -6,9 +6,18 @@ import { EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings';
 import { Artwork, SearchResponse } from '@/app/types';
 import SimilarArtworks from './SimilarArtworks';
 import ArtworkDetail from './ArtworkDetail';
+import KnowledgePanel from './KnowledgePanel';
 import ScrollToTop from '@/app/components/ScrollToTop';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getElasticsearchClient, INDEX_NAME, findSimilarArtworks, findCombinedSimilarArtworks, findMetadataSimilarArtworks, hydrateSimilarArtworks } from '@/lib/elasticsearch/client';
+import {
+  getElasticsearchClient,
+  INDEX_NAME,
+  findSimilarArtworks,
+  findCombinedSimilarArtworks,
+  findMetadataSimilarArtworks,
+  hydrateSimilarArtworks,
+} from '@/lib/elasticsearch/client';
+import { loadKnowledgeCapsule } from '@/lib/knowledge';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -146,10 +155,13 @@ export default async function ArtworkDetailPage({ params }: PageProps) {
     notFound();
   }
 
+  const knowledgeCapsule = await loadKnowledgeCapsule(artwork.id);
+
   return (
     <div className="container mx-auto px-4 py-6">
       <ScrollToTop />
       <ArtworkDetail artwork={artwork} />
+      {knowledgeCapsule && <KnowledgePanel capsule={knowledgeCapsule} />}
       
       <Suspense fallback={
         <div className="space-y-4">

@@ -135,7 +135,7 @@ async function loadDescriptions(): Promise<Map<string, DescriptionRecord>> {
       if (record.artwork_id) {
         descriptions.set(record.artwork_id, record);
       }
-    } catch (error) {
+    } catch {
       console.warn('Failed to parse description line');
     }
   }

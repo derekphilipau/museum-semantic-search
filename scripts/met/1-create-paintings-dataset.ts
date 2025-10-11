@@ -22,22 +22,15 @@ import { parse } from 'csv-parse';
 import { stringify } from 'csv-stringify';
 import { parseArgs } from 'util';
 
-interface MetAPIResponse {
-  objectID: number;
-  primaryImage: string;
-  primaryImageSmall: string;
-  title: string;
-  artistDisplayName: string;
-  objectDate: string;
-  [key: string]: any;
-}
+type CsvRow = Record<string, string>;
 
-interface ProcessedPainting {
-  csvRow: any;
-  primaryImage: string;
-  primaryImageSmall: string;
-  hasImage: boolean;
-  fetchedAt: string;
+interface MetAPIResponse extends Record<string, unknown> {
+  objectID?: number;
+  primaryImage?: string;
+  primaryImageSmall?: string;
+  title?: string;
+  artistDisplayName?: string;
+  objectDate?: string;
 }
 
 class MetAPIFetcher {
@@ -54,8 +47,8 @@ class MetAPIFetcher {
     this.baseDelay = delay;
   }
 
-  async loadExistingData(): Promise<Map<string, any>> {
-    const existing = new Map<string, any>();
+  async loadExistingData(): Promise<Map<string, CsvRow>> {
+    const existing = new Map<string, CsvRow>();
     
     try {
       await fs.access(this.outputPath);
@@ -129,11 +122,15 @@ class MetAPIFetcher {
           const text = await response.text();
           console.log(`  ✗ HTTP ${response.status}: ${text.substring(0, 100)}`);
         }
-      } catch (error: any) {
-        if (error.name === 'AbortError') {
-          console.log(`  ✗ Request timeout`);
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          if (error.name === 'AbortError') {
+            console.log('  ✗ Request timeout');
+          } else {
+            console.log(`  ✗ Error: ${error.message}`);
+          }
         } else {
-          console.log(`  ✗ Error: ${error.message}`);
+          console.log('  ✗ Unknown error encountered during fetch');
         }
       }
       
@@ -158,7 +155,7 @@ class MetAPIFetcher {
     const existing = await this.loadExistingData();
     
     // Collect paintings to process
-    const paintingsToProcess: Array<{id: string, row: any}> = [];
+    const paintingsToProcess: Array<{ id: string; row: CsvRow }> = [];
     console.log(`\nReading CSV from ${csvPath}`);
     
     // First pass: collect headers and paintings

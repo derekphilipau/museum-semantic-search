@@ -34,6 +34,13 @@ interface ProcessedRecord {
   generated_at: string;
 }
 
+interface ArtworkDocument {
+  id?: string;
+  title?: string;
+  artist?: string;
+  similar_artworks?: Array<{ explanation?: string }>;
+}
+
 class SimilarityUpdater {
   private similarArtworksPath: string;
   private processedCount = 0;
@@ -155,15 +162,15 @@ class SimilarityUpdater {
           _source: ['id', 'title', 'artist', 'similar_artworks']
         });
         
-        const artwork = response._source as any;
+        const artwork = response._source as ArtworkDocument | undefined;
         const expectedSimilar = similarityMap.get(artworkId)?.length || 0;
-        const actualSimilar = artwork.similar_artworks?.length || 0;
+        const actualSimilar = artwork?.similar_artworks?.length || 0;
         
-        console.log(`\n${artwork.title} by ${artwork.artist}:`);
+        console.log(`\n${artwork?.title ?? 'Unknown title'} by ${artwork?.artist ?? 'Unknown artist'}:`);
         console.log(`  Expected ${expectedSimilar} similar artworks`);
         console.log(`  Found ${actualSimilar} similar artworks`);
         
-        if (actualSimilar > 0 && artwork.similar_artworks[0]) {
+        if (actualSimilar > 0 && artwork?.similar_artworks?.[0]) {
           console.log(`  Top match: ${artwork.similar_artworks[0].explanation}`);
         }
       } catch (error) {

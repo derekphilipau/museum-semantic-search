@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Embed capsule snippets using Gemini embeddings.
+ * Embed capsule snippets using Jina text embeddings (v3 via API).
  */
 
 import { loadEnvConfig } from '@next/env';
@@ -22,13 +22,11 @@ interface CliOptions {
   input: string;
   output: string;
   batchSize: number;
-  task: 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY';
 }
 
 function parseArgs(argv: string[]): CliOptions {
   const options: Partial<CliOptions> = {
     batchSize: Number.parseInt(process.env.SNIPPET_EMBED_BATCH || '16', 10),
-    task: 'RETRIEVAL_DOCUMENT',
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -42,9 +40,6 @@ function parseArgs(argv: string[]): CliOptions {
         break;
       case '--batch':
         options.batchSize = Number.parseInt(argv[++i], 10);
-        break;
-      case '--task':
-        options.task = argv[++i] as CliOptions['task'];
         break;
       default:
         if (arg.startsWith('-')) {
@@ -62,7 +57,6 @@ function parseArgs(argv: string[]): CliOptions {
     output:
       options.output || options.input.replace(/\.jsonl$/i, '.with_embeddings.jsonl'),
     batchSize: Math.max(1, options.batchSize || 16),
-    task: options.task || 'RETRIEVAL_DOCUMENT',
   };
 
   return resolved;
@@ -100,8 +94,11 @@ async function writeJsonl(filePath: string, records: SnippetRecord[]): Promise<v
   await fs.writeFile(absolute, content, 'utf-8');
 }
 
-async function embedSnippets(records: SnippetRecord[], batchSize: number, _task: CliOptions['task']) {
-  const dimension = EMBEDDING_MODELS.jina_text.dimension;
+async function embedSnippets(
+  records: SnippetRecord[],
+  batchSize: number
+) {
+  const expectedDimension = EMBEDDING_MODELS.jina_text.dimension;
 
   for (let i = 0; i < records.length; i += batchSize) {
     const batch = records.slice(i, i + batchSize);
@@ -113,6 +110,11 @@ async function embedSnippets(records: SnippetRecord[], batchSize: number, _task:
     }
 
     vectors.forEach((vector, index) => {
+      if (Array.isArray(vector.values) && vector.values.length !== expectedDimension) {
+        throw new Error(
+          `Embedding dimension mismatch: expected ${expectedDimension}, received ${vector.values.length}`
+        );
+      }
       batch[index].embedding = vector.values;
     });
 
@@ -134,7 +136,7 @@ async function main() {
 
     console.log(`Loaded ${records.length} snippets from ${options.input}`);
 
-    await embedSnippets(records, options.batchSize, options.task);
+    await embedSnippets(records, options.batchSize);
 
     await writeJsonl(options.output, records);
     console.log(`Saved embedded snippets → ${options.output}`);

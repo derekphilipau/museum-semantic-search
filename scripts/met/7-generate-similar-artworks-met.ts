@@ -32,6 +32,12 @@ import {
 import type { Artwork, SearchHit, SearchResponse } from '../../app/types';
 import type { Client } from '@elastic/elasticsearch';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import type {
+  EnhancedGenerateContentResponse,
+  GenerateContentResult,
+  GenerateContentCandidate,
+  Part,
+} from '@google/generative-ai';
 
 // Load env vars before other imports use them
 const projectDir = path.join(__dirname, '../..');
@@ -410,19 +416,59 @@ function buildPromptText(bundle: PromptBundle): string {
 
 type GenerativeModel = ReturnType<GoogleGenerativeAI['getGenerativeModel']>;
 
+const extractStatusCode = (error: unknown): number | undefined => {
+  if (!error || typeof error !== 'object') {
+    return undefined;
+  }
+
+  if ('status' in error && typeof (error as { status?: number }).status === 'number') {
+    return (error as { status?: number }).status;
+  }
+
+  const cause = (error as { cause?: { status?: number } }).cause;
+  if (cause && typeof cause.status === 'number') {
+    return cause.status;
+  }
+
+  const details = (error as { errorDetails?: Array<{ status?: number | string }> }).errorDetails;
+  if (Array.isArray(details)) {
+    for (const detail of details) {
+      if (detail && typeof detail.status === 'number') {
+        return detail.status;
+      }
+      if (detail && typeof detail.status === 'string') {
+        const parsed = Number(detail.status);
+        if (!Number.isNaN(parsed)) {
+          return parsed;
+        }
+      }
+    }
+  }
+
+  return undefined;
+};
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return 'Unknown error';
+};
+
 async function generateContentWithRetry(
   modelClient: GenerativeModel,
   prompt: string,
   attempt = 1,
-): Promise<any> {
+): Promise<EnhancedGenerateContentResponse> {
   try {
-    const result = await modelClient.generateContent(prompt);
+    const result: GenerateContentResult = await modelClient.generateContent(prompt);
     return result.response;
   } catch (error) {
-    const status =
-      (error as any)?.status ??
-      (error as any)?.cause?.status ??
-      (error as any)?.errorDetails?.[0]?.status;
+    const status = extractStatusCode(error);
+    const message = getErrorMessage(error);
 
     if (
       status !== undefined &&
@@ -437,11 +483,12 @@ async function generateContentWithRetry(
       return generateContentWithRetry(modelClient, prompt, attempt + 1);
     }
 
+    console.error(`Gemini request failed: ${message}`);
     throw error;
   }
 }
 
-function parseGeminiResponse(rawResponse: any): {
+function parseGeminiResponse(rawResponse: EnhancedGenerateContentResponse): {
   items: SimilarArtworkRecord['similar_artworks'];
   errors: string[];
   shouldRetry: boolean;
@@ -455,13 +502,15 @@ function parseGeminiResponse(rawResponse: any): {
     return { items: [], errors, shouldRetry };
   }
 
-  const first = candidates[0];
+  const first = candidates[0] as GenerateContentCandidate;
   if (first.finishReason === 'SAFETY') {
     errors.push('safety_block');
     return { items: [], errors, shouldRetry };
   }
 
-  const textPart = first?.content?.parts?.find((part: any) => typeof part.text === 'string');
+  const textPart = first?.content?.parts?.find(
+    (part: Part): part is Part & { text: string } => typeof part.text === 'string'
+  );
   if (!textPart?.text) {
     errors.push('missing_text_part');
     shouldRetry = true;
@@ -530,9 +579,13 @@ async function loadExistingRecords(filePath: string, force: boolean): Promise<Se
     try {
       await fs.unlink(filePath);
       console.log(`Removed existing output file at ${filePath}`);
-    } catch (error: any) {
-      if (error?.code !== 'ENOENT') {
-        console.warn(`Failed to remove existing file: ${error}`);
+    } catch (error: unknown) {
+      const code =
+        typeof error === 'object' && error && 'code' in error
+          ? (error as { code?: string }).code
+          : undefined;
+      if (code !== 'ENOENT') {
+        console.warn(`Failed to remove existing file: ${getErrorMessage(error)}`);
       }
     }
     return new Set();

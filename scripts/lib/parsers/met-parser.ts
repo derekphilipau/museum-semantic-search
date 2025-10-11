@@ -1,7 +1,7 @@
 import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { BaseParser, ParsedArtwork } from './types';
-import { ArtworkImage, Artist } from '../../../app/types';
+import { Artist } from '../../../app/types';
 
 interface MetCSVRow {
   'Object Number': string;

@@ -1,5 +1,12 @@
 import { ArtworkMetadata, ArtworkImage } from '../../../app/types';
 
+type DimensionResult = {
+  width?: number;
+  height?: number;
+  depth?: number;
+  diameter?: number;
+};
+
 // Generic parser interface that all collection parsers must implement
 export interface CollectionParser {
   // Parse a CSV/JSON file and return normalized artwork data
@@ -63,13 +70,8 @@ export abstract class BaseParser implements CollectionParser {
   }
   
   // Helper to parse physical dimensions from various formats
-  protected parsePhysicalDimensions(dimStr: string): {
-    width?: number;
-    height?: number;
-    depth?: number;
-    diameter?: number;
-  } {
-    const dims: any = {};
+  protected parsePhysicalDimensions(dimStr: string): DimensionResult {
+    const dims: DimensionResult = {};
     
     // Try to extract height x width x depth pattern
     const hwdMatch = dimStr.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:[x×]\s*(\d+(?:\.\d+)?))?/);

@@ -60,7 +60,7 @@ GOOGLE_GEMINI_API_KEY=your_gemini_api_key  # For Gemini 2.5 Flash descriptions
 # Jina Embeddings
 JINA_API_KEY=your_jina_api_key
 JINA_TEXT_EMBED_MODEL=jina-embeddings-v3
-JINA_TEXT_EMBED_DIM=768             # Increase to 1536 for higher-precision text vectors
+JINA_TEXT_EMBED_DIM=1024            # Increase to 1536 for higher-precision text vectors
 JINA_IMAGE_EMBED_MODEL=jina-clip-v2
 JINA_CLIP_EMBED_DIM=1024             # Increase to 1536 for higher-precision image vectors
 # Optional overrides:

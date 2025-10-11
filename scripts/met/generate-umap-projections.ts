@@ -92,7 +92,7 @@ async function loadEmbeddings(
       if (record.artwork_id && Array.isArray(record.embedding)) {
         records.push(record);
       }
-    } catch (error) {
+    } catch {
       console.warn('Failed to parse embedding record');
     }
   }
