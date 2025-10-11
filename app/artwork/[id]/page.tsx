@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { Search } from 'lucide-react';
-import { EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings/types';
+import { EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings';
 import { Artwork, SearchResponse } from '@/app/types';
 import SimilarArtworks from './SimilarArtworks';
 import ArtworkDetail from './ArtworkDetail';
@@ -57,7 +57,7 @@ async function getSimilarArtworks(artwork: Artwork): Promise<Record<string, Sear
       artwork.id, 
       modelKeys,
       20,
-      { jina_v3: 0.35, siglip2: 0.35, metadata: 0.3 } // Balanced weights across all similarity types
+      { jina_text: 0.35, jina_clip: 0.35, metadata: 0.3 } // Balanced weights across all similarity types
     ).catch(error => {
       console.log(`Combined similarity search failed for artwork ${artwork.id}:`, error);
       return { took: 0, total: 0, hits: [] };

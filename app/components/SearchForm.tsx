@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Info, Image as ImageIcon } from 'lucide-react';
-import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
+import { EMBEDDING_MODELS } from '@/lib/embeddings';
 import { SearchResponse, SearchMetadata } from '@/app/types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -140,7 +140,7 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
         setImageSearchState({ isSearching: false, results: apiResults, error: null });
         
         // Scroll to results if they exist
-        if (apiResults.semantic?.siglip2?.hits?.length > 0) {
+        if (apiResults.semantic?.jina_clip?.hits?.length > 0) {
           setTimeout(() => {
             document.getElementById('search-results')?.scrollIntoView({ behavior: 'smooth' });
           }, 100);
@@ -345,9 +345,9 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
                     <TooltipContent>
                       <p className="max-w-xs text-sm">
                         Choose which embeddings to combine with keyword search using Elasticsearch&apos;s RRF:
-                        <br />• Text: Keyword + Jina v3 text embeddings
-                        <br />• Image: Keyword + SigLIP 2 cross-modal embeddings (default)
-                        <br />• Both: Keyword + both Jina v3 and SigLIP 2
+                        <br />• Text: Keyword + Jina text embeddings
+                        <br />• Image: Keyword + Jina CLIP image embeddings (default)
+                        <br />• Both: Keyword + Jina text and Jina CLIP together
                       </p>
                     </TooltipContent>
                   </Tooltip>

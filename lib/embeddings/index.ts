@@ -1,3 +1,16 @@
-// Only export the unified embeddings function and types
-export { EMBEDDING_MODELS, type ModelKey, type EmbeddingResponse } from './types';
-export { generateUnifiedEmbeddings, extractSigLIP2Embedding, extractJinaV3Embedding } from './unified';
+export {
+  EMBEDDING_MODELS,
+  type ModelKey,
+  type EmbeddingModel,
+  type EmbeddingVector,
+  type EmbeddingBatchResult,
+  type EmbedTextOptions,
+  type GeminiTaskType,
+} from './types';
+
+export {
+  embedJinaText,
+  embedJinaTextBatch,
+  embedJinaClipImage,
+  embedJinaClipText,
+} from './jina';

@@ -1,2 +1,0 @@
-# Modal.com requirements
-modal>=0.56.0

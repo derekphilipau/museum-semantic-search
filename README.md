@@ -16,6 +16,25 @@ Prototype exploring semantic search for museum collections using AI-generated vi
 - [Try the Demo](https://museum-semantic-search.vercel.app/) - Search 5,280 Open Access Met paintings
 - [Explore the Embeddings Visualization](https://museum-semantic-search.vercel.app/visualize) - See how artworks cluster by text & image similarity
 - [Technical Guide & Setup](TECHNICAL_GUIDE.md) - Setup and development guide
+- [Trusted Context Prototype Plan](docs/TrustedContextPrototypePlan.md) - Offline capsule pipeline for grounded chat answers
+
+## API Keys
+
+Set the following environment variables before running the embedding scripts:
+
+- `GOOGLE_GEMINI_API_KEY` for Gemini 2.5 Flash visual description generation and other LLM tooling.
+- `JINA_API_KEY` for Jina text (v3) and CLIP v2 embeddings (run `npm install sharp` locally once so oversized images can be compressed automatically).
+
+## Capsule-Based Chat Prototype
+
+We are extending the project with an offline, citation-first chat experience for individual artworks. Each prototype artwork (starting with *The Death of Socrates*) receives a **capsule**: canonical metadata, visual description chunks we already generate, and vetted narrative snippets sourced from cached Wikipedia/Wikidata entries. Snippets are stored with embeddings in a dedicated Elasticsearch index so the runtime can retrieve 6–12 grounded passages, require inline citations, and gracefully deflect outside that approved scope—no live web calls, no human editors in the loop. See the [Trusted Context Prototype Plan](docs/TrustedContextPrototypePlan.md) for the full build pipeline and storage schema. (Getty vocabularies can be layered on later if we decide to expand beyond the MVP.)
+
+- Run `npx tsx scripts/trusted_context/suggest-links.ts --artifact-config …` (Gemini, loads `GOOGLE_GEMINI_API_KEY`/`GEMINI_API_KEY` from `.env*`) to identify the Wikipedia titles to mirror.
+- Mirror those pages once with `npx tsx scripts/trusted_context/fetch-wikipedia.ts --suggestions …` (the script will try a Wikipedia search fallback if the suggested title is slightly off).
+- Generate the capsule bundle and snippet JSONL with `node scripts/trusted_context/build-capsule.mjs --artifact-config …`, then ingest the snippets into Elasticsearch.
+- Create snippet embeddings with `npx tsx scripts/trusted_context/embed-snippets.ts --input …` (Jina v3 document embeddings written beside the source JSONL).
+- Index the snippets with `node scripts/trusted_context/index-snippets.mjs --artifact …` (defaults to `ELASTICSEARCH_KNOWLEDGE_INDEX=knowledge_snippets`).
+- Retrieve grounded passages at runtime via `POST /api/knowledge-search` (body: `{ artifactId, query, size? }`), which returns top snippets + citations for the chat prompt.
 
 ## Example Searches
 
@@ -193,12 +212,12 @@ Sometimes strangely accurate revealing details I missed, at other times question
 
 Below are comparisons of keyword search, text embedding search, and image embedding search for the query *"woman looking into mirror"*.  
 
-[Search for "woman looking into mirror"](https://museum-semantic-search.vercel.app/?q=woman+looking+into+mirror&keyword=true&hybrid=true&hybridMode=image&hybridBalance=0.5&models=jina_v3%2Csiglip2)
+[Search for "woman looking into mirror"](https://museum-semantic-search.vercel.app/?q=woman+looking+into+mirror&keyword=true&hybrid=true&hybridMode=image&hybridBalance=0.5&models=jina_text%2Cjina_clip)
 
 Out of a result set of 20:
 
 - The conventional Elasticsearch keyword search over Met Museum metadata produces only 3 results that I consider highly relevant.
-- Text embedding search using Jina v3 embeddings on combined metadata and AI-generated descriptions returns 13 excellent results, including a number of images where the reflection or mirror is not even visible.
+- Text embedding search using Jina embeddings on combined metadata and AI-generated descriptions returns 13 excellent results, including a number of images where the reflection or mirror is not even visible.
 - Image embedding search returns 8 highly-relevant results, including artworks where there's no actual mirror, but perhaps the concept of mirroring, for example [*"Portrait of a Woman with a Man at a Casement"* by Fra Filippo Lippi](https://www.metmuseum.org/art/collection/search/436896) and [*"Dancers, Pink and Green"* by Edgar Degas](https://www.metmuseum.org/art/collection/search/436140).
 
 ![Highly Relevant Results for "woman looking into mirror"](docs/images/MirrorCompare.jpg)
@@ -273,20 +292,20 @@ Traditional Elasticsearch text search using BM25 scoring across artwork metadata
 
 ### 2. **Semantic Search** 
 Vector similarity search using pre-computed embeddings:
-- **Jina v3 Text**: Advanced text search combining artwork metadata with AI-generated descriptions (768 dimensions)
-- **SigLIP 2 Cross-Modal**: True text-to-image search using Google's SigLIP 2 model (768 dimensions) - enables natural language queries like "red car in snow" or "mourning scene"
+- **Jina Text v3**: Semantic search combining artwork metadata with AI-generated descriptions using `jina-embeddings-v3` (default 768 dimensions; set `JINA_TEXT_EMBED_DIM=1536` to experiment with higher precision)
+- **Jina CLIP v2**: Cross-modal search powered by Jina's CLIP v2 model (default 1024 dimensions; adjust `JINA_CLIP_EMBED_DIM` to experiment with larger vectors) for natural language ↔ image matching
 
 ### 3. **Hybrid Search**
 Combines keyword and semantic search with user-adjustable balance control:
 
-- **Text Mode**: Keyword + Jina v3 text embeddings
-- **Image Mode**: Keyword + SigLIP 2 cross-modal embeddings  
-- **Both Mode**: Keyword + both embedding types using RRF
+- **Text Mode**: Keyword + Jina text embeddings
+- **Image Mode**: Keyword + Jina CLIP image embeddings  
+- **Both Mode**: Keyword + both embedding families using RRF
 - Balance slider: 0% = pure keyword, 100% = pure semantic, 50% = equal weight
 
 ### 4. **Image Search**
 
-By clicking on "Image Search" in the search bar, you can upload an image to find visually similar artworks using SigLIP 2 cross-modal embeddings.  Such a feature could be useful for museum-goers to find more information about an artwork they see in person or projects like [Google Arts & Culture's "Art Selfie"](https://artsandculture.google.com/camera/selfie).
+By clicking on "Image Search" in the search bar, you can upload an image to find visually similar artworks using Jina CLIP embeddings. This helps museum-goers find related works from a photo they capture in the galleries or projects like [Google Arts & Culture's "Art Selfie"](https://artsandculture.google.com/camera/selfie).
 
 <table>
 <tr>
@@ -321,14 +340,14 @@ Finds artworks with similar structured metadata using art historical principles:
 - **Culture/Nationality** (weight: 4) - Cultural and geographic connections
 - **Period/Dynasty** (weight: 3) - Art historical movements
 
-### 2. **Jina v3 Text Similarity**
-Uses 768-dimensional text embeddings to find semantically similar artworks based on:
+### 2. **Jina Text Similarity**
+Uses Jina text embeddings to find semantically similar artworks based on:
 - Artwork metadata (title, artist, date, medium)
 - AI-generated visual descriptions
 - Contextual understanding of art terminology
 
-### 3. **SigLIP 2 Visual Similarity**
-Uses 768-dimensional cross-modal embeddings to find visually similar artworks:
+### 3. **Jina CLIP Visual Similarity**
+Uses Jina CLIP embeddings to find visually similar artworks:
 - Analyzes visual features like composition, color, style
 - Works across different media and periods
 - Captures visual patterns independent of metadata
@@ -336,8 +355,8 @@ Uses 768-dimensional cross-modal embeddings to find visually similar artworks:
 ### 4. **Combined Similarity**
 
 Fuses all three similarity types using weighted Reciprocal Rank Fusion (RRF):
-- **35%** Jina v3 text embeddings - semantic understanding
-- **35%** SigLIP 2 visual embeddings - visual appearance
+- **35%** Jina text embeddings - semantic understanding
+- **35%** Jina CLIP embeddings - visual appearance
 - **30%** Elasticsearch metadata - art historical context
 
 *Note that Elasticsearch has [native RRF](https://www.elastic.co/docs/reference/elasticsearch/rest-apis/reciprocal-rank-fusion) but it's only available in the Enter­prise plan.*
@@ -345,20 +364,20 @@ Fuses all three similarity types using weighted Reciprocal Rank Fusion (RRF):
 ### 5. **AI Curated Similarity** (Pre-computed LLM Reranking)
 
 The AI curation process:
-1. Retrieves top 20 candidates from metadata and text embeddings searches, 5 candidates from image embeddings search
-2. Removes duplicates and presents candidates without scores to avoid bias
-3. Applies art historical expertise to select truly meaningful connections
-4. Enforces diversity rules (max 3 per artist, max 8 per similarity type)
-5. Returns up to 20 curated recommendations with confidence scores
+1. Retrieves trimmed candidate pools (metadata × 20, text × 20, image × 10) from Elasticsearch
+2. Applies reciprocal rank fusion with tuned weights (metadata 30%, text 40%, image 30%) and keeps the top ~24 unique works
+3. Sends prompts to Gemini 2.5 Flash with bounded concurrency, including evidence for each candidate (source, rank, score)
+4. Gemini selects up to 12 finalists, assigns similarity type + confidence, and explains the relationship
+5. The JSONL output is ingested into Elasticsearch so the UI can show curated recommendations instantly
 
 Uses Gemini 2.5 Flash to intelligently select and rank similar artworks:
 - **Cross-cultural connections**: Discovers relationships across time periods and cultures (e.g., Gauguin's Tahitian Madonna with Renaissance Madonnas)
 - **Thematic relationships**: Identifies shared subjects and motifs beyond surface similarities
 - **Visual intelligence**: Considers composition, style, and emotional resonance
 - **Diversity-aware**: Limits over-representation of single artists or similarity types
-- **Explainable**: Each recommendation includes a brief explanation of the connection
+- **Explainable**: Each recommendation includes a brief explanation grounded in the supplied evidence
 
-[Full prompt here.](scripts/met/7-generate-similar-artworks-met.ts#L259)
+[Prompt builder lives here.](scripts/met/7-generate-similar-artworks-met.ts)
 
 ### AI-Curated Similarity Example
 

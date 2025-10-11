@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateImageEmbedding, extractImageSigLIP2Embedding } from '@/lib/embeddings/image';
+import { embedJinaClipImage } from '@/lib/embeddings';
 import { performSemanticSearchWithEmbedding, getIndexStats } from '@/lib/elasticsearch/client';
 
 // Helper to get CORS headers
@@ -31,13 +31,29 @@ export async function POST(request: NextRequest) {
     // Track query start time
     const queryStartTime = Date.now();
 
-    // Generate embedding for the image using Modal API
-    const embeddingResponse = await generateImageEmbedding(image);
-    const siglip2Data = extractImageSigLIP2Embedding(embeddingResponse);
+    const [prefix, payload] = image.split(',');
+    const mimeMatch = prefix?.match(/^data:(.*?);base64$/);
+    const mimeType = mimeMatch?.[1] || 'image/jpeg';
+    const base64Data = payload ?? prefix ?? '';
+
+    if (!base64Data) {
+      return NextResponse.json(
+        { error: 'Invalid image payload' },
+        { status: 400, headers: getCorsHeaders(request) }
+      );
+    }
+
+    const embedStart = Date.now();
+    const embeddingVector = await embedJinaClipImage(base64Data, mimeType);
+    const embeddingTime = (Date.now() - embedStart) / 1000;
 
     // Perform semantic search with the image embedding
     const [searchResults, indexStats] = await Promise.all([
-      performSemanticSearchWithEmbedding(siglip2Data.embedding, 'siglip2', 20),
+      performSemanticSearchWithEmbedding(
+        embeddingVector.values,
+        'jina_clip',
+        20
+      ),
       getIndexStats()
     ]);
 
@@ -48,7 +64,7 @@ export async function POST(request: NextRequest) {
     const response = {
       keyword: null,
       semantic: {
-        siglip2: searchResults
+        jina_clip: searchResults
       },
       hybrid: null,
       metadata: {
@@ -56,13 +72,13 @@ export async function POST(request: NextRequest) {
         timestamp: new Date().toISOString(),
         totalQueryTime,
         searchMode: 'image',
-        embeddingTime: siglip2Data.processing_time,
+        embeddingTime,
         esQueries: {
           semantic: {
-            siglip2: {
-              note: 'Image similarity search using SigLIP2',
-              model: 'siglip2',
-              dimension: siglip2Data.dimension
+            jina_clip: {
+              note: 'Image similarity search using Jina CLIP v2 embeddings',
+              model: 'jina_clip',
+              dimension: embeddingVector.dimension
             }
           }
         }
