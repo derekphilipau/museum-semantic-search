@@ -7,17 +7,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "setup-siglip2": "pip3 install -r scripts/requirements-siglip2.txt",
     "1-create-paintings-dataset": "npx tsx scripts/met/1-create-paintings-dataset.ts",
     "2-generate-descriptions-met": "npx tsx scripts/met/2-generate-descriptions-met.ts",
     "3-edit-descriptions-met": "npx tsx scripts/met/3-edit-descriptions-met.ts",
-    "4-generate-jina-embeddings-met": "python3 scripts/met/4-generate-jina-text-embeddings-met.py",
-    "5-generate-siglip2-embeddings-met": "python3 scripts/met/5-generate-siglip2-image-embeddings-met.py",
+    "4-generate-text-embeddings-met": "npx tsx scripts/met/generate-text-embeddings.ts",
+    "5-generate-image-embeddings-met": "npx tsx scripts/met/generate-image-embeddings.ts",
     "6-generate-similar-artworks-met": "npx tsx scripts/met/7-generate-similar-artworks-met.ts",
     "7-update-similarities-met": "npx tsx scripts/met/8-update-similarities-met.ts",
-    "9-generate-umap-projections-met": "python3 scripts/met/9-generate-umap-projections-met.py",
+    "9-generate-umap-projections-met": "npx tsx scripts/met/generate-umap-projections.ts",
     "10-index-artworks": "npx tsx scripts/met/10-index-artworks.ts",
-    "setup": "echo 'Run: 1) npm run 1-create-paintings-dataset, 2) npm run 2-generate-descriptions-met, 3) npm run 3-edit-descriptions-met, 4) npm run 4-generate-jina-embeddings-met, 5) npm run 5-generate-siglip2-embeddings-met, 6) npm run 6-generate-similar-artworks-met, 7) npm run 7-update-similarities-met, 8) npm run 9-generate-umap-projections-met, 9) npm run 10-index-artworks'"
+    "setup": "echo 'Run: 1) npm run 1-create-paintings-dataset, 2) npm run 2-generate-descriptions-met, 3) npm run 3-edit-descriptions-met, 4) npm run 4-generate-text-embeddings-met, 5) npm run 5-generate-image-embeddings-met, 6) npm run 6-generate-similar-artworks-met, 7) npm run 7-update-similarities-met, 8) npm run 9-generate-umap-projections-met, 9) npm run 10-index-artworks'"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.19.1",
@@ -51,7 +50,9 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-dropzone": "^14.3.8",
-    "tailwind-merge": "^3.3.1"
+    "sharp": "^0.33.5",
+    "tailwind-merge": "^3.3.1",
+    "umap-js": "^1.3.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

@@ -1,7 +1,7 @@
 import { Client } from '@elastic/elasticsearch';
 // @ts-expect-error - TypeScript can't find the module but it exists
 import type { SearchResponse as ESResponse } from '@elastic/elasticsearch/lib/api/types';
-import { ModelKey } from '@/lib/embeddings/types';
+import { ModelKey } from '@/lib/embeddings';
 import { SearchResponse, SearchHit, SearchResponseWithQuery, ESSearchQuery, ESHybridQuery, Artwork, SimilarArtwork } from '@/app/types';
 
 // ============================================================================
@@ -27,8 +27,8 @@ const SEARCH_CONSTANTS = {
   // Score thresholds for filtering results
   SCORE_THRESHOLDS: {
     KEYWORD: 10.0,        // Lowered to allow more keyword matches in hybrid search
-    JINA_V3: 0.71,        // Threshold for Jina v3 text embeddings
-    SIGLIP2: 0.58,        // Threshold for SigLIP 2 image embeddings
+    JINA_TEXT: 0.68,      // Threshold for Jina text embeddings
+    JINA_CLIP: 0.6,       // Threshold for Jina CLIP embeddings
     SIMILARITY: 0.55,     // General similarity threshold
     METADATA: 2.0         // Metadata scores are typically higher
   },
@@ -160,8 +160,8 @@ function calculateBalanceWeights(balance: number): NormalizedWeights {
 function getScoreThreshold(model: ModelKey | 'keyword' | 'metadata' | 'similarity'): number {
   const thresholds: Record<string, number> = {
     keyword: SEARCH_CONSTANTS.SCORE_THRESHOLDS.KEYWORD,
-    jina_v3: SEARCH_CONSTANTS.SCORE_THRESHOLDS.JINA_V3,
-    siglip2: SEARCH_CONSTANTS.SCORE_THRESHOLDS.SIGLIP2,
+    jina_text: SEARCH_CONSTANTS.SCORE_THRESHOLDS.JINA_TEXT,
+    jina_clip: SEARCH_CONSTANTS.SCORE_THRESHOLDS.JINA_CLIP,
     similarity: SEARCH_CONSTANTS.SCORE_THRESHOLDS.SIMILARITY,
     metadata: SEARCH_CONSTANTS.SCORE_THRESHOLDS.METADATA
   };
@@ -558,7 +558,7 @@ async function performSingleEmbeddingHybridSearchWithEmbedding(
 // Multiple embedding hybrid search with pre-computed embeddings
 async function performMultipleEmbeddingHybridSearchWithEmbeddings(
   query: string,
-  embeddings: Record<ModelKey, number[]>,
+  embeddings: Partial<Record<ModelKey, number[]>>,
   models: ModelKey[],
   size: number = 20,
   includeDescriptions: boolean = false,
@@ -573,8 +573,11 @@ async function performMultipleEmbeddingHybridSearchWithEmbeddings(
   
   // Semantic searches using pre-computed embeddings
   for (const model of models) {
-    if (embeddings[model as ModelKey]) {
-      searchPromises.push(performSemanticSearchWithEmbedding(embeddings[model as ModelKey] as number[], model, searchSize));
+    const vector = embeddings[model];
+    if (vector) {
+      searchPromises.push(
+        performSemanticSearchWithEmbedding(vector, model, searchSize)
+      );
     }
   }
   
@@ -671,7 +674,7 @@ async function performMultipleEmbeddingHybridSearchWithEmbeddings(
 // Hybrid search with pre-computed embeddings
 export async function performHybridSearchWithEmbeddings(
   query: string,
-  embeddings: { siglip2?: number[]; jina_v3?: number[] },
+  embeddings: Partial<Record<ModelKey, number[]>>,
   models: ModelKey | ModelKey[],
   size: number = 20,
   includeDescriptions: boolean = false,
@@ -682,7 +685,7 @@ export async function performHybridSearchWithEmbeddings(
     
     if (modelsArray.length === 1) {
       const model = modelsArray[0];
-      const embedding = (embeddings as Record<ModelKey, number[]>)[model];
+      const embedding = embeddings[model];
       
       if (!embedding) {
         throw new Error(`No embedding found for model ${model}`);
@@ -698,7 +701,7 @@ export async function performHybridSearchWithEmbeddings(
       );
     } else {
       // Filter to only models we have embeddings for
-      const availableModels = modelsArray.filter(m => embeddings[m as keyof typeof embeddings]);
+      const availableModels = modelsArray.filter((m) => embeddings[m]);
       
       if (availableModels.length === 0) {
         throw new Error('No embeddings available for requested models');
@@ -706,7 +709,7 @@ export async function performHybridSearchWithEmbeddings(
       
       return await performMultipleEmbeddingHybridSearchWithEmbeddings(
         query,
-        embeddings as Record<ModelKey, number[]>,
+        embeddings,
         availableModels,
         size,
         includeDescriptions,

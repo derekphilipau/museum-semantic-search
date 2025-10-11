@@ -1,7 +1,7 @@
 # Embedding Visualization Features
 
 ## Overview
-Interactive features leveraging the Jina text embeddings and SigLIP2 image embeddings to create engaging visualization and exploration tools for the museum collection.
+Interactive features leveraging the Jina text and Jina CLIP embeddings to create engaging visualization and exploration tools for the museum collection.
 
 ## Core Embedding Features
 
@@ -12,7 +12,7 @@ Interactive features leveraging the Jina text embeddings and SigLIP2 image embed
   - Precomputed UMAP 3D projections for both embedding types
   - Real-time filtering and navigation
 - **View Modes**:
-  - Visual similarity (SigLIP2 embeddings)
+  - Visual similarity (Jina CLIP embeddings)
   - Conceptual similarity (Jina text embeddings)
   - Hybrid view (weighted combination)
 - **Features**:

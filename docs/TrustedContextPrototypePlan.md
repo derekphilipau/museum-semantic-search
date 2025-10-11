@@ -49,7 +49,7 @@ Prototype goal: demonstrate that richer, trustworthy chat experiences emerge whe
      - `related_entities`: resolved IDs with brief descriptions.
    - Use a retrieval-augmented LLM prompt that forbids inventing content and enforces one or more snippet citations per statement.
    - Generate the bundle and snippet JSONL with `node scripts/trusted_context/build-capsule.mjs --artifact-config data/trusted_corpus/artifacts/<artifact_id>.json`.
-   - Produce snippet embeddings locally with `python scripts/trusted_context/generate-snippet-embeddings.py --input data/trusted_corpus/snippets/<artifact_id>.jsonl --device cpu|cuda|mps` (writes a `.embedded.jsonl`).
+   - Produce snippet embeddings with Jina via `npx tsx scripts/trusted_context/embed-snippets.ts --input data/trusted_corpus/snippets/<artifact_id>.jsonl` (writes `<artifact_id>.with_embeddings.jsonl`).
    - Index the embedded snippets with `node scripts/trusted_context/index-snippets.mjs --snippets data/trusted_corpus/snippets/<artifact_id>.embedded.jsonl --recreate` (set `ELASTICSEARCH_KNOWLEDGE_INDEX` or accept `knowledge_snippets`).
 
 8. **Automated Review Pass**
@@ -68,7 +68,7 @@ Prototype goal: demonstrate that richer, trustworthy chat experiences emerge whe
     - On each user query, retrieve top-matching snippets from the capsule (semantic + keyword search).
     - Invoke the conversational LLM with the system prompt + retrieved snippets + capsule facts; enforce citation tags in responses.
     - If retrieval returns nothing relevant, respond with an in-character deflection citing scope limitations.
-    - API helper: `POST /api/knowledge-search` accepts `{ artifactId, query, size? }`, resolves the query embedding via the Modal service, and returns the top snippets with citation metadata for prompt construction.
+   - API helper: `POST /api/knowledge-search` accepts `{ artifactId, query, size? }`, resolves the query embedding with Jina text embeddings, and returns the top snippets with citation metadata for prompt construction.
 
 11. **Automated Regression Checks**
     - Create a small suite of scripted questions per artwork (facts, adversarial prompts) to ensure responses stay within the capsule and cite approved snippets.
@@ -78,7 +78,7 @@ Prototype goal: demonstrate that richer, trustworthy chat experiences emerge whe
 - `data/trusted_corpus/` — normalized source files (Wikipedia/Wikidata; Getty vocabularies can be layered in later).
 - `data/artifacts.json` — canonical metadata with external IDs and visual descriptions.
 - `capsules/<artifact_id>.json` — context capsules with citations and build metadata.
-- `scripts/` — automation for suggestion generation (`suggest-links.ts`), Wikipedia mirroring (`fetch-wikipedia.ts`), capsule generation (`build-capsule.mjs`), snippet embedding (`generate-snippet-embeddings.py`), snippet indexing (`index-snippets.mjs`), validator pass, and regression tests.
+- `scripts/` — automation for suggestion generation (`suggest-links.ts`), Wikipedia mirroring (`fetch-wikipedia.ts`), capsule generation (`build-capsule.mjs`), snippet embedding (`embed-snippets.ts`), snippet indexing (`index-snippets.mjs`), validator pass, and regression tests.
 
 ## LLM Suggestion CLI
 - Command: `npx tsx scripts/trusted_context/suggest-links.ts --artifact-config data/trusted_corpus/artifacts/<artifact_id>.json`

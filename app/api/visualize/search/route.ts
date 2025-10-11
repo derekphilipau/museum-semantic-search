@@ -1,32 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { performSemanticSearchWithEmbedding } from '@/lib/elasticsearch/client';
-import { generateUnifiedEmbeddings, extractJinaV3Embedding, extractSigLIP2Embedding } from '@/lib/embeddings';
+import { embedJinaText, embedJinaClipText, EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings';
 import { EmbeddingType } from '@/app/types';
-import { ModelKey } from '@/lib/embeddings/types';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const query = searchParams.get('query');
-  const embeddingType = (searchParams.get('embeddingType') || 'jina_v3') as EmbeddingType;
+  const embeddingType = (searchParams.get('embeddingType') || 'jina_text') as EmbeddingType;
   
   if (!query) {
     return NextResponse.json({ hits: [], maxScore: 0 });
   }
   
   try {
-    // Get embeddings for the query
-    const unifiedResponse = await generateUnifiedEmbeddings(query);
-    
-    // Extract the specific embedding based on visualization type
     let embedding: number[];
     let modelKey: ModelKey;
-    
-    if (embeddingType === 'siglip2') {
-      embedding = extractSigLIP2Embedding(unifiedResponse).embedding;
-      modelKey = 'siglip2';
+
+    if (embeddingType === 'jina_clip') {
+      const vector = await embedJinaClipText(query);
+      embedding = vector.values;
+      modelKey = 'jina_clip';
     } else {
-      embedding = extractJinaV3Embedding(unifiedResponse).embedding;
-      modelKey = 'jina_v3';
+      const vector = await embedJinaText(query);
+      embedding = vector.values;
+      modelKey = 'jina_text';
     }
     
     // Use pure semantic search with the specific embedding

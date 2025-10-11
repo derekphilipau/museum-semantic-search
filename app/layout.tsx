@@ -16,7 +16,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Museum Semantic Search",
-  description: "Explore the artwork collections using semantic search - find artworks by meaning, visual similarity, and multimodal AI embeddings",
+  description:
+    "Explore the artwork collections using semantic search powered by Jina text and Jina CLIP image embeddings",
 };
 
 export default function RootLayout({

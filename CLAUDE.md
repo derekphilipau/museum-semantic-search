@@ -12,11 +12,12 @@
 - Dataset creation: `scripts/met/1-create-paintings-dataset.ts` - Creates MetPaintingsWithImages.csv
 - Description generation: `scripts/met/2-generate-descriptions-met.ts` - Uses MetPaintingsWithImages.csv
 - Description editing: `scripts/met/3-edit-descriptions-met.ts`
-- Jina text embeddings: `scripts/met/4-generate-jina-text-embeddings-met.py`
-- SigLIP2 image embeddings: `scripts/met/5-generate-siglip2-image-embeddings-met.py`
+- Jina text embeddings: `scripts/met/generate-text-embeddings.ts`
+- Jina CLIP image embeddings: `scripts/met/generate-image-embeddings.ts`
+- Make sure `JINA_API_KEY` is configured and install `sharp` locally before generating image embeddings
 - Similar artworks generation: `scripts/met/7-generate-similar-artworks-met.ts`
 - Similarity index update: `scripts/met/8-update-similarities-met.ts`
-- UMAP projections: `scripts/met/9-generate-umap-projections-met.py` - Generates 2D/3D projections from embeddings
+- UMAP projections: `scripts/met/generate-umap-projections.ts` - Generates 2D/3D projections from embeddings
 - Elasticsearch indexing: `scripts/met/10-index-artworks.ts` - Final step, indexes all data including projections
 - Gemini integration: `lib/descriptions/gemini.ts`
 

@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ModelKey, EMBEDDING_MODELS, generateUnifiedEmbeddings } from '@/lib/embeddings';
-import { extractSigLIP2Embedding, extractJinaV3Embedding } from '@/lib/embeddings/unified';
-import { 
-  performKeywordSearch, 
+import {
+  EMBEDDING_MODELS,
+  ModelKey,
+  embedJinaText,
+  embedJinaClipText,
+} from '@/lib/embeddings';
+import {
+  performKeywordSearch,
   performSemanticSearchWithEmbedding,
   performHybridSearchWithEmbeddings,
   performEmojiSearch,
-  getIndexStats
+  getIndexStats,
 } from '@/lib/elasticsearch/client';
 import { SearchResponse, ESSearchQuery, ESHybridQuery } from '@/app/types';
 import { HybridMode } from '@/app/components/SearchForm';
-import { getCachedEmbeddings, setCachedEmbeddings } from '@/lib/embeddings/cache';
+import {
+  getCachedEmbeddings,
+  setCachedEmbeddings,
+} from '@/lib/embeddings/cache';
 
 // Type definitions
 interface SearchRequest {
@@ -82,12 +89,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Get selected models
-    const selectedModels = Object.keys(EMBEDDING_MODELS).filter(
-      modelKey => options.models[modelKey]
-    ) as ModelKey[];
+    const modelSelections = options.models ?? {};
+    const selectedModels = (Object.keys(EMBEDDING_MODELS) as ModelKey[]).filter(
+      (modelKey) => modelSelections[modelKey]
+    );
 
     // Pre-fetch embeddings if ANY semantic search is needed
-    let embeddings: { siglip2?: number[]; jina_v3?: number[] } = {};
+    let embeddings: Partial<Record<ModelKey, number[]>> = {};
     let cacheHit = false;
     
     // Initialize ES queries for metadata
@@ -104,28 +112,34 @@ export async function POST(request: NextRequest) {
     if (selectedModels.length > 0 || options.hybrid) {
       // Check cache first
       const cached = await getCachedEmbeddings(query);
-      
+
       if (cached) {
-        embeddings = {
-          siglip2: cached.siglip2,
-          jina_v3: cached.jina_v3
-        };
+        embeddings = cached;
         cacheHit = true;
       } else {
         // Generate new embeddings if not cached
         try {
-          const unified = await generateUnifiedEmbeddings(query);
-          embeddings = {
-            siglip2: extractSigLIP2Embedding(unified).embedding,
-            jina_v3: extractJinaV3Embedding(unified).embedding
-          };
-          
-          // Cache the embeddings only if both are present
-          if (embeddings.siglip2 && embeddings.jina_v3) {
-            await setCachedEmbeddings(query, { 
-              siglip2: embeddings.siglip2, 
-              jina_v3: embeddings.jina_v3 
-            });
+          const computed: Partial<Record<ModelKey, number[]>> = {};
+
+          const needTextEmbedding = selectedModels.includes('jina_text');
+          const needImageEmbedding = selectedModels.includes(
+            'jina_clip'
+          );
+
+          if (needTextEmbedding || options.hybrid) {
+            const vector = await embedJinaText(query);
+            computed.jina_text = vector.values;
+          }
+
+          if (needImageEmbedding || options.hybrid) {
+            const vector = await embedJinaClipText(query);
+            computed.jina_clip = vector.values;
+          }
+
+          embeddings = computed;
+
+          if (Object.keys(computed).length > 0) {
+            await setCachedEmbeddings(query, computed);
           }
         } catch (error) {
           console.error('Failed to generate embeddings:', error);
@@ -169,7 +183,7 @@ export async function POST(request: NextRequest) {
 
     // Semantic searches using pre-computed embeddings
     for (const model of selectedModels) {
-      const embedding = embeddings[model as keyof typeof embeddings];
+      const embedding = embeddings[model];
       if (embedding) {
         searchPromises.push(
           performSemanticSearchWithEmbedding(embedding, model, size)
@@ -220,32 +234,32 @@ export async function POST(request: NextRequest) {
       let modelsToUse: ModelKey | ModelKey[] | undefined;
       
       if (hybridMode === 'text') {
-        // Use Jina v3 for text mode hybrid search
-        modelsToUse = selectedModels.find(m => m === 'jina_v3');
+        // Prefer text-only embeddings
+        modelsToUse = selectedModels.find((m) => m === 'jina_text');
         if (!modelsToUse) {
-          console.warn('Jina v3 not found in selectedModels, using first text model');
-          modelsToUse = selectedModels.find(m => 
-            EMBEDDING_MODELS[m] && !EMBEDDING_MODELS[m].supportsImage
+          modelsToUse = selectedModels.find(
+            (m) => EMBEDDING_MODELS[m]?.supportsText
           );
         }
       } else if (hybridMode === 'image') {
-        // Use SigLIP 2 for image mode hybrid search (cross-modal)
-        modelsToUse = selectedModels.find(m => m === 'siglip2');
+        // Prefer image-capable embeddings
+        modelsToUse = selectedModels.find((m) => m === 'jina_clip');
         if (!modelsToUse) {
-          console.warn('SigLIP not found in selectedModels, using first image model');
-          modelsToUse = selectedModels.find(m => 
-            EMBEDDING_MODELS[m] && EMBEDDING_MODELS[m].supportsImage
+          modelsToUse = selectedModels.find(
+            (m) => EMBEDDING_MODELS[m]?.supportsImage
           );
         }
       } else if (hybridMode === 'both') {
-        // For "both" mode, use both Jina v3 (text) and SigLIP 2 (image)
+        // Combine text + image-capable embeddings when available
         const models: ModelKey[] = [];
-        const jinaModel = selectedModels.find(m => m === 'jina_v3');
-        const siglipModel = selectedModels.find(m => m === 'siglip2');
-        
-        if (jinaModel) models.push(jinaModel);
-        if (siglipModel) models.push(siglipModel);
-        
+        const textModel = selectedModels.find((m) => m === 'jina_text');
+        const clipModel = selectedModels.find(
+          (m) => m === 'jina_clip'
+        );
+
+        if (textModel) models.push(textModel);
+        if (clipModel) models.push(clipModel);
+
         if (models.length > 0) {
           modelsToUse = models;
         }

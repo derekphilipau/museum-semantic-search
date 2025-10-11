@@ -65,9 +65,9 @@ export function VisualizationControls({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="jina_v3">Text (Jina v3)</SelectItem>
-              <SelectItem value="siglip2">
-                Image (SigLIP2)
+              <SelectItem value="jina_text">Text (Jina v3)</SelectItem>
+              <SelectItem value="jina_clip">
+                Image (Jina CLIP)
               </SelectItem>
             </SelectContent>
           </Select>

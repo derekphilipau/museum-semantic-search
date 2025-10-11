@@ -5,30 +5,26 @@
 echo "Generating 100 embeddings for each model..."
 echo "============================================"
 
-# Array of models
-models=("siglip2" "jina_v3")
-
-# Generate embeddings for each model
 echo ""
-echo "Processing siglip2..."
-echo "-------------------"
-npm run generate-siglip2-embeddings -- --limit=100
+echo "Processing jina_clip..."
+echo "-------------------------------"
+npm run 5-generate-image-embeddings-met -- --limit=100
 
 if [ $? -eq 0 ]; then
-    echo "✓ siglip2 completed successfully"
+    echo "✓ jina_clip completed successfully"
 else
-    echo "✗ siglip2 failed"
+    echo "✗ jina_clip failed"
 fi
 
 echo ""
-echo "Processing jina_v3..."
-echo "-------------------"
-npm run generate-jina-embeddings -- --limit=100
+echo "Processing jina_text..."
+echo "-----------------------"
+npm run 4-generate-text-embeddings-met -- --limit=100
 
 if [ $? -eq 0 ]; then
-    echo "✓ jina_v3 completed successfully"
+    echo "✓ jina_text completed successfully"
 else
-    echo "✗ jina_v3 failed"
+    echo "✗ jina_text failed"
 fi
 
 echo ""

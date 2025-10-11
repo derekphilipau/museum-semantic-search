@@ -1,14 +1,18 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
-import { EMBEDDING_MODELS, ModelKey } from '@/lib/embeddings/types';
-import { generateUnifiedEmbeddings, extractSigLIP2Embedding, extractJinaV3Embedding } from '@/lib/embeddings';
+import {
+  EMBEDDING_MODELS,
+  ModelKey,
+  embedJinaText,
+  embedJinaClipText,
+} from '@/lib/embeddings';
 import { getCachedEmbeddings, setCachedEmbeddings } from '@/lib/embeddings/cache';
-import { 
-  performKeywordSearch, 
-  performSemanticSearchWithEmbedding, 
+import {
+  performKeywordSearch,
+  performSemanticSearchWithEmbedding,
   performHybridSearchWithEmbeddings,
   performEmojiSearch,
-  getIndexStats 
+  getIndexStats,
 } from '@/lib/elasticsearch/client';
 import { SearchResponse, ESSearchQuery, ESHybridQuery } from '@/app/types';
 import SearchForm, { HybridMode } from './components/SearchForm';
@@ -55,7 +59,7 @@ async function SearchResults({ searchParams }: PageProps) {
     .filter(([, enabled]) => enabled)
     .map(([key]) => key as ModelKey);
   
-  let embeddings: { siglip2?: number[]; jina_v3?: number[] } = {};
+  let embeddings: Partial<Record<ModelKey, number[]>> = {};
   let cacheHit = false;
   
   if (selectedModels.length > 0 || hybrid) {
@@ -63,26 +67,27 @@ async function SearchResults({ searchParams }: PageProps) {
     const cached = await getCachedEmbeddings(query);
     
     if (cached) {
-      embeddings = {
-        siglip2: cached.siglip2,
-        jina_v3: cached.jina_v3
-      };
+      embeddings = cached;
       cacheHit = true;
     } else {
       // Generate new embeddings if not cached
       try {
-        const unified = await generateUnifiedEmbeddings(query);
-        embeddings = {
-          siglip2: extractSigLIP2Embedding(unified).embedding,
-          jina_v3: extractJinaV3Embedding(unified).embedding
-        };
-        
-        // Cache the embeddings
-        if (embeddings.siglip2 && embeddings.jina_v3) {
-          await setCachedEmbeddings(query, { 
-            siglip2: embeddings.siglip2, 
-            jina_v3: embeddings.jina_v3 
-          });
+        const computed: Partial<Record<ModelKey, number[]>> = {};
+
+        if (selectedModels.includes('jina_text') || hybrid) {
+          const vector = await embedJinaText(query);
+          computed.jina_text = vector.values;
+        }
+
+        if (selectedModels.includes('jina_clip') || hybrid) {
+          const vector = await embedJinaClipText(query);
+          computed.jina_clip = vector.values;
+        }
+
+        embeddings = computed;
+
+        if (Object.keys(computed).length > 0) {
+          await setCachedEmbeddings(query, computed);
         }
       } catch (error) {
         console.error('Failed to generate embeddings:', error);
@@ -121,7 +126,7 @@ async function SearchResults({ searchParams }: PageProps) {
 
   // Semantic searches using pre-computed embeddings
   for (const model of selectedModels) {
-    const embedding = embeddings[model as keyof typeof embeddings];
+    const embedding = embeddings[model];
     if (embedding) {
       searchPromises.push(
         performSemanticSearchWithEmbedding(embedding, model, 20)
@@ -133,38 +138,48 @@ async function SearchResults({ searchParams }: PageProps) {
   // Hybrid search - use Elasticsearch's native hybrid search with RRF
   if (hybrid && selectedModels.length > 0) {
     let modelsToUse: ModelKey | ModelKey[] | undefined;
-    
+
     if (hybridMode === 'both') {
-      // For "both" mode, use both Jina v3 (text) and SigLIP 2 (image)
       const models: ModelKey[] = [];
-      const jinaModel = selectedModels.find(m => m === 'jina_v3');
-      const siglipModel = selectedModels.find(m => m === 'siglip2');
-      
-      if (jinaModel) models.push(jinaModel);
-      if (siglipModel) models.push(siglipModel);
-      
+      const textModel = selectedModels.find((m) => m === 'jina_text');
+      const imageModel = selectedModels.find((m) => m === 'jina_clip');
+
+      if (textModel) models.push(textModel);
+      if (imageModel) models.push(imageModel);
+
       if (models.length > 0) {
         modelsToUse = models;
       }
-    } else {
-      // Single model hybrid search
-      if (hybridMode === 'text') {
-        // Use Jina v3 for text mode hybrid search
-        modelsToUse = selectedModels.find(m => m === 'jina_v3');
-      } else if (hybridMode === 'image') {
-        // Use SigLIP 2 for image mode hybrid search (cross-modal)
-        modelsToUse = selectedModels.find(m => m === 'siglip2');
+    } else if (hybridMode === 'text') {
+      modelsToUse = selectedModels.find((m) => m === 'jina_text');
+      if (!modelsToUse) {
+        modelsToUse = selectedModels.find(
+          (m) => EMBEDDING_MODELS[m]?.supportsText
+        );
+      }
+    } else if (hybridMode === 'image') {
+      modelsToUse = selectedModels.find((m) => m === 'jina_clip');
+      if (!modelsToUse) {
+        modelsToUse = selectedModels.find(
+          (m) => EMBEDDING_MODELS[m]?.supportsImage
+        );
       }
     }
-    
+
     if (modelsToUse) {
       searchPromises.push(
-        performHybridSearchWithEmbeddings(query, embeddings, modelsToUse, 20, includeDescriptions, hybridBalance)
-          .then(results => ({ 
-            type: 'hybrid', 
-            model: Array.isArray(modelsToUse) ? 'multi' : modelsToUse, 
-            results 
-          }))
+        performHybridSearchWithEmbeddings(
+          query,
+          embeddings,
+          modelsToUse,
+          20,
+          includeDescriptions,
+          hybridBalance
+        ).then((results) => ({
+          type: 'hybrid',
+          model: Array.isArray(modelsToUse) ? 'multi' : modelsToUse,
+          results,
+        }))
       );
     }
   }
@@ -255,7 +270,9 @@ export default async function Home({ searchParams }: PageProps) {
   
   // If no query is provided, redirect to default search
   if (!query) {
-    redirect('/?q=woman+looking+into+mirror&keyword=true&hybrid=true&hybridMode=both&hybridBalance=0.5&models=jina_v3%2Csiglip2');
+    redirect(
+      '/?q=woman+looking+into+mirror&keyword=true&hybrid=true&hybridMode=both&hybridBalance=0.5&models=jina_text%2Cjina_clip'
+    );
   }
 
   return (

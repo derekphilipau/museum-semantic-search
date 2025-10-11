@@ -1,6 +1,6 @@
 'use client';
 
-import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
+import { EMBEDDING_MODELS } from '@/lib/embeddings';
 import { SearchResponse, SearchHit } from '@/app/types';
 import SearchResultColumn from '@/app/components/SearchResultColumn';
 import { Sparkles, FileText, Image, Database, Brain } from 'lucide-react';
@@ -33,8 +33,8 @@ export default function SimilarArtworks({ similarArtworks, precomputedHits }: Si
   let columnCount = 0;
   if (hasPrecomputed) columnCount++;
   if (hasMetadataResults) columnCount++;
-  if (similarArtworks.jina_v3?.hits?.length > 0) columnCount++;
-  if (similarArtworks.siglip2?.hits?.length > 0) columnCount++;
+  if (similarArtworks.jina_text?.hits?.length > 0) columnCount++;
+  if (similarArtworks.jina_clip?.hits?.length > 0) columnCount++;
   if (hasCombinedResults) columnCount++;
   
   // Determine grid columns based on column count
@@ -65,35 +65,35 @@ export default function SimilarArtworks({ similarArtworks, precomputedHits }: Si
         />
       )}
       
-      {/* 2. Jina v3 Text results */}
-      {similarArtworks.jina_v3?.hits?.length > 0 && (
+      {/* 2. Jina text results */}
+      {similarArtworks.jina_text?.hits?.length > 0 && (
         <SearchResultColumn
-          key="jina_v3"
-          title={EMBEDDING_MODELS.jina_v3.name}
-          description={EMBEDDING_MODELS.jina_v3.description}
+          key="jina_text"
+          title={EMBEDDING_MODELS.jina_text.name}
+          description={EMBEDDING_MODELS.jina_text.description}
           icon={FileText}
-          hits={similarArtworks.jina_v3.hits || []}
+          hits={similarArtworks.jina_text.hits || []}
           gradientFrom="from-blue-500"
           gradientTo="to-blue-600"
           badgeColor="bg-blue-700"
-          responseTime={similarArtworks.jina_v3.took}
-          totalResults={similarArtworks.jina_v3.total}
+          responseTime={similarArtworks.jina_text.took}
+          totalResults={similarArtworks.jina_text.total}
         />
       )}
       
-      {/* 3. SigLIP 2 results */}
-      {similarArtworks.siglip2?.hits?.length > 0 && (
+      {/* 3. Jina CLIP results */}
+      {similarArtworks.jina_clip?.hits?.length > 0 && (
         <SearchResultColumn
-          key="siglip2"
-          title={EMBEDDING_MODELS.siglip2.name}
-          description={EMBEDDING_MODELS.siglip2.description}
+          key="jina_clip"
+          title={EMBEDDING_MODELS.jina_clip.name}
+          description={EMBEDDING_MODELS.jina_clip.description}
           icon={Image}
-          hits={similarArtworks.siglip2.hits || []}
+          hits={similarArtworks.jina_clip.hits || []}
           gradientFrom="from-purple-500"
           gradientTo="to-purple-600"
           badgeColor="bg-purple-700"
-          responseTime={similarArtworks.siglip2.took}
-          totalResults={similarArtworks.siglip2.total}
+          responseTime={similarArtworks.jina_clip.took}
+          totalResults={similarArtworks.jina_clip.total}
         />
       )}
       

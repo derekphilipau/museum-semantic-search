@@ -1,5 +1,5 @@
 import { createElasticsearchClient } from '@/lib/elasticsearch/client';
-import { generateUnifiedEmbeddings, extractJinaV3Embedding } from '@/lib/embeddings/unified';
+import { embedJinaText } from '@/lib/embeddings';
 import { KnowledgeSnippet } from './types';
 
 const KNOWLEDGE_INDEX = process.env.ELASTICSEARCH_KNOWLEDGE_INDEX || 'knowledge_snippets';
@@ -74,9 +74,12 @@ function buildHybridQuery({ artifactId, query, size = 12, vector }: RetrieveSnip
   };
 }
 
-export async function retrieveKnowledgeSnippets(options: RetrieveSnippetsOptions): Promise<KnowledgeSnippet[]> {
+export async function retrieveKnowledgeSnippets(
+  options: RetrieveSnippetsOptions
+): Promise<KnowledgeSnippet[]> {
   const client = createElasticsearchClient();
-  const vector = options.vector ?? extractJinaV3Embedding(await generateUnifiedEmbeddings(options.query)).embedding;
+  const vector =
+    options.vector ?? (await embedJinaText(options.query)).values;
 
   const response = await client.search({
     index: KNOWLEDGE_INDEX,
