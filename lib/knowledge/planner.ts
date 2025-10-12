@@ -85,7 +85,7 @@ function buildPlannerPrompt({
         : '(no additional documents recorded)'
     }`,
     `SLOW-LOOKING ELEMENTS:\n${slowLookingElements}`,
-    `OUTPUT INSTRUCTIONS:\n- Decide on a prompt strategy: OBSERVATION_FIRST (invite visual exploration), FACT_FIRST (pure factual answer), or DEFLECT (outside scope/unsafe).\n- target_elements may list up to 2 element IDs from the SLOW-LOOKING ELEMENTS section.\n- Propose up to ${maxTasks} focused Elasticsearch queries in "tasks".\n- Stay strictly within the allowed topics/entities above.\n- Prefer concrete entity names over pronouns when possible.\n- Respond with JSON matching {"prompt_strategy":"...","target_elements":["..."],"tasks":[{"query":"...","rationale":"..."}]}.\n- Omit any task if you cannot stay within the allowed topics.\n- If the user request is completely unsupported, return {"prompt_strategy":"DEFLECT","target_elements":[],"tasks":[]}.`,
+    `OUTPUT INSTRUCTIONS:\n- Decide on a prompt strategy: OBSERVATION_FIRST (invite visual exploration), FACT_FIRST (pure factual answer), or DEFLECT (outside scope/unsafe).\n- target_elements may list up to 2 element IDs from the SLOW-LOOKING ELEMENTS section.\n- Propose up to ${maxTasks} focused Elasticsearch queries in "tasks".\n- Each task.query MUST be a short natural-language search phrase (no JSON, DSL, or Lucene syntax).\n- Stay strictly within the allowed topics/entities above.\n- Prefer concrete entity names over pronouns when possible.\n- Respond with JSON matching {"prompt_strategy":"...","target_elements":["..."],"tasks":[{"query":"...","rationale":"..."}]}.\n- Omit any task if you cannot stay within the allowed topics.\n- If the user request is completely unsupported, return {"prompt_strategy":"DEFLECT","target_elements":[],"tasks":[]}.`,
   ];
 
   return promptSections.join('\n\n');
@@ -132,12 +132,12 @@ function parsePlannerResponse(
 
     const tasks = Array.isArray(parsed.tasks)
       ? parsed.tasks
-      .filter(
-        (task) =>
-          typeof task === 'object' &&
-          typeof task.query === 'string' &&
-          task.query.trim().length > 0
-      )
+          .filter(
+            (task) =>
+              typeof task === 'object' &&
+              typeof task.query === 'string' &&
+              task.query.trim().length > 0
+          )
       : [];
 
     plan.tasks = tasks
@@ -167,44 +167,60 @@ export async function planRetrievalTasks({
   maxTasks = DEFAULT_MAX_TASKS,
 }: PlanRetrievalInput): Promise<RetrievalPlan> {
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.1,
-        max_tokens: 240,
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You generate Elasticsearch retrieval plans for a museum chat assistant. Stay inside the allowed topics and produce valid JSON.',
-          },
-          {
-            role: 'user',
-            content: buildPlannerPrompt({
-              artifactId,
-              userQuery,
-              recentMessages,
-              capsule,
-              maxTasks,
-            }),
-          },
-        ],
-      }),
-    });
+    async function callPlanner(modelName: string) {
+      return fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: modelName,
+          temperature: 0.1,
+          max_tokens: 240,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You generate Elasticsearch retrieval plans for a museum chat assistant. Stay inside the allowed topics and produce valid JSON.',
+            },
+            {
+              role: 'user',
+              content: buildPlannerPrompt({
+                artifactId,
+                userQuery,
+                recentMessages,
+                capsule,
+                maxTasks,
+              }),
+            },
+          ],
+        }),
+      });
+    }
 
-    if (!response.ok) {
-      const errorPayload = await response.json().catch(() => null);
-      console.warn(
-        '[retrieval-planner] OpenAI error',
-        response.status,
-        errorPayload
-      );
+    const fallbackModel = model !== 'gpt-4o-mini' ? 'gpt-4o-mini' : null;
+    const orderedModels = [model, fallbackModel].filter(
+      (candidate): candidate is string => Boolean(candidate)
+    );
+
+    let response: Response | null = null;
+    for (const candidate of orderedModels) {
+      const attempt = await callPlanner(candidate);
+      if (attempt.ok) {
+        response = attempt;
+        break;
+      }
+      try {
+        const errorPayload = await attempt.json();
+        console.warn('[retrieval-planner] OpenAI error', candidate, attempt.status, errorPayload);
+      } catch (error) {
+        console.warn('[retrieval-planner] OpenAI error', candidate, attempt.status, error);
+      }
+    }
+
+    if (!response) {
       return { tasks: [] };
     }
 

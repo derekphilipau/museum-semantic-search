@@ -53,50 +53,52 @@ export default async function SocratesChatPage() {
       : 'Artwork image');
 
   return (
-    <div className="container mx-auto flex flex-col gap-6 px-4 py-6 lg:flex-row">
-      <section className="flex-1 space-y-6">
-        {heroImage && (
-          <figure className="overflow-hidden rounded-2xl border border-border/80 bg-background shadow">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={heroImage}
-              alt={heroAlt}
-              className="h-auto w-full object-cover"
-            />
-            <figcaption className="space-y-1 px-4 py-3 text-sm">
-              <div className="font-semibold text-foreground">
-                {artwork?.title ?? 'The Death of Socrates'}
-              </div>
-              <div className="text-muted-foreground">
-                {artwork?.artist ?? 'Jacques-Louis David'} ·{' '}
-                {artwork?.date ?? '1787'} ·{' '}
-                {artwork?.medium ?? 'Oil on canvas'}
-              </div>
-              {artwork?.creditLine && (
-                <div className="text-xs text-muted-foreground">
-                  {artwork.creditLine}
+    <div className="container mx-auto flex flex-col gap-8 px-4 py-6">
+      <header className="space-y-3">
+        <h1 className="text-2xl font-semibold text-foreground">{PAGE_TITLE}</h1>
+        <p className="text-sm text-muted-foreground">
+          This dedicated workspace lets you explore the painting using only
+          vetted capsule content. Ask about the artwork, its subjects, or the
+          surrounding philosophy and the assistant will respond with inline
+          citations pointing to cached Wikipedia snippets.
+        </p>
+      </header>
+
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="lg:w-[360px] lg:flex-shrink-0">
+          {heroImage && (
+            <figure className="overflow-hidden rounded-2xl border border-border/80 bg-background shadow">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={heroImage}
+                alt={heroAlt}
+                className="h-auto w-full object-cover"
+              />
+              <figcaption className="space-y-1 px-4 py-3 text-sm">
+                <div className="font-semibold text-foreground">
+                  {artwork?.title ?? 'The Death of Socrates'}
                 </div>
-              )}
-            </figcaption>
-          </figure>
-        )}
+                <div className="text-muted-foreground">
+                  {artwork?.artist ?? 'Jacques-Louis David'} ·{' '}
+                  {artwork?.date ?? '1787'} ·{' '}
+                  {artwork?.medium ?? 'Oil on canvas'}
+                </div>
+                {artwork?.creditLine && (
+                  <div className="text-xs text-muted-foreground">
+                    {artwork.creditLine}
+                  </div>
+                )}
+              </figcaption>
+            </figure>
+          )}
+        </div>
 
-        <header className="space-y-2">
-          <h1 className="text-2xl font-semibold text-foreground">
-            {PAGE_TITLE}
-          </h1>
-          <p className="text-sm text-muted-foreground max-w-3xl">
-            This dedicated workspace lets you explore the painting using only
-            vetted capsule content. Ask about the artwork, its subjects, or the
-            surrounding philosophy and the assistant will respond with inline
-            citations pointing to cached Wikipedia snippets.
-          </p>
-        </header>
+        <section className="flex-1">
+          <ChatExperience artifactId={ARTIFACT_ID} capsule={capsule} />
+        </section>
+      </div>
 
-        <ChatExperience artifactId={ARTIFACT_ID} capsule={capsule} />
-      </section>
-
-      <aside className="w-full max-w-xl shrink-0">
+      <section>
         {capsule ? (
           <KnowledgePanel capsule={capsule} />
         ) : (
@@ -105,7 +107,7 @@ export default async function SocratesChatPage() {
             operate, but source details and entity context will be limited.
           </div>
         )}
-      </aside>
+      </section>
     </div>
   );
 }

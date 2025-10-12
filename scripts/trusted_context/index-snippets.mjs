@@ -199,16 +199,17 @@ async function fileExists(filePath) {
 
 async function resolveSnippetPath(filePath) {
   const absolute = path.isAbsolute(filePath) ? filePath : path.join(ROOT_DIR, filePath);
+  const hasWithEmbeddingsSuffix = /\.with_embeddings\.jsonl$/i.test(absolute);
+  const candidateWithEmbeddings = hasWithEmbeddingsSuffix
+    ? absolute
+    : absolute.replace(/\.jsonl$/i, '.with_embeddings.jsonl');
 
-  if (await fileExists(absolute)) {
-    return absolute;
+  if (await fileExists(candidateWithEmbeddings)) {
+    return candidateWithEmbeddings;
   }
 
-  if (absolute.toLowerCase().endsWith('.jsonl')) {
-    const withEmbeddings = absolute.replace(/\.jsonl$/i, '.with_embeddings.jsonl');
-    if (await fileExists(withEmbeddings)) {
-      return withEmbeddings;
-    }
+  if (!hasWithEmbeddingsSuffix && await fileExists(absolute)) {
+    return absolute;
   }
 
   throw new Error(`Snippet file not found: ${filePath}`);

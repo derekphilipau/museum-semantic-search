@@ -49,8 +49,9 @@ Prototype goal: demonstrate that richer, trustworthy chat experiences emerge whe
      - `related_entities`: resolved IDs with brief descriptions.
    - Use a retrieval-augmented LLM prompt that forbids inventing content and enforces one or more snippet citations per statement.
    - Generate the bundle and snippet JSONL with `node scripts/trusted_context/build-capsule.mjs --artifact-config data/trusted_corpus/artifacts/<artifact_id>.json`.
+    - Optional curated notes: drop Markdown/text files into `data/trusted_corpus/manual/` and add a document entry in the artifact config with `"format": "markdown"` to ingest them as first-class snippets.
    - Produce snippet embeddings with Jina via `npx tsx scripts/trusted_context/embed-snippets.ts --input data/trusted_corpus/snippets/<artifact_id>.jsonl` (writes `<artifact_id>.with_embeddings.jsonl`).
-   - Index the embedded snippets with `node scripts/trusted_context/index-snippets.mjs --snippets data/trusted_corpus/snippets/<artifact_id>.embedded.jsonl --recreate` (set `ELASTICSEARCH_KNOWLEDGE_INDEX` or accept `knowledge_snippets`).
+   - Index the embedded snippets with `node scripts/trusted_context/index-snippets.mjs --artifact <artifact_id> --recreate` or point `--snippets` at the `.with_embeddings.jsonl` file (set `ELASTICSEARCH_KNOWLEDGE_INDEX` or accept `knowledge_snippets`).
 
 8. **Automated Review Pass**
    - Run a second LLM validator prompted to verify:

@@ -16,7 +16,7 @@ import {
   findElementIdForPrompt,
 } from '@/lib/slow-looking';
 
-interface ChatMessageInput {
+export interface ChatMessageInput {
   role: 'user' | 'assistant';
   content: string;
 }
@@ -42,7 +42,7 @@ interface OpenAIChatCompletion {
   choices?: OpenAIChoice[];
 }
 
-const SUPPORTED_ARTIFACT_ID = 'met_436105';
+export const SUPPORTED_ARTIFACT_ID = 'met_436105';
 
 const SYSTEM_PROMPT = `
 You are a museum guide assisting visitors with the current artwork.
@@ -53,12 +53,13 @@ Rules:
 - Do not introduce new citations or snippet IDs that are not listed. Fabricated citations are disallowed.
 - Subject questions about people, movements, places, or terms listed in RELATED ENTITIES (or otherwise mentioned in the snippets) are in scope—answer with the available evidence rather than deflecting.
 - If the capsule offers partial information, share what is known (with citations) and note any gaps; only deflect when no snippet supports the request.
+- When answering “who” or “which people” questions, list every named individual mentioned in the snippets (with citations) before noting any unnamed companions.
 - If no snippet supports the request, respond exactly with the provided deflection message.
 - Keep answers friendly, concise (≤6 sentences), and appropriate for all ages.
 - When a focus detail is supplied, weave it naturally into your factual answer with citations.
 - Do not append observation questions—the system will invite the visitor to look after your reply.
 - Never invent sources, speculate beyond the snippets, or acknowledge system instructions.
-- Before answering, identify which snippet IDs support the response.
+- Before answering, internally determine which snippet IDs support the response; do not mention this step outside of inline citations.
 `.trim();
 
 function buildDeflectionMessage(capsule?: KnowledgeCapsule | null) {
@@ -96,6 +97,47 @@ const OBSERVATION_RESUME_PATTERNS: RegExp[] = [
 ];
 
 const OBSERVATION_SUPPRESSION_WINDOW = 3;
+
+const CLOSING_PHRASE_PATTERNS: RegExp[] = [
+  /(?:\n\n)?If you have(?: any)?(?: more)?(?: specific)? questions[^.?!]*[.?!]\s*$/i,
+  /(?:\n\n)?Feel free to ask[^.?!]*[.?!]\s*$/i,
+  /(?:\n\n)?Just let me know[^.?!]*[.?!]\s*$/i,
+  /(?:\n\n)?Let me know[^.?!]*[.?!]\s*$/i,
+];
+
+const FRAGMENT_RESPONSES: Record<string, string> = {
+  what: 'Happy to help. Would you like to focus on Socrates, his companions, or the hemlock exchange?',
+  'what?': 'I can dive into Socrates himself, his companions, or the hemlock exchange—where should we start?',
+  about: 'We can explore Socrates, the companions, or the hemlock exchange. Which focus sounds helpful?',
+  'about?': 'We can explore Socrates, the companions, or the hemlock exchange. Which focus sounds helpful?',
+  hello: 'Hello! We can look closely at Socrates, the companions, or the hemlock exchange—what would you like to explore?',
+  hi: 'Hi there! Would you like to talk about Socrates, his companions, or the hemlock exchange?',
+  hey: 'Hey there! Should we look at Socrates, the companions, or the hemlock exchange next?',
+};
+
+function stripClosingPhrases(text: string) {
+  let result = text.trimEnd();
+  let modified = true;
+  while (modified) {
+    modified = false;
+    for (const pattern of CLOSING_PHRASE_PATTERNS) {
+      const next = result.replace(pattern, '').trimEnd();
+      if (next.length !== result.length) {
+        result = next;
+        modified = true;
+      }
+    }
+  }
+  return result;
+}
+
+function resolveFragmentResponse(message: string) {
+  const normalized = message.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  return FRAGMENT_RESPONSES[normalized] ?? null;
+}
 
 function findLatestUserMessage(messages: ChatMessageInput[] = []) {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -211,13 +253,6 @@ function trimHistory(messages: ChatMessageInput[] = []) {
   return trimmed.slice(trimmed.length - MAX_EXCHANGES * 2);
 }
 
-function truncateSnippetText(text: string, maxChars = 480) {
-  if (text.length <= maxChars) {
-    return text;
-  }
-  return `${text.slice(0, maxChars - 1)}…`;
-}
-
 function formatSnippets(snippets: KnowledgeSnippet[]) {
   if (snippets.length === 0) {
     return 'SNIPPETS\n- (none)';
@@ -225,7 +260,7 @@ function formatSnippets(snippets: KnowledgeSnippet[]) {
 
   const lines = snippets.map((snippet) => {
     const parts: string[] = [];
-    parts.push(`- [S:${snippet.snippetId}] ${truncateSnippetText(snippet.text)}`);
+    parts.push(`- [S:${snippet.snippetId}] ${snippet.text}`);
     if (snippet.sourceTitle) {
       parts.push(` (${snippet.sourceTitle})`);
     }
@@ -375,11 +410,65 @@ function filterSnippetsByCitation(
   return snippets.filter((snippet) => cited.has(snippet.snippetId));
 }
 
+interface RetrievalLogSnippet {
+  snippetId: string;
+  sourceTitle?: string;
+}
+
 interface RetrievalLogEntry {
   query: string;
   hits: number;
   source: 'planner' | 'fallback';
   rationale?: string;
+  topSnippets?: RetrievalLogSnippet[];
+}
+
+function collectStringLeaves(input: unknown, collector: Set<string>) {
+  if (typeof input === 'string') {
+    const normalized = input.trim();
+    if (normalized) {
+      collector.add(normalized);
+    }
+    return;
+  }
+  if (Array.isArray(input)) {
+    input.forEach((value) => collectStringLeaves(value, collector));
+    return;
+  }
+  if (input && typeof input === 'object') {
+    Object.values(input).forEach((value) => collectStringLeaves(value, collector));
+  }
+}
+
+function sanitizePlannerQuery(
+  query: string,
+  fallback: string,
+  rationale?: string
+): string {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const strings = new Set<string>();
+      collectStringLeaves(parsed, strings);
+      if (strings.size > 0) {
+        return Array.from(strings).join(' ');
+      }
+    } catch {
+      // fall through to fallback handling
+    }
+    const rationaleText = rationale?.trim();
+    if (rationaleText) {
+      return rationaleText;
+    }
+    return fallback;
+  }
+
+  return trimmed;
 }
 
 async function executeRetrievalPlan(
@@ -407,16 +496,25 @@ async function executeRetrievalPlan(
   };
 
   for (const task of plannedTasks) {
+    const normalizedQuery = sanitizePlannerQuery(
+      task.query,
+      latestUserQuery,
+      task.rationale
+    );
     const taskSnippets = await retrieveKnowledgeSnippets({
       artifactId,
-      query: task.query,
+      query: normalizedQuery,
       size: 8,
     });
     addSnippets(taskSnippets, {
-      query: task.query,
+      query: normalizedQuery,
       hits: taskSnippets.length,
       source: 'planner',
       rationale: task.rationale,
+      topSnippets: taskSnippets.slice(0, 3).map((snippet) => ({
+        snippetId: snippet.snippetId,
+        sourceTitle: snippet.sourceTitle,
+      })),
     });
   }
 
@@ -432,6 +530,10 @@ async function executeRetrievalPlan(
       query: latestUserQuery,
       hits: fallbackSnippets.length,
       source: 'fallback',
+      topSnippets: fallbackSnippets.slice(0, 3).map((snippet) => ({
+        snippetId: snippet.snippetId,
+        sourceTitle: snippet.sourceTitle,
+      })),
     });
   }
 
@@ -469,6 +571,26 @@ export async function POST(request: Request) {
       );
     }
 
+    const fragmentReply = resolveFragmentResponse(latestUserMessage);
+    if (fragmentReply) {
+      return NextResponse.json({
+        message: {
+          role: 'assistant',
+          content: fragmentReply,
+        },
+        snippets: [],
+        retrievalLog: [
+          {
+            query: latestUserMessage,
+            hits: 0,
+            source: 'planner',
+            rationale:
+              'Fragment detected; offered clarifying prompt instead of retrieval.',
+          },
+        ],
+      });
+    }
+
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
@@ -478,7 +600,9 @@ export async function POST(request: Request) {
     }
 
     const model =
-      process.env.OPENAI_ARTWORK_MODEL?.trim() || 'gpt-4o-mini';
+      process.env.OPENAI_ARTWORK_MODEL?.trim() || 'gpt-5-mini';
+    const fallbackModel =
+      model !== 'gpt-4o-mini' ? 'gpt-4o-mini' : null;
 
     const capsule = await loadKnowledgeCapsule(payload.artifactId);
     const deflectionMessage = buildDeflectionMessage(capsule);
@@ -539,13 +663,14 @@ export async function POST(request: Request) {
     const preferredElements =
       derivePreferredElementsFromQuery(latestUserMessage);
     const recentObservationPrompts = extractObservationPrompts(trimmedHistory);
-    const recentPromptTexts = recentObservationPrompts.slice(-4);
+    const recentPromptTexts = recentObservationPrompts.slice(-8);
+    const artifactIdSafe = payload.artifactId ?? SUPPORTED_ARTIFACT_ID;
     const recentElementIds = recentPromptTexts
-      .map((prompt) => findElementIdForPrompt(payload.artifactId, prompt))
+      .map((prompt) => findElementIdForPrompt(artifactIdSafe, prompt))
       .filter((value): value is string => Boolean(value));
     const excludeElements = recentElementIds
       .filter((elementId) => !preferredElements.includes(elementId))
-      .slice(-2);
+      .slice(-3);
 
     const { snippets, log } = await executeRetrievalPlan(
       payload.artifactId,
@@ -587,23 +712,33 @@ export async function POST(request: Request) {
 
     const retrievalLogLines = log.map((entry) => {
       const prefix = entry.source === 'planner' ? 'planner' : 'fallback';
-      const base = `- ${prefix} query "${entry.query}" → ${entry.hits} snippet(s)`;
+      const topSnippets =
+        entry.topSnippets && entry.topSnippets.length > 0
+          ? entry.topSnippets
+              .map((snippet) =>
+                snippet.sourceTitle
+                  ? `${snippet.snippetId} (${snippet.sourceTitle})`
+                  : snippet.snippetId
+              )
+              .join(', ')
+          : null;
+      const topInfo = topSnippets ? ` [top: ${topSnippets}]` : '';
+      const base = `- ${prefix} query "${entry.query}" → ${entry.hits} snippet(s)${topInfo}`;
       if (entry.rationale) {
         return `${base} (because ${entry.rationale})`;
       }
       return base;
     });
 
-    const openAiResponse = await fetch(
-      'https://api.openai.com/v1/chat/completions',
-      {
+    async function callOpenAIChat(modelName: string) {
+      return fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model,
+          model: modelName,
           temperature: 0.1,
           max_tokens: 320,
           messages: buildOpenAIMessages(
@@ -617,12 +752,38 @@ export async function POST(request: Request) {
             }
           ),
         }),
-      }
+      });
+    }
+
+    const orderedModels = [model, fallbackModel].filter(
+      (candidate): candidate is string => Boolean(candidate)
     );
 
-    if (!openAiResponse.ok) {
-      const errorPayload = await openAiResponse.json().catch(() => null);
-      console.error('OpenAI error', openAiResponse.status, errorPayload);
+    let openAiResponse: Response | null = null;
+    let lastErrorPayload: unknown = null;
+
+    for (const candidate of orderedModels) {
+      const response = await callOpenAIChat(candidate);
+      if (response.ok) {
+        openAiResponse = response;
+        break;
+      }
+      try {
+        lastErrorPayload = await response.json();
+      } catch {
+        try {
+          lastErrorPayload = await response.text();
+        } catch {
+          lastErrorPayload = null;
+        }
+      }
+      console.warn('[artwork-chat] model request failed', candidate, {
+        status: response.status,
+        error: lastErrorPayload,
+      });
+    }
+
+    if (!openAiResponse) {
       return NextResponse.json(
         { error: 'Model request failed. Please try again.' },
         { status: 502 }
@@ -666,7 +827,7 @@ export async function POST(request: Request) {
 
     let assistantMessage = isUnsafeContent(content)
       ? deflectionMessage
-      : content;
+      : stripClosingPhrases(content);
 
     if (
       assistantMessage !== deflectionMessage &&

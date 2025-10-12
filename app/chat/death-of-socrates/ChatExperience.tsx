@@ -8,7 +8,16 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Loader2, SendHorizontal, Sparkles, X } from 'lucide-react';
+import {
+  Loader2,
+  Mic,
+  SendHorizontal,
+  Sparkles,
+  Square,
+  Volume2,
+  VolumeX,
+  X,
+} from 'lucide-react';
 import { KnowledgeCapsule, KnowledgeSnippet } from '@/lib/knowledge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,6 +37,13 @@ interface ChatMessage {
   role: MessageRole;
   content: string;
   createdAt: number;
+  origin?: 'text' | 'voice';
+  audio?: {
+    mimeType: string;
+    base64: string;
+  } | null;
+  transcriptDurationMs?: number;
+  pendingVoice?: boolean;
 }
 
 interface ChatResponsePayload {
@@ -40,11 +56,28 @@ interface ChatResponsePayload {
   error?: string;
 }
 
+interface VoiceChatResponsePayload extends ChatResponsePayload {
+  transcript: {
+    text: string;
+    durationMs?: number;
+  };
+  audio?: {
+    base64: string;
+    mimeType: string;
+  } | null;
+}
+
+interface RetrievalLogSnippet {
+  snippetId: string;
+  sourceTitle?: string;
+}
+
 interface RetrievalLogEntry {
   query: string;
   hits: number;
   source: 'planner' | 'fallback';
   rationale?: string;
+  topSnippets?: RetrievalLogSnippet[];
 }
 
 interface ContentSegment {
@@ -89,6 +122,16 @@ function formatTimestamp(timestamp: number) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(timestamp);
+}
+
+function formatDuration(durationMs?: number | null) {
+  if (!durationMs || !Number.isFinite(durationMs)) {
+    return null;
+  }
+  const seconds = Math.max(1, Math.round(durationMs / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
 function getCoreFactsSummary(capsule?: KnowledgeCapsule | null) {
@@ -143,6 +186,11 @@ export default function ChatExperience({
     null
   );
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioElementsRef = useRef<Record<string, HTMLAudioElement>>({});
+  const [isRecording, setIsRecording] = useState(false);
+  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
 
   const snippets = useMemo(() => {
     if (snippetOrder.length === 0) {
@@ -173,6 +221,20 @@ export default function ChatExperience({
     scrollToBottom();
   }, [messages, isLoading, scrollToBottom]);
 
+  useEffect(() => {
+    return () => {
+      const recorder = mediaRecorderRef.current;
+      if (recorder && recorder.state !== 'inactive') {
+        recorder.stop();
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const audioMap = audioElementsRef.current;
+      Object.values(audioMap).forEach((audio) => {
+        audio.pause();
+      });
+    };
+  }, []);
+
   const formatRetrievalSummary = useCallback(
     (log?: RetrievalLogEntry[]) => {
       if (!log || log.length === 0) {
@@ -184,15 +246,334 @@ export default function ChatExperience({
           const label = entry.source === 'planner' ? 'Planner' : 'Fallback';
           const hits =
             entry.hits === 1 ? '1 snippet' : `${entry.hits} snippets`;
+          const topSnippets =
+            entry.topSnippets && entry.topSnippets.length > 0
+              ? entry.topSnippets
+                  .map((snippet) =>
+                    snippet.sourceTitle
+                      ? `${snippet.snippetId} (${snippet.sourceTitle})`
+                      : snippet.snippetId
+                  )
+                  .join(', ')
+              : null;
           const rationale = entry.rationale
             ? ` — ${entry.rationale}`
             : '';
-          return `${label}: “${entry.query}” (${hits}${rationale})`;
+          const topDetail = topSnippets ? ` — top: ${topSnippets}` : '';
+          return `${label}: “${entry.query}” (${hits}${rationale}${topDetail})`;
         })
         .join(' • ');
     },
     []
   );
+
+  const stopCurrentAudio = useCallback(() => {
+    if (!playingMessageId) {
+      return;
+    }
+    const existing = audioElementsRef.current[playingMessageId];
+    if (existing) {
+      existing.pause();
+      existing.currentTime = 0;
+    }
+    setPlayingMessageId(null);
+  }, [playingMessageId]);
+
+  const playAudio = useCallback(
+    async (
+      messageId: string,
+      clip: { mimeType: string; base64: string },
+      autoPlay = false
+    ) => {
+      if (!clip?.base64) {
+        return;
+      }
+
+      if (playingMessageId && playingMessageId !== messageId) {
+        const active = audioElementsRef.current[playingMessageId];
+        if (active) {
+          active.pause();
+          active.currentTime = 0;
+        }
+      }
+
+      let audio = audioElementsRef.current[messageId];
+      const src = `data:${clip.mimeType};base64,${clip.base64}`;
+
+      if (!audio) {
+        audio = new Audio(src);
+        audio.volume = 1;
+        audioElementsRef.current[messageId] = audio;
+        audio.addEventListener('ended', () => {
+          setPlayingMessageId((current) =>
+            current === messageId ? null : current
+          );
+        });
+        audio.addEventListener('pause', () => {
+          const finished =
+            Math.abs(audio.currentTime - audio.duration) < 0.05 ||
+            audio.currentTime === 0;
+          if (finished) {
+            setPlayingMessageId((current) =>
+              current === messageId ? null : current
+            );
+          }
+        });
+      } else if (audio.src !== src) {
+        audio.src = src;
+      } else {
+        audio.currentTime = 0;
+      }
+
+      try {
+        await audio.play();
+        setPlayingMessageId(messageId);
+      } catch (playError) {
+        if (!autoPlay) {
+          console.error(playError);
+          setError(
+            playError instanceof Error
+              ? playError.message
+              : 'Unable to play audio.'
+          );
+        }
+      }
+    },
+    [playingMessageId, setError]
+  );
+
+  const toggleAudioPlayback = useCallback(
+    (message: ChatMessage) => {
+      if (!message.audio) {
+        return;
+      }
+      if (playingMessageId === message.id) {
+        stopCurrentAudio();
+        return;
+      }
+      void playAudio(message.id, message.audio);
+    },
+    [playAudio, playingMessageId, stopCurrentAudio]
+  );
+
+  const submitVoiceRecording = useCallback(
+    async (audioBlob: Blob) => {
+      const requestMessages = messages
+        .filter((msg) => msg.role !== 'system')
+        .map(({ role, content }) => ({ role, content }));
+
+      const voiceMessageId = crypto.randomUUID();
+      const statusMessageId = crypto.randomUUID();
+
+      const placeholderUser: ChatMessage = {
+        id: voiceMessageId,
+        role: 'user',
+        content: 'Processing voice input…',
+        createdAt: Date.now(),
+        origin: 'voice',
+        pendingVoice: true,
+      };
+
+      const statusMessage: ChatMessage = {
+        id: statusMessageId,
+        role: 'system',
+        content: 'Transcribing audio…',
+        createdAt: Date.now(),
+      };
+
+      setMessages((prev) => [...prev, placeholderUser, statusMessage]);
+      setIsLoading(true);
+      setError(null);
+
+      const formData = new FormData();
+      formData.append('artifactId', artifactId);
+      formData.append('messages', JSON.stringify(requestMessages));
+      formData.append('audio', audioBlob, 'voice-input.webm');
+
+      try {
+        const response = await fetch('/api/voice-chat', {
+          method: 'POST',
+          body: formData,
+        });
+
+        let payload: VoiceChatResponsePayload & { error?: string };
+        try {
+          payload = (await response.json()) as VoiceChatResponsePayload & {
+            error?: string;
+          };
+        } catch (parseError) {
+          throw new Error('Voice chat failed. Please retry.', {
+            cause: parseError,
+          });
+        }
+
+        if (!response.ok) {
+          throw new Error(payload?.error ?? 'Voice chat failed. Please retry.');
+        }
+
+        if (!payload?.message?.content) {
+          throw new Error('Voice response did not include assistant content.');
+        }
+
+        const userMessage: ChatMessage = {
+          id: voiceMessageId,
+          role: 'user',
+          content: payload.transcript?.text ?? 'Audio transcription unavailable.',
+          createdAt: Date.now(),
+          origin: 'voice',
+          pendingVoice: false,
+          transcriptDurationMs: payload.transcript?.durationMs,
+        };
+
+        const assistantMessage: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: payload.message.role,
+          content: payload.message.content,
+          createdAt: Date.now(),
+          audio: payload.audio
+            ? {
+                mimeType: payload.audio.mimeType,
+                base64: payload.audio.base64,
+              }
+            : null,
+        };
+
+        setMessages((prev) => {
+          const updated = prev.map((msg) => {
+            if (msg.id === voiceMessageId) {
+              return { ...msg, ...userMessage };
+            }
+            if (msg.id === statusMessageId) {
+              return {
+                ...msg,
+                content: formatRetrievalSummary(payload.retrievalLog),
+              };
+            }
+            return msg;
+          });
+          return [...updated, assistantMessage];
+        });
+
+        if (payload.snippets?.length) {
+          setSnippetMap((prev) => {
+            const next = { ...prev };
+            payload.snippets.forEach((snippet) => {
+              next[snippet.snippetId] = snippet;
+            });
+            return next;
+          });
+
+          setSnippetOrder((prev) => {
+            const next = [...prev];
+            payload.snippets.forEach((snippet) => {
+              if (!next.includes(snippet.snippetId)) {
+                next.push(snippet.snippetId);
+              }
+            });
+            return next;
+          });
+        }
+
+        if (assistantMessage.audio) {
+          void playAudio(assistantMessage.id, assistantMessage.audio, true);
+        }
+      } catch (voiceError) {
+        console.error(voiceError);
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id === statusMessageId) {
+              return {
+                ...msg,
+                content: 'Voice request failed. Please try again.',
+              };
+            }
+            if (msg.id === voiceMessageId) {
+              return {
+                ...msg,
+                pendingVoice: false,
+                content: 'Voice input unavailable.',
+              };
+            }
+            return msg;
+          })
+        );
+        setError(
+          voiceError instanceof Error
+            ? voiceError.message
+            : 'Voice chat failed. Please try again.'
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [
+      artifactId,
+      formatRetrievalSummary,
+      messages,
+      playAudio,
+      setSnippetMap,
+      setSnippetOrder,
+    ]
+  );
+
+  const startRecording = useCallback(async () => {
+    if (isRecording || isLoading) {
+      return;
+    }
+
+    if (
+      typeof window === 'undefined' ||
+      !navigator.mediaDevices ||
+      !navigator.mediaDevices.getUserMedia
+    ) {
+      setError('Voice recording is not supported in this browser.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm',
+      });
+      audioChunksRef.current = [];
+      recorder.addEventListener('dataavailable', (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      });
+      recorder.addEventListener('stop', () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const chunks = audioChunksRef.current;
+        audioChunksRef.current = [];
+        if (!chunks.length) {
+          return;
+        }
+        const blob = new Blob(chunks, { type: recorder.mimeType });
+        void submitVoiceRecording(blob);
+      });
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+      setError(null);
+    } catch (recordError) {
+      console.error(recordError);
+      setError(
+        recordError instanceof Error
+          ? recordError.message
+          : 'Unable to access the microphone.'
+      );
+    }
+  }, [isRecording, isLoading, submitVoiceRecording]);
+
+  const stopRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
+    }
+    setIsRecording(false);
+  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -206,6 +587,7 @@ export default function ChatExperience({
       role: 'user',
       content,
       createdAt: Date.now(),
+      origin: 'text',
     };
     const searchMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -247,6 +629,7 @@ export default function ChatExperience({
         role: payload.message.role,
         content: payload.message.content,
         createdAt: Date.now(),
+        audio: null,
       };
 
       const retrievalSummary = formatRetrievalSummary(
@@ -314,19 +697,6 @@ export default function ChatExperience({
 
   return (
     <div className="space-y-6">
-      {coreFactsSummary && (
-        <Card className="border border-primary/40 bg-primary/5">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold uppercase tracking-wide text-primary">
-              Capsule Facts Snapshot
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-primary">
-            {coreFactsSummary}
-          </CardContent>
-        </Card>
-      )}
-
       <Card className="flex flex-col border border-border/80">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
           <div>
@@ -362,6 +732,11 @@ export default function ChatExperience({
                 }
 
                 const isAssistant = message.role === 'assistant';
+                const isVoiceMessage = message.origin === 'voice';
+                const durationLabel = isVoiceMessage
+                  ? formatDuration(message.transcriptDurationMs ?? null)
+                  : null;
+                const isPlaying = playingMessageId === message.id;
                 let observationText: string | null = null;
                 let factualContent = message.content;
 
@@ -393,12 +768,48 @@ export default function ChatExperience({
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">
-                        <span className="font-semibold capitalize text-muted-foreground">
-                          {isAssistant ? 'Guide' : 'You'}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatTimestamp(message.createdAt)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold capitalize text-muted-foreground">
+                            {isAssistant ? 'Guide' : 'You'}
+                          </span>
+                          {isVoiceMessage && (
+                            <Badge
+                              variant={message.pendingVoice ? 'outline' : 'secondary'}
+                              className="text-[10px] uppercase tracking-wide"
+                            >
+                              Voice
+                            </Badge>
+                          )}
+                          {durationLabel && !message.pendingVoice && (
+                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              {durationLabel}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isAssistant && message.audio && (
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/20"
+                              onClick={() => toggleAudioPlayback(message)}
+                            >
+                              {isPlaying ? (
+                                <>
+                                  <VolumeX className="h-3 w-3" />
+                                  Stop Audio
+                                </>
+                              ) : (
+                                <>
+                                  <Volume2 className="h-3 w-3" />
+                                  Play Audio
+                                </>
+                              )}
+                            </button>
+                          )}
+                          <span className="text-xs text-muted-foreground">
+                            {formatTimestamp(message.createdAt)}
+                          </span>
+                        </div>
                       </div>
                       <div className="mt-2 leading-relaxed">
                         {segments.map((segment, index) => {
@@ -435,10 +846,7 @@ export default function ChatExperience({
                       {isAssistant && observationQuestion && (
                         <div className="mt-3 flex flex-col gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-primary">
                           <div className="flex items-start justify-between gap-4">
-                            <span>
-                              <span className="font-semibold not-italic">Observation:</span>{' '}
-                              <span className="italic">{observationQuestion}</span>
-                            </span>
+                            <span className="italic leading-relaxed">{observationQuestion}</span>
                             <button
                               type="button"
                               className="inline-flex items-center gap-1 rounded-full border border-transparent px-2 py-1 text-xs text-primary/80 transition hover:border-primary/50 hover:bg-primary/20"
@@ -486,29 +894,77 @@ export default function ChatExperience({
                   rows={3}
                   placeholder="Ask about the painting or share what you notice in the scene…"
                   className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  disabled={isLoading}
+                  disabled={isLoading || isRecording}
                 />
               </div>
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Press Enter to send, Shift+Enter for a new line.</span>
-                <Button type="submit" size="sm" disabled={isLoading || !composer.trim()}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating…
-                    </>
-                  ) : (
-                    <>
-                      Send
-                      <SendHorizontal className="ml-2 h-4 w-4" />
-                    </>
-                  )}
-                </Button>
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+                <span>
+                  {isRecording
+                    ? 'Recording… Tap Stop when you are ready for the transcript.'
+                    : 'Press Enter to send, Shift+Enter for a new line.'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={isRecording ? 'destructive' : 'outline'}
+                    onClick={() => {
+                      if (isRecording) {
+                        stopRecording();
+                      } else {
+                        void startRecording();
+                      }
+                    }}
+                    disabled={isLoading && !isRecording}
+                  >
+                    {isRecording ? (
+                      <>
+                        <Square className="mr-2 h-4 w-4" />
+                        Stop
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="mr-2 h-4 w-4" />
+                        Speak
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={isLoading || isRecording || !composer.trim()}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing…
+                      </>
+                    ) : (
+                      <>
+                        Send
+                        <SendHorizontal className="ml-2 h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </form>
           </div>
         </CardContent>
       </Card>
+
+      {coreFactsSummary && (
+        <Card className="border border-primary/40 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wide text-primary">
+              Capsule Facts Snapshot
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-primary">
+            {coreFactsSummary}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

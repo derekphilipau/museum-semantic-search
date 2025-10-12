@@ -40,6 +40,16 @@ We are extending the project with an offline, citation-first chat experience for
 - Chat with the prototype guide at `/chat/death-of-socrates` once `OPENAI_API_KEY` is configured and the capsule/snippets for `met_436105` are indexed via Elasticsearch.
 - Programmatic responses are available via `POST /api/artwork-chat` with `{ artifactId: "met_436105", messages: [...] }`; the route handles retrieval, prompt assembly, and returns cited snippets alongside the assistant reply.
 
+### Voice Mode (beta)
+
+The `/chat/death-of-socrates` experience now offers an opt-in voice turn. Press **Speak** to record a short clip (captured locally as WebM/Opus), then tap **Stop** to upload it. The server:
+
+- Transcribes the audio with `gpt-4o-mini-transcribe`, appends the transcript to your chat history, and routes the text through `/api/artwork-chat` (running on `gpt-5-mini`) so citations and slow-looking prompts behave exactly like the text workflow.
+- Converts the assistant reply to speech with `gpt-4o-mini-tts`, returning an inline play button while keeping the on-screen transcript + citations intact.
+- Falls back gracefully if TTS is unavailable—the cited text still renders, and you can play previous clips at any time.
+
+Developers can exercise the same path directly through `POST /api/voice-chat`, sending a `multipart/form-data` body with `artifactId`, the prior `messages` array (JSON string), and an `audio` file. The response includes the transcript, assistant message, retrieved snippets, retrieval log, and (when available) a base64-encoded audio clip.
+
 ## Example Searches
 
 Try these queries to see how semantic search finds artworks that traditional keyword search might miss:

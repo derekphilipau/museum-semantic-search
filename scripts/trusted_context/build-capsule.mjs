@@ -21,6 +21,7 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..', '..');
 const DATA_DIR = path.join(ROOT_DIR, 'data', 'trusted_corpus');
 const RAW_DIR = path.join(DATA_DIR, 'raw');
+const MANUAL_DIR = path.join(DATA_DIR, 'manual');
 const CAPSULE_DIR = path.join(DATA_DIR, 'capsules');
 const SNIPPET_DIR = path.join(DATA_DIR, 'snippets');
 
@@ -39,6 +40,16 @@ const VISUAL_MAX_WORDS = 120;
 const VISUAL_MIN_WORDS = 40;
 
 const SENTENCE_REGEX = /[^.!?]+(?:[.!?]+|$)/g;
+const BOLD_HEADING_REGEX = /^\*\*[^*\n]+\*\*$/;
+
+function isHeadingParagraph(paragraph) {
+  if (!paragraph) return false;
+  const trimmed = paragraph.trim();
+  if (!trimmed) return false;
+  if (/^#{1,6}\s+/.test(trimmed)) return true;
+  if (BOLD_HEADING_REGEX.test(trimmed)) return true;
+  return false;
+}
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -173,6 +184,7 @@ function chunkParagraphs(text, maxWords, minWords) {
 
   const chunks = [];
   const paragraphs = text.split(/\n{2,}/);
+  let pendingHeading = null;
   let searchIndex = 0;
 
   for (const rawParagraph of paragraphs) {
@@ -189,6 +201,12 @@ function chunkParagraphs(text, maxWords, minWords) {
     }
     const end = start + trimmed.length;
 
+    if (isHeadingParagraph(trimmed)) {
+      pendingHeading = { text: trimmed, start, end };
+      searchIndex = end;
+      continue;
+    }
+
     const wordCount = trimmed.split(/\s+/).length;
     if (wordCount > maxWords) {
       const sentenceSpans = iterSentenceSpans(trimmed);
@@ -199,20 +217,35 @@ function chunkParagraphs(text, maxWords, minWords) {
       );
 
       sentenceChunks.forEach((chunk) => {
+        let chunkText = chunk.text;
+        let charStart = start + chunk.char_start;
+        if (pendingHeading) {
+          chunkText = `${pendingHeading.text}\n\n${chunkText}`;
+          charStart = pendingHeading.start;
+          pendingHeading = null;
+        }
         chunks.push({
-          text: chunk.text,
-          word_count: chunk.word_count,
-          char_start: start + chunk.char_start,
+          text: chunkText,
+          word_count: chunkText.split(/\s+/).length,
+          char_start: charStart,
           char_end: start + chunk.char_end,
-          sentence_count: chunk.sentence_count,
+          sentence_count: iterSentenceSpans(chunkText).length,
         });
       });
     } else {
-      const sentenceCount = iterSentenceSpans(trimmed).length;
+      let chunkText = trimmed;
+      let charStart = start;
+      let sentenceCount = iterSentenceSpans(chunkText).length;
+      if (pendingHeading) {
+        chunkText = `${pendingHeading.text}\n\n${chunkText}`;
+        charStart = pendingHeading.start;
+        sentenceCount = iterSentenceSpans(chunkText).length;
+        pendingHeading = null;
+      }
       chunks.push({
-        text: trimmed,
-        word_count: wordCount,
-        char_start: start,
+        text: chunkText,
+        word_count: chunkText.split(/\s+/).length,
+        char_start: charStart,
         char_end: end,
         sentence_count: sentenceCount,
       });
@@ -262,7 +295,70 @@ async function loadVisualDescription(artifactId, source) {
   throw new Error(`No visual description found for ${artifactId} in ${resolved}`);
 }
 
+async function processManualDocument(
+  artifactId,
+  docConfig,
+  maxWords,
+  minWords
+) {
+  const manualPath = path.join(MANUAL_DIR, docConfig.path);
+  const rawText = await fs.readFile(manualPath, 'utf-8');
+  const chunks = chunkParagraphs(rawText, maxWords, minWords);
+  const snippetIds = [];
+
+  const snippets = chunks.map((chunk, chunkIndex) => {
+    const snippetId = `${docConfig.doc_id}:0:${chunkIndex}`;
+    snippetIds.push(snippetId);
+    return {
+      artifact_id: artifactId,
+      capsule_family: docConfig.capsule_family ?? 'artwork',
+      doc_id: docConfig.doc_id,
+      snippet_id: snippetId,
+      source_title: docConfig.title ?? docConfig.doc_id,
+      source_type: docConfig.source?.type ?? 'manual',
+      source_url: docConfig.source?.url ?? null,
+      source_retrieved: docConfig.source?.retrieved ?? null,
+      source_license: docConfig.source?.license ?? null,
+      source_note: docConfig.source?.note ?? null,
+      section_heading: docConfig.section_heading ?? null,
+      section_index: 0,
+      chunk_index: chunkIndex,
+      text: chunk.text,
+      word_count: chunk.word_count,
+      char_start: chunk.char_start,
+      char_end: chunk.char_end,
+      sentence_count: chunk.sentence_count,
+      entity_ids: docConfig.entity_ids ?? [],
+      doc_path: docConfig.path,
+    };
+  });
+
+  const summary = {
+    doc_id: docConfig.doc_id,
+    capsule_family: docConfig.capsule_family ?? 'artwork',
+    source_title: docConfig.title ?? docConfig.doc_id,
+    source_type: docConfig.source?.type ?? 'manual',
+    source_url: docConfig.source?.url ?? null,
+    source_retrieved: docConfig.source?.retrieved ?? null,
+    source_license: docConfig.source?.license ?? null,
+    entity_ids: docConfig.entity_ids ?? [],
+    section_count: chunks.length > 0 ? 1 : 0,
+    snippet_ids: snippetIds,
+    source_hash: await computeSha256(manualPath),
+  };
+
+  return { snippets, summary };
+}
+
 async function processDocument(artifactId, docConfig, maxWords, minWords) {
+  if (
+    docConfig.format === 'markdown' ||
+    docConfig.format === 'text' ||
+    docConfig.source?.type === 'manual'
+  ) {
+    return processManualDocument(artifactId, docConfig, maxWords, minWords);
+  }
+
   const rawPath = path.join(RAW_DIR, docConfig.path);
   const rawDoc = await loadJson(rawPath);
   const sections = rawDoc.sections ?? [];
