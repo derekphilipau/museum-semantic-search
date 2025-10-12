@@ -33,8 +33,8 @@ const DEFAULT_VISUAL_DESCRIPTIONS = path.join(
   'edited_descriptions.jsonl'
 );
 
-const DEFAULT_MAX_WORDS = 170;
-const DEFAULT_MIN_WORDS = 55;
+const DEFAULT_MAX_WORDS = 220;
+const DEFAULT_MIN_WORDS = 40;
 const VISUAL_MAX_WORDS = 120;
 const VISUAL_MIN_WORDS = 40;
 
@@ -168,6 +168,72 @@ function chunkSentences(spans, maxWords, minWords) {
   return chunks;
 }
 
+function chunkParagraphs(text, maxWords, minWords) {
+  if (!text || !text.trim()) return [];
+
+  const chunks = [];
+  const paragraphs = text.split(/\n{2,}/);
+  let searchIndex = 0;
+
+  for (const rawParagraph of paragraphs) {
+    const trimmed = rawParagraph.trim();
+    if (!trimmed) {
+      searchIndex += rawParagraph.length;
+      continue;
+    }
+
+    const start = text.indexOf(trimmed, searchIndex);
+    if (start === -1) {
+      searchIndex += rawParagraph.length;
+      continue;
+    }
+    const end = start + trimmed.length;
+
+    const wordCount = trimmed.split(/\s+/).length;
+    if (wordCount > maxWords) {
+      const sentenceSpans = iterSentenceSpans(trimmed);
+      const sentenceChunks = chunkSentences(
+        sentenceSpans,
+        maxWords,
+        minWords
+      );
+
+      sentenceChunks.forEach((chunk) => {
+        chunks.push({
+          text: chunk.text,
+          word_count: chunk.word_count,
+          char_start: start + chunk.char_start,
+          char_end: start + chunk.char_end,
+          sentence_count: chunk.sentence_count,
+        });
+      });
+    } else {
+      const sentenceCount = iterSentenceSpans(trimmed).length;
+      chunks.push({
+        text: trimmed,
+        word_count: wordCount,
+        char_start: start,
+        char_end: end,
+        sentence_count: sentenceCount,
+      });
+    }
+
+    searchIndex = end;
+  }
+
+  if (chunks.length === 0 && text.trim()) {
+    chunks.push({
+      text: text.trim(),
+      word_count: text.trim().split(/\s+/).length,
+      char_start: 0,
+      char_end: text.trim().length,
+      sentence_count: iterSentenceSpans(text.trim()).length,
+    });
+  }
+
+  return chunks;
+}
+
 function buildVisualDescriptionChunks(longDescription) {
   const spans = iterSentenceSpans(longDescription ?? '');
   return chunkSentences(spans, VISUAL_MAX_WORDS, VISUAL_MIN_WORDS);
@@ -204,8 +270,7 @@ async function processDocument(artifactId, docConfig, maxWords, minWords) {
   const snippetIds = [];
 
   sections.forEach((section, sectionIndex) => {
-    const spans = iterSentenceSpans(section.text ?? '');
-    const chunks = chunkSentences(spans, maxWords, minWords);
+    const chunks = chunkParagraphs(section.text ?? '', maxWords, minWords);
     chunks.forEach((chunk, chunkIndex) => {
       const snippetId = `${docConfig.doc_id}:${sectionIndex}:${chunkIndex}`;
       snippets.push({

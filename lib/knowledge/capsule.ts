@@ -38,6 +38,7 @@ export interface KnowledgeCapsule {
   artifact_id: string;
   title?: string;
   wikidata_id?: string;
+  core_facts?: Record<string, unknown>;
   related_entities?: CapsuleRelatedEntity[];
   documents?: CapsuleDocument[];
   snippet_stats?: CapsuleSnippetStats;

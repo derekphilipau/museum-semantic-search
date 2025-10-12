@@ -1,5 +1,7 @@
 Here’s a tight, build-ready plan for a “Death of Socrates” chat MVP that plugs into your Elasticsearch + capsules, uses **OpenAI Realtime (WebRTC) for voice**, **Azure AI Content Safety** for kid-safe filtering, and **Vercel AI SDK + shadcn/Radix** for UI.
 
+> Implementation status (October 2025): the initial text-only capsule chat is live at `/chat/death-of-socrates`. The route renders `ChatExperience`, pulls snippets via `/api/artwork-chat`, and surfaces source capsules in the sidebar. Voice/WebRTC and Azure Content Safety integration remain TODOs for future iterations.
+
 ---
 
 # 0) Scope & success criteria (MVP)
@@ -287,6 +289,101 @@ Each run asserts:
 * **“Why this answer?”** button → show ranked snippet list and scores.
 * **Entity pills** under the composer: Socrates, Plato, Neoclassicism (pre-routed subject queries).
 * **Screenreader**: live region for token stream; ensure chips are keyboard-navigable.
+
+---
+
+# Slow-looking conversation layer (design)
+
+## Why add slow-looking prompts
+
+* The current chat excels at factual Q&A but rarely nudges visitors to linger on the canvas.
+* Slow-looking should encourage observation without inventing interpretations—facts still cite capsule snippets.
+* The layer runs alongside Q&A so visitors can switch between “explain it” and “help me explore.”
+
+## Conversation goals
+
+1. Kick off with prompts that spark close looking.
+2. Keep every factual statement cited.
+3. Respect visitor preference—return to straight answers when asked.
+4. Stay within vetted scope (visible details, documented themes).
+
+## Interaction pattern
+
+1. **Orientation turn**
+   * Greet the visitor, supply a short cited fact (artist/date), then invite the first observation.
+   * Example: “Before we dive into details, take a slow look—what catches your eye near Socrates?”
+2. **Loop per user message**
+   * Run the existing planner + retrieval to collect snippets.
+   * Choose a strategy:
+     * `OBSERVATION_FIRST`: open-ended or scene-based queries.
+     * `FACT_FIRST`: explicit factual questions.
+     * `DEFLECT`: unsafe/off-scope.
+   * Respond with:
+     1. Factual paragraph (≤3 sentences) with citations.
+     2. One observation prompt tied to the same detail (“Do you notice his raised finger? What might that gesture suggest in the story?”).
+3. **When visitors share observations**
+   * Acknowledge without judging; echo their focus.
+   * Offer optional context from snippets (“Writers link that gesture to his argument about the soul [S:wiki:phaedo:0:0]”).
+4. **Off-ramp**
+   * Detect cues like “Just answer directly” and suspend observation prompts until the visitor invites them back.
+
+## Planner and prompt updates
+
+* Extend planner output with a `prompt_strategy` enum and optional list of target elements (`gesture`, `cup`, `companions`, `setting`).
+* Maintain a prompt library (TS/JSON) with entries:
+  * `element_id`, prompt variants, acknowledgement templates, associated snippet IDs.
+* Select a prompt whose cited snippets appear in retrieval results; otherwise use a neutral slow-looking question.
+* Log prompt usage to monitor repetition and coverage.
+
+### Prompt wording guardrails
+
+Borrowing from slow-looking narration work:
+
+* Stick to **visible or cited facts**—no speculative symbolism, mood adjectives, or inferred identities.
+* Use neutral descriptors (light/dark, broad/thin, curved/straight). If unsure who a figure is, reference position (“figure at the LEFT edge”) until a snippet confirms identity.
+* Rotate prompt types to keep the dialogue rich:  
+  * **Attention** (“Where does your eye settle next?”)  
+  * **Complexity / inventory** (“How many distinct textures do you spot around the cup?”)  
+  * **Relationships / structure** (“What links the raised finger to the figures on the bench?”)  
+  * **Scale & scope** (“What changes when you shift from the central group to the background walls?”)  
+  * **Juxtaposition** (“How do the bright drapery folds compare with the dark shadows nearby?”)  
+  * **Personal resonance** (invite memories or associations without leading interpretation).  
+* Encourage short pauses in wording (“Take another breath and look again…”) but keep it optional so the visitor can respond immediately.
+
+## Prompting the model
+
+* Update system instructions:
+  * Pair facts with a single observation question when `prompt_strategy` requests it.
+  * Never confirm or reject visitor interpretations beyond what citations support.
+  * Label observation prompts clearly (e.g., prefix with “Observation:”).
+* Add guardrails on length so prompts remain concise.
+
+## UI considerations (future work)
+
+* Style observation prompts differently (lighter bubble, italic text) to signal interactivity.
+* Offer quick actions like “Skip observation” or “Show another detail.”
+* Track analytics: number of observation turns, drop-off points, user-initiated mode switches.
+
+## Content requirements
+
+* Verify capsule snippets cover each referenced element (finger gesture, hemlock cup, lyre, shackles, companions).
+* Optionally add `looking_notes` arrays in capsule manifests with short, cited descriptions to support prompts.
+* Keep provenance for educator-style prompts if adapted from museum resources.
+
+## Safety and guardrails
+
+* Run existing moderation on visitor replies and assistant prompts.
+* Observation prompts should avoid sensitive imagery unless the visitor already raised it and safety cleared the topic.
+* If planner outputs `DEFLECT`, skip slow-looking and respond with the standard deflection.
+
+## Implementation checklist
+
+1. Define prompt-library schema and seed entries for “Death of Socrates.”
+2. Extend planner to output `prompt_strategy` and candidate elements.
+3. Update `/api/artwork-chat` to blend factual answers with observation prompts per strategy.
+4. Adjust prompt templates/system message to enforce one observation question per relevant turn.
+5. Add UI affordances (styling, skip button) and telemetry hooks.
+6. Script test conversations to ensure smooth transitions between observation mode and direct Q&A.
 
 ---
 

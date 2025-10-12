@@ -37,6 +37,8 @@ We are extending the project with an offline, citation-first chat experience for
 - Create snippet embeddings with `npx tsx scripts/trusted_context/embed-snippets.ts --input …` (Jina v3 document embeddings written beside the source JSONL).
 - Index the snippets with `node scripts/trusted_context/index-snippets.mjs --artifact …` (defaults to `ELASTICSEARCH_KNOWLEDGE_INDEX=knowledge_snippets`).
 - Retrieve grounded passages at runtime via `POST /api/knowledge-search` (body: `{ artifactId, query, size? }`), which returns top snippets + citations for the chat prompt.
+- Chat with the prototype guide at `/chat/death-of-socrates` once `OPENAI_API_KEY` is configured and the capsule/snippets for `met_436105` are indexed via Elasticsearch.
+- Programmatic responses are available via `POST /api/artwork-chat` with `{ artifactId: "met_436105", messages: [...] }`; the route handles retrieval, prompt assembly, and returns cited snippets alongside the assistant reply.
 
 ## Example Searches
 

@@ -12,8 +12,6 @@ interface RetrieveSnippetsOptions {
   vector?: number[];
 }
 
-type HybridQuery = Record<string, unknown>;
-
 interface RawSnippetSource {
   snippet_id?: string;
   artifact_id: string;
@@ -36,12 +34,12 @@ interface RawSnippetHit {
   _source?: RawSnippetSource;
 }
 
-function buildHybridQuery({
+function buildSearchBody({
   artifactId,
   query,
   size = 12,
   vector,
-}: RetrieveSnippetsOptions): HybridQuery {
+}: RetrieveSnippetsOptions): Record<string, unknown> {
   const must: Array<Record<string, unknown>> = [
     {
       term: {
@@ -69,38 +67,30 @@ function buildHybridQuery({
     },
   ];
 
-  const knn: Record<string, unknown> | undefined = vector
-    ? {
-        field: 'embedding',
-        query_vector: vector,
-        k: Math.max(size, 50),
-        num_candidates: Math.max(size * 4, 200),
-        filter: {
-          term: { artifact_id: artifactId },
-        },
-      }
-    : undefined;
-
-  const queries: Array<Record<string, unknown>> = [
-    {
+  const body: Record<string, unknown> = {
+    size,
+    query: {
       bool: {
         must,
         should,
         minimum_should_match: 1,
       },
     },
-  ];
+  };
 
-  if (knn) {
-    queries.push({ knn });
+  if (vector) {
+    body.knn = {
+      field: 'embedding',
+      query_vector: vector,
+      k: Math.max(size, 50),
+      num_candidates: Math.max(size * 4, 200),
+      filter: {
+        term: { artifact_id: artifactId },
+      },
+    };
   }
 
-  return {
-    hybrid: {
-      queries,
-    },
-    size,
-  };
+  return body;
 }
 
 function mapHitToSnippet(hit: RawSnippetHit): KnowledgeSnippet | null {
@@ -138,7 +128,7 @@ export async function retrieveKnowledgeSnippets(
 
   const response = await client.search<RawSnippetSource>({
     index: KNOWLEDGE_INDEX,
-    body: buildHybridQuery({ ...options, vector }),
+    body: buildSearchBody({ ...options, vector }),
   });
 
   const hits = (response.hits?.hits ?? []) as RawSnippetHit[];
