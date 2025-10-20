@@ -11,7 +11,7 @@ if (!process.env.NODE_ENV) {
 
 // Manually load env vars
 import { loadEnvConfig } from '@next/env';
-const { combinedEnv } = loadEnvConfig(projectDir, false); // false = don't log
+loadEnvConfig(projectDir, false); // false = don't log
 
 // Debug: Check if env vars were loaded
 console.log('Environment variables loaded:', {
@@ -28,6 +28,7 @@ import { MetParser } from '../lib/parsers/met-parser';
 import { ParsedArtwork } from '../lib/parsers/types';
 import { createElasticsearchClient, INDEX_NAME, buildIndexMapping } from '../lib/elasticsearch';
 import { ModelKey, EMBEDDING_MODELS } from '../../lib/embeddings';
+import type { Client } from '@elastic/elasticsearch';
 
 interface EmbeddingRecord {
   artwork_id: string;
@@ -204,8 +205,11 @@ async function loadProjections(): Promise<Map<string, ProjectionData>> {
               // Store coordinates
               artworkProjections[embeddingType][projectionType] = record.coordinates;
               count++;
-            } catch (error) {
-              console.warn(`  Failed to parse line: ${line.substring(0, 50)}...`);
+            } catch (parseError) {
+              console.warn(
+                `  Failed to parse line: ${line.substring(0, 50)}...`,
+                parseError
+              );
             }
           }
         }
@@ -222,10 +226,10 @@ async function loadProjections(): Promise<Map<string, ProjectionData>> {
 }
 
 async function createIndex(
-  esClient: any,
+  esClient: Client,
   forceRecreate: boolean = false,
   dims: { text?: number; clip?: number } = {}
-) {
+): Promise<boolean> {
   const exists = await esClient.indices.exists({ index: INDEX_NAME });
   
   if (exists) {
@@ -252,7 +256,7 @@ async function createIndex(
 }
 
 async function indexArtworks(
-  esClient: any,
+  esClient: Client,
   artworks: ParsedArtwork[], 
   embeddings: { [key in ModelKey]?: Map<string, EmbeddingRecord> },
   descriptions: Map<string, DescriptionRecord>,
@@ -264,13 +268,13 @@ async function indexArtworks(
   
   for (let i = 0; i < artworks.length; i += BATCH_SIZE) {
     const batch = artworks.slice(i, i + BATCH_SIZE);
-    const operations = [];
+    const operations: Array<Record<string, unknown>> = [];
     
     for (const artwork of batch) {
       const artworkId = artwork.id;
       
       // Get embeddings for this artwork
-      const artworkEmbeddings: any = {};
+      const artworkEmbeddings: Record<string, number[]> = {};
       for (const [modelKey, embeddingMap] of Object.entries(embeddings)) {
         const embedding = embeddingMap?.get(artworkId);
         if (embedding) {
@@ -285,7 +289,7 @@ async function indexArtworks(
       const artworkProjections = projections.get(artworkId);
       
       // Create document - artwork is already flattened from parser
-      const doc: any = {
+      const doc: Record<string, unknown> = {
         // Spread all artwork fields (already flattened)
         ...artwork,
         

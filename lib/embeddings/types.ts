@@ -42,7 +42,7 @@ export interface EmbedTextOptions {
 }
 
 const DEFAULT_JINA_TEXT_DIMENSION =
-  Number.parseInt(process.env.JINA_TEXT_EMBED_DIM ?? '768', 10) || 768;
+  Number.parseInt(process.env.JINA_TEXT_EMBED_DIM ?? '1024', 10) || 1024;
 
 const DEFAULT_JINA_CLIP_DIMENSION =
   Number.parseInt(process.env.JINA_CLIP_EMBED_DIM ?? '1024', 10) || 1024;

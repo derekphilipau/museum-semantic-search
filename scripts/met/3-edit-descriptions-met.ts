@@ -2,7 +2,7 @@
 import { loadEnvConfig } from '@next/env';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { createReadStream, createWriteStream } from 'fs';
+import { createReadStream, createWriteStream, WriteStream } from 'fs';
 import * as readline from 'readline';
 import { editVisualDescription, VisualDescription } from '../../lib/descriptions/gemini';
 
@@ -75,10 +75,37 @@ async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+const getErrorMessage = (err: unknown): string => {
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+  if (typeof err === 'string') {
+    return err;
+  }
+  return 'Unknown error';
+};
+
+const isSafetyBlockError = (err: unknown): boolean => {
+  if (!err || typeof err !== 'object') {
+    return false;
+  }
+
+  const message = getErrorMessage(err);
+  if (
+    message.includes('PROHIBITED_CONTENT') ||
+    message.includes('blocked due to OTHER')
+  ) {
+    return true;
+  }
+
+  const response = (err as { response?: { promptFeedback?: { blockReason?: string } } }).response;
+  return Boolean(response?.promptFeedback?.blockReason);
+};
+
 
 async function processDescription(
   record: DescriptionRecord,
-  writer: any
+  writer: WriteStream
 ): Promise<{ success: boolean; edited: boolean; reason?: string }> {
   try {
     // Validate record has required fields
@@ -105,9 +132,9 @@ async function processDescription(
     };
     
     // Try to edit with retries
-    let result = null;
+    let result: Awaited<ReturnType<typeof editVisualDescription>> | null = null;
     const maxRetries = 3;
-    let lastError = null;
+    let lastError: Error | null = null;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -117,14 +144,13 @@ async function processDescription(
         if (result) {
           break; // Success!
         }
-      } catch (error: any) {
-        lastError = error;
-        console.error(`  Attempt ${attempt} failed: ${error.message}`);
+      } catch (error: unknown) {
+        const message = getErrorMessage(error);
+        lastError = error instanceof Error ? error : new Error(message);
+        console.error(`  Attempt ${attempt} failed: ${message}`);
         
         // Check if it's a content policy violation
-        if (error.message?.includes('PROHIBITED_CONTENT') || 
-            error.message?.includes('blocked due to OTHER') ||
-            error.response?.promptFeedback?.blockReason) {
+        if (isSafetyBlockError(error)) {
           console.error('  ⚠️  Content blocked by Gemini safety filters');
           console.error('  This artwork contains content that triggers AI safety policies');
           // Don't retry for content violations
@@ -202,7 +228,7 @@ async function processDescription(
     
     // Write immediately
     return new Promise((resolve) => {
-      writer.write(JSON.stringify(editedRecord) + '\n', (err: any) => {
+      writer.write(`${JSON.stringify(editedRecord)}\n`, (err?: Error | null) => {
         if (err) {
           console.error('  Failed to write record:', err);
           resolve({ success: false, edited: false, reason: 'Write failed' });
@@ -214,9 +240,10 @@ async function processDescription(
       });
     });
     
-  } catch (error: any) {
-    console.error(`  Error: ${error.message}`);
-    return { success: false, edited: false, reason: error.message };
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
+    console.error(`  Error: ${message}`);
+    return { success: false, edited: false, reason: message };
   }
 }
 

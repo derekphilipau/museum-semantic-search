@@ -1,4 +1,4 @@
-import { Client } from '@elastic/elasticsearch';
+import { Client, type ClientOptions } from '@elastic/elasticsearch';
 
 // Create a function to get the client so env vars are loaded first
 let _esClient: Client | null = null;
@@ -13,34 +13,37 @@ export function createElasticsearchClient(): Client {
   const CLOUD_ID = process.env.ELASTICSEARCH_CLOUD_ID;
 
   // Create client with proper authentication
-  let clientConfig: any = {};
+  let clientOptions: ClientOptions;
 
   if (CLOUD_ID && API_KEY) {
     // Elastic Cloud configuration with Cloud ID
-    clientConfig = {
+    clientOptions = {
       cloud: {
-        id: CLOUD_ID
+        id: CLOUD_ID,
       },
       auth: {
-        apiKey: API_KEY
-      }
+        apiKey: API_KEY,
+      },
     };
-  } else if (API_KEY && (ES_URL.includes('elastic.co') || ES_URL.includes('elastic-cloud.com'))) {
+  } else if (
+    API_KEY &&
+    (ES_URL.includes('elastic.co') || ES_URL.includes('elastic-cloud.com'))
+  ) {
     // Elastic Cloud with URL
-    clientConfig = {
+    clientOptions = {
       node: ES_URL,
       auth: {
-        apiKey: API_KEY
-      }
+        apiKey: API_KEY,
+      },
     };
   } else {
     // Local Elasticsearch
-    clientConfig = {
-      node: ES_URL
+    clientOptions = {
+      node: ES_URL,
     };
   }
 
-  _esClient = new Client(clientConfig);
+  _esClient = new Client(clientOptions);
 
   // Log connection details for debugging
   console.log('Elasticsearch script client config:', {
@@ -63,7 +66,7 @@ export function buildIndexMapping({
   textDims?: number;
   clipDims?: number;
 } = {}) {
-  const fallbackTextDims = Number.parseInt(process.env.JINA_TEXT_EMBED_DIM ?? '768', 10);
+  const fallbackTextDims = Number.parseInt(process.env.JINA_TEXT_EMBED_DIM ?? '1024', 10);
   const fallbackClipDims = Number.parseInt(process.env.JINA_CLIP_EMBED_DIM ?? '1024', 10);
 
   const jinaTextDims =

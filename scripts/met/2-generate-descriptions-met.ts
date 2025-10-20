@@ -2,7 +2,7 @@
 import { loadEnvConfig } from '@next/env';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { createReadStream, createWriteStream } from 'fs';
+import { createReadStream, createWriteStream, WriteStream } from 'fs';
 import * as readline from 'readline';
 import { MetParser } from '../lib/parsers/met-parser';
 import { generateVisualDescription } from '../../lib/descriptions/gemini';
@@ -80,8 +80,9 @@ async function downloadWithRetry(url: string, maxRetries: number = 3): Promise<A
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       return await response.arrayBuffer();
-    } catch (error: any) {
-      console.log(`  Attempt ${attempt}/${maxRetries} failed: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.log(`  Attempt ${attempt}/${maxRetries} failed: ${message}`);
       if (attempt === maxRetries) {
         throw error;
       }
@@ -95,7 +96,7 @@ async function downloadWithRetry(url: string, maxRetries: number = 3): Promise<A
 
 async function processArtwork(
   artwork: ParsedArtwork,
-  writer: any
+  writer: WriteStream
 ): Promise<{ success: boolean; reason?: string }> {
   try {
     const imageUrl = typeof artwork.image === 'string' ? artwork.image : artwork.image?.url;
@@ -167,7 +168,7 @@ async function processArtwork(
     
     // Write immediately
     return new Promise((resolve) => {
-      writer.write(JSON.stringify(record) + '\n', (err: any) => {
+      writer.write(`${JSON.stringify(record)}\n`, (err?: Error | null) => {
         if (err) {
           console.error('  Failed to write record:', err);
           resolve({ success: false, reason: 'Write failed' });
@@ -178,9 +179,10 @@ async function processArtwork(
       });
     });
     
-  } catch (error: any) {
-    console.error(`  Error: ${error.message}`);
-    return { success: false, reason: error.message };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`  Error: ${message}`);
+    return { success: false, reason: message };
   }
 }
 
