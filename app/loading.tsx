@@ -40,4 +40,4 @@ export default function Loading() {
 }
 
 // Import at build time to avoid circular dependency
-import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
+import { EMBEDDING_MODELS } from '@/lib/embeddings';

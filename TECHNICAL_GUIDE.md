@@ -6,12 +6,10 @@ This prototype was developed quickly and is not production-ready.
 
 - Node.js 18+ 
 - Docker (for Elasticsearch)
-- Python 3.8+ (for local embedding generation scripts)
-- Modal account (for serverless GPU inference) - https://modal.com
 - Museum artwork data (e.g., Met CSV in `data/met/`)
 - API keys:
-  - Google Gemini API key (for visual descriptions)
-  - Jina API key (optional fallback for text embeddings)
+  - Google Gemini API key (for visual descriptions and LLM tooling)
+  - Jina API key (for text + image embeddings)
 
 ## Installation Steps
 
@@ -57,8 +55,15 @@ Create a `.env.local` file:
 # Visual Description Generation
 GOOGLE_GEMINI_API_KEY=your_gemini_api_key  # For Gemini 2.5 Flash descriptions
 
-# Modal Unified Embeddings API - Returns both SigLIP 2 and Jina v3 in one call
-MODAL_EMBEDDING_URL=https://your-username--museum-embeddings-embed-text.modal.run
+# Jina Embeddings
+JINA_API_KEY=your_jina_api_key
+JINA_TEXT_EMBED_MODEL=jina-embeddings-v3
+JINA_TEXT_EMBED_DIM=768             # Increase to 1536 for higher-precision text vectors
+JINA_IMAGE_EMBED_MODEL=jina-clip-v2
+JINA_CLIP_EMBED_DIM=1024             # Increase to 1536 for higher-precision image vectors
+# Optional overrides:
+# JINA_API_URL=https://api.jina.ai/v1/embeddings
+# JINA_CLIP_MAX_PAYLOAD=200000       # Bytes, used by the CLI when compressing large source images
 
 # Elasticsearch Configuration
 # Option 1: Local Elasticsearch (default)
@@ -78,37 +83,7 @@ ELASTICSEARCH_URL=http://localhost:9200
 # KV_KV_REST_API_TOKEN=...
 ```
 
-### 5. Deploy Modal Embeddings API
-
-The project uses Modal for serverless GPU inference to generate embeddings efficiently:
-
-```bash
-# Install Modal CLI
-pip install modal
-
-# Authenticate with Modal
-modal setup
-
-# Deploy the unified embeddings API
-cd modal
-modal deploy embedding_api.py
-```
-
-After deployment, Modal will provide your endpoint URL. Update your `.env.local`:
-```env
-MODAL_EMBEDDING_URL=https://your-username--museum-embeddings-embed-text.modal.run
-```
-
-**Modal API Features:**
-- Single endpoint returns both SigLIP 2 and Jina v3 embeddings
-- GPU-accelerated inference (T4 GPU)
-- Auto-scaling based on load
-- Persistent model loading (no cold starts between requests)
-- ~$0.000006-0.000011 per request
-
-See `modal/README.md` for detailed deployment instructions.
-
-### 6. Set up Elasticsearch
+### 5. Set up Elasticsearch
 
 #### Option A: Local Elasticsearch (Development)
 
@@ -131,7 +106,7 @@ ELASTICSEARCH_API_KEY=your-api-key
 
 The client will automatically detect and use cloud credentials when available.
 
-### 7. Generate UMAP projections for visualization
+### 6. Generate UMAP projections for visualization
 
 Generate 2D and 3D projections of embeddings for the explore/visualize page:
 
@@ -143,7 +118,7 @@ npm run 9-generate-umap-projections-met                  # Process all
 
 This creates dimensionality-reduced projections for interactive visualization of the embedding space.
 
-### 8. Index the artworks
+### 7. Index the artworks
 
 ```bash
 # First time setup - creates new index
@@ -195,27 +170,24 @@ The system supports multiple museum collections through a parser architecture. T
 
 ### 9. Generate embeddings
 
-The system generates multimodal embeddings using both text metadata and artwork images for enhanced semantic understanding.
+The system generates CLIP image embeddings using both text metadata and artwork images for enhanced semantic understanding.
 
 **Embedding Models:**
 - **Jina v3** (`jina-embeddings-v3`)
   - 768 dimensions
   - Advanced text embeddings combining artwork metadata with AI-generated visual descriptions
-  - Task-specific embeddings: "retrieval.passage" for indexing, "retrieval.query" for search
   - Only generated for artworks with visual descriptions
   
-- **SigLIP 2** (`google/siglip2-base-patch16-224`)
-  - 768 dimensions
-  - True cross-modal embeddings - text and image in shared space
-  - Improved semantic understanding and localization vs original SigLIP
+- **Jina CLIP v2** (`jina-clip-v2`)
+  - 1024 dimensions (configurable via `JINA_CLIP_EMBED_DIM`)
+  - Cross-modal embeddings—text and image share the same latent space
   - Enables natural language image search ("cat on a chair", "stormy seascape")
-  - Image embeddings stored in database, text queries processed at search time
-  - Deployed via Modal for serverless GPU inference
+  - Image embeddings stored in Elasticsearch; query embeddings generated at search time via the Jina API
 
 
 **Example embedding generation output:**
 
-For SigLIP 2 (cross-modal):
+For Jina CLIP:
 ```
 [62/100] Anabol(A): PACE CAR for the HUBRIS PILL by Matthew Barney
   Downloading image...
@@ -223,7 +195,7 @@ For SigLIP 2 (cross-modal):
   ✓ Success (768 dimensions)
 ```
 
-For Jina v3 (text):
+For Jina text:
 ```
 [62/100] Anabol(A): PACE CAR for the HUBRIS PILL by Matthew Barney
   Creating text for embedding...
@@ -259,17 +231,14 @@ npm run 3-edit-descriptions-met -- --limit=100     # Edit first 100 descriptions
 npm run 3-edit-descriptions-met                     # Edit all descriptions
 # Note: By default, ALL descriptions are edited. Use --skip-clean to only edit problematic ones
 
-# 3. Generate SigLIP 2 cross-modal embeddings
-# First install Python dependencies (one-time setup)
-npm run setup-siglip2
+# 3. Generate Jina CLIP embeddings (image similarity)
+#    (Run `npm install sharp` once locally so large images can be compressed automatically)
+npm run 5-generate-image-embeddings-met -- --limit 100    # Test with 100 (resumes by default)
+npm run 5-generate-image-embeddings-met                   # Process all (resumes by default)
 
-# Then generate embeddings (runs locally on your Mac)
-npm run 5-generate-siglip2-embeddings-met -- --limit 100    # Test with 100 (resumes by default)
-npm run 5-generate-siglip2-embeddings-met                   # Process all (resumes by default)
-
-# 4. Generate Jina v3 text embeddings (combines metadata + visual descriptions)
-npm run 4-generate-jina-embeddings-met -- --limit 100      # Test with 100 (resumes by default)
-npm run 4-generate-jina-embeddings-met                     # Process all (resumes by default)
+# 4. Generate Jina text embeddings (combines metadata + visual descriptions)
+npm run 4-generate-text-embeddings-met -- --limit 100      # Test with 100 (resumes by default)
+npm run 4-generate-text-embeddings-met                     # Process all (resumes by default)
 
 # 5. Generate AI-curated similar artworks (optional but recommended)
 npm run 6-generate-similar-artworks-met -- --limit 100  # Test with 100
@@ -288,8 +257,6 @@ npm run 10-index-artworks -- --force
 ```
 
 **Quality Control**: Use `npm run compare-met-coverage` periodically to ensure all eligible artworks have been processed. The script identifies paintings from MetObjects.csv that are missing descriptions, helping maintain complete coverage.
-
-**Note**: The Modal deployment (step 5 above) handles real-time query embedding generation. The scripts above generate embeddings for the artwork collection to be stored in Elasticsearch.
 
 The file-based approach allows for resumable generation and easier data portability between environments.
 
@@ -317,13 +284,12 @@ All Met scripts are numbered to indicate the recommended execution order:
   - `--force` - Start fresh instead of resuming (default: resume)
   - `--batch-size=N` - Save progress every N descriptions (default: 50)
   - `--skip-clean` - Only edit descriptions that appear problematic (default: edit all)
-- `npm run 4-generate-jina-embeddings-met` - Generate Jina v3 text embeddings
-  - `--limit=N` - Only process N artworks
-  - `--batch-size=N` - Save progress every N artworks (default: 10)
-- `npm run 5-generate-siglip2-embeddings-met` - Generate SigLIP 2 cross-modal embeddings
+- `npm run 4-generate-text-embeddings-met` - Generate Jina v3 text embeddings for metadata + descriptions
   - `--limit=N` - Only process N artworks
   - `--batch-size=N` - Save progress every N artworks (default: 16)
-- `npm run 6-generate-similar-artworks-met` - Generate AI-curated similar artwork recommendations
+- `npm run 5-generate-image-embeddings-met` - Generate Jina CLIP embeddings for artwork images
+  - `--limit=N` - Only process N artworks
+-- `npm run 6-generate-similar-artworks-met` - Generate AI-curated similar artwork recommendations
   - `--limit=N` - Only process N artworks
   - `--artwork-ids=id1,id2` - Process specific artwork IDs (comma-separated)
 - `npm run 7-update-similarities-met` - Update Elasticsearch with AI-curated similar artworks
@@ -334,7 +300,6 @@ All Met scripts are numbered to indicate the recommended execution order:
 - `npm run 10-index-artworks` - Index artworks into Elasticsearch
   - `--force` - Force recreate the index (WARNING: deletes all existing data)
   - `--limit N` - Only index N artworks (useful for testing)
-- `npm run setup-siglip2` - Install Python dependencies for SigLIP 2 (one-time setup)
 - `npm run dev` - Start the development server
 - `npm run build` - Build for production
 - `npm run start` - Start production server
@@ -344,15 +309,15 @@ All Met scripts are numbered to indicate the recommended execution order:
 ### Indexing Pipeline
 1. **Museum CSV** → Parse metadata → Generate visual descriptions (Gemini)
 2. **Optional but recommended** → Edit descriptions for quality and consistency (Gemini)
-3. **Artwork images** → Generate SigLIP 2 embeddings (local Python script)
-4. **Metadata + descriptions** → Generate Jina v3 embeddings (local Python script)
+3. **Artwork images** → Generate Jina CLIP embeddings (TypeScript CLI)
+4. **Metadata + descriptions** → Generate Jina text embeddings (TypeScript CLI)
 5. **Optional but recommended** → Generate AI-curated similar artworks (Gemini 2.5 Flash)
 6. **Similar artwork data** → Update Elasticsearch documents with curated recommendations
 7. **Embeddings** → Generate UMAP projections for visualization (2D/3D dimensionality reduction)
 8. **All data** → Index to Elasticsearch with embeddings, descriptions, and projections
 
 ### Search Pipeline  
-1. **User query** → Modal API (single call) → Both embeddings
+1. **User query** → Jina embeddings API → Query vector
 2. **Embeddings** → Parallel search execution (keyword, semantic, hybrid)
 3. **Results** → Ranking/fusion → UI presentation
 
@@ -369,56 +334,34 @@ See [DATA_PIPELINE.md](DATA_PIPELINE.md) for detailed documentation.
 ### Embedding Architecture
 
 #### Models
-- **Jina v3** (`jina-embeddings-v3`): 768-dimensional text embeddings
+- **Jina Text v3** (`jina-embeddings-v3`): 768-dimensional semantic text embeddings
   - Combines artwork metadata with AI-generated visual descriptions
-  - Task-specific: "retrieval.passage" for indexing, "retrieval.query" for search
+  - Generated offline for indexing and at runtime for user queries
   
-- **SigLIP 2** (`google/siglip2-base-patch16-224`): 768-dimensional cross-modal embeddings
-  - True text-to-image search in shared vector space
-  - Enables natural language queries about visual content
+- **Jina CLIP v2** (`jina-clip-v2`): 1024-dimensional cross-modal embeddings
+  - Supports natural language ↔ image similarity
+  - Used for image uploads and the image branch of hybrid search
+  - Requests are sent to the Jina embeddings API (`https://api.jina.ai/v1/embeddings`)
 
-#### Unified Embeddings API
+#### Embedding Access
 
-The system uses a unified Modal deployment that returns both embeddings in a single call:
-
-```typescript
-// Single API call for both embeddings
-const response = await generateUnifiedEmbeddings("abstract painting");
-// Returns: { 
-//   embeddings: {
-//     siglip2: { embedding: [...], dimension: 768 },
-//     jina_v3: { embedding: [...], dimension: 768 }
-//   }
-// }
-```
-
-**Benefits:**
-- One API call per search instead of multiple
-- Reduced latency and cost
-- Consistent embeddings across all search types
-- GPU-accelerated inference via Modal
+Both text and image embeddings are produced via `lib/embeddings/jina.ts`; the CLI automatically compresses large images with `sharp` so that payloads stay within comfortable limits before calling the API.
 
 #### Search Flow
 
 1. User enters search query
-2. Frontend calls search API
-3. Search API makes ONE call to Modal unified embeddings endpoint
-4. Both SigLIP 2 and Jina v3 embeddings returned
-5. Embeddings used for all requested search types (semantic, hybrid)
-6. Results returned to user
+2. Frontend calls the search API
+3. API requests a Jina text embedding for the query and, when needed, a Jina CLIP embedding for cross-modal retrieval
+4. Embeddings feed the semantic + hybrid searches (alongside cached image vectors)
+5. Results are ranked and returned to the user
 
 
 ## Troubleshooting
 
-### Modal API Issues
-- **403 Error**: Check that MODAL_EMBEDDING_URL is set correctly in `.env.local`
-- **Timeout**: First request after idle may take 10-15s (model loading)
-- **No Jina embeddings**: Ensure Modal deployment includes both models
-
 ### Search Issues  
 - **No results**: Check Elasticsearch is running and artworks are indexed
-- **Slow searches**: Ensure Modal API is being used (check browser network tab)
-- **Missing embeddings**: Run the generation scripts for both models
+- **Slow searches**: Confirm Jina embedding requests are succeeding (see server logs)
+- **Missing embeddings**: Run the TypeScript embedding scripts for both models
 
 ### Development
 - **Port conflicts**: The app will auto-select next available port
@@ -445,14 +388,14 @@ These safety filters cannot distinguish between:
 
 **Affected artworks** will fail with `PROHIBITED_CONTENT` errors. The scripts will skip these and continue processing other artworks. Consider maintaining a separate list of blocked artworks for manual review or alternative processing approaches.
 
-## Various Notes
+## Various Notes (Historical Model Evaluation)
 
-In developing this project I tried out a number of different models:
+Before standardizing on Jina embeddings, the project evaluated several other providers. The notes below reflect those experiments for posterity:
 
 1. **Jina Embeddings** performed very well across all their models:
    - **JinaCLIP v2** provided highly relevant results for visual art search
    - **Jina v3** delivered excellent text-only semantic search capabilities
-   - **Jina v4** matched Google's performance for multimodal search with 2048-dimensional embeddings
+   - **Jina v4** matched Google's performance for image search with 2048-dimensional embeddings
 
 2. **SigLIP vs CLIP**: SigLIP 2 over CLIP for several reasons:
    - Better performance on natural language queries

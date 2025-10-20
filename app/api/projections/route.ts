@@ -5,7 +5,8 @@ import { ProjectionPoint, EmbeddingType, ProjectionType } from '@/app/types';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const embeddingType = searchParams.get('embeddingType') as EmbeddingType || 'jina_v3';
+  const embeddingType =
+    (searchParams.get('embeddingType') as EmbeddingType) || 'jina_text';
   const projectionType = searchParams.get('projectionType') as ProjectionType || 'standard_2d';
   
   try {

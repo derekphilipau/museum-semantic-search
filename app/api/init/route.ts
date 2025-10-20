@@ -4,7 +4,7 @@ import { warmupEmbeddingService } from '@/lib/embeddings/warmup';
 // This endpoint can be called on app startup to warm up services
 export async function GET() {
   try {
-    // Warm up the Modal embedding service
+    // Warm up Gemini embedding endpoints
     await warmupEmbeddingService();
     
     return NextResponse.json({

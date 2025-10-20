@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ModelKey, EMBEDDING_MODELS } from '@/lib/embeddings/types';
+import { ModelKey, EMBEDDING_MODELS } from '@/lib/embeddings';
 import { findSimilarArtworks } from '@/lib/elasticsearch/client';
 
 // Constants for validation

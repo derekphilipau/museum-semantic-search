@@ -1,5 +1,6 @@
 import { createClient } from '@vercel/kv';
 import crypto from 'crypto';
+import type { ModelKey } from './types';
 
 // Lazy initialization of KV client to ensure environment variables are loaded
 let kv: ReturnType<typeof createClient> | null = null;
@@ -21,9 +22,8 @@ function getKVClient() {
 }
 
 // Types
-interface CachedEmbedding {
-  siglip2: number[];
-  jina_v3: number[];
+interface CachedEmbeddingsPayload {
+  vectors: Partial<Record<ModelKey, number[]>>;
   timestamp: number;
 }
 
@@ -42,7 +42,9 @@ function isKVAvailable(): boolean {
   return !!(process.env.KV_KV_REST_API_URL && process.env.KV_KV_REST_API_TOKEN);
 }
 
-export async function getCachedEmbeddings(query: string): Promise<CachedEmbedding | null> {
+export async function getCachedEmbeddings(
+  query: string
+): Promise<Partial<Record<ModelKey, number[]>> | null> {
   const key = getCacheKey(query);
   
   try {
@@ -53,17 +55,17 @@ export async function getCachedEmbeddings(query: string): Promise<CachedEmbeddin
         if (!kvClient) {
           throw new Error('KV client not initialized');
         }
-        const cached = await kvClient.get<CachedEmbedding>(key);
+        const cached = await kvClient.get<CachedEmbeddingsPayload>(key);
         if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        
-        // Refresh TTL for frequently accessed items
-        // Only refresh if entry is older than 1 hour to avoid excessive writes
-        if (Date.now() - cached.timestamp > 60 * 60 * 1000) {
-          const refreshed = { ...cached, timestamp: Date.now() };
-          await kvClient.set(key, refreshed, { ex: Math.floor(CACHE_TTL / 1000) });
+          // Refresh TTL for frequently accessed items
+          if (Date.now() - cached.timestamp > 60 * 60 * 1000) {
+            const refreshed = { ...cached, timestamp: Date.now() };
+            await kvClient.set(key, refreshed, {
+              ex: Math.floor(CACHE_TTL / 1000),
+            });
           }
-          
-          return cached;
+
+          return cached.vectors;
         }
       } catch (kvError) {
         console.error('[Cache] KV lookup error:', kvError);
@@ -77,13 +79,13 @@ export async function getCachedEmbeddings(query: string): Promise<CachedEmbeddin
 }
 
 export async function setCachedEmbeddings(
-  query: string, 
-  embeddings: { siglip2: number[]; jina_v3: number[] }
+  query: string,
+  embeddings: Partial<Record<ModelKey, number[]>>
 ): Promise<void> {
   const key = getCacheKey(query);
-  const data: CachedEmbedding = {
-    ...embeddings,
-    timestamp: Date.now()
+  const data: CachedEmbeddingsPayload = {
+    vectors: embeddings,
+    timestamp: Date.now(),
   };
   
   try {

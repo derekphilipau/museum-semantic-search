@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Zap, FileText, ImageIcon } from 'lucide-react';
-import { EMBEDDING_MODELS } from '@/lib/embeddings/types';
+import { EMBEDDING_MODELS } from '@/lib/embeddings';
 import { SearchResponse } from '@/app/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -78,7 +78,7 @@ export default function AllModesResults({
 
   return (
     <div className="space-y-8">
-      {/* Fixed 4-column grid layout: ES text, Jina v3, SigLIP, Hybrid */}
+      {/* Fixed 4-column grid layout: keyword, Jina text, Jina CLIP, hybrid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* 1. Keyword Search (ES text only) */}
         <SearchResultColumn
@@ -93,40 +93,46 @@ export default function AllModesResults({
           totalResults={results.keyword?.total}
         />
 
-        {/* 2. Jina v3 (Enhanced text embeddings) */}
+        {/* 2. Jina text embeddings */}
         <SearchResultColumn
-          title={EMBEDDING_MODELS.jina_v3?.name || 'Jina v3'}
-          description={EMBEDDING_MODELS.jina_v3?.description || 'Enhanced text search'}
+          title={EMBEDDING_MODELS.jina_text?.name || 'Jina Text'}
+          description={
+            EMBEDDING_MODELS.jina_text?.description || 'Jina-powered semantic text search'
+          }
           icon={FileText}
-          hits={results.semantic.jina_v3?.hits || []}
+          hits={results.semantic.jina_text?.hits || []}
           gradientFrom="from-orange-500"
           gradientTo="to-orange-600"
           badgeColor="bg-orange-700"
-          modelUrl={EMBEDDING_MODELS.jina_v3?.url}
+          modelUrl={EMBEDDING_MODELS.jina_text?.url}
           showExternalLink={true}
-          responseTime={results.semantic.jina_v3?.took}
-          totalResults={results.semantic.jina_v3?.total}
+          responseTime={results.semantic.jina_text?.took}
+          totalResults={results.semantic.jina_text?.total}
         />
 
-        {/* 3. SigLIP 2 (Cross-modal) */}
+        {/* 3. Jina CLIP (cross-modal) */}
         <SearchResultColumn
-          title={EMBEDDING_MODELS.siglip2?.name || 'SigLIP 2'}
-          description={EMBEDDING_MODELS.siglip2?.description || 'Cross-modal search'}
+          title={
+            EMBEDDING_MODELS.jina_clip?.name || 'Jina CLIP v2'
+          }
+          description={
+            EMBEDDING_MODELS.jina_clip?.description || 'Cross-modal text ↔ image search (Jina CLIP v2)'
+          }
           icon={ImageIcon}
-          hits={results.semantic.siglip2?.hits || []}
+          hits={results.semantic.jina_clip?.hits || []}
           gradientFrom="from-purple-500"
           gradientTo="to-purple-600"
           badgeColor="bg-purple-700"
-          modelUrl={EMBEDDING_MODELS.siglip2?.url}
+          modelUrl={EMBEDDING_MODELS.jina_clip?.url}
           showExternalLink={true}
-          responseTime={results.semantic.siglip2?.took}
-          totalResults={results.semantic.siglip2?.total}
+          responseTime={results.semantic.jina_clip?.took}
+          totalResults={results.semantic.jina_clip?.total}
         />
 
-        {/* 4. Hybrid Search (Jina v3 + SigLIP 2) */}
+        {/* 4. Hybrid Search (Jina text + Jina CLIP) */}
         <SearchResultColumn
           title="Hybrid"
-          description="Jina v3 + SigLIP 2"
+          description="Jina text + Jina CLIP"
           icon={Zap}
           hits={results.hybrid?.results?.hits || []}
           gradientFrom="from-amber-500"

@@ -24,7 +24,7 @@ interface SearchResult {
 
 export default function ExplorePage() {
   const [isMounted, setIsMounted] = useState(false);
-  const [embeddingType, setEmbeddingType] = useState<EmbeddingType>('jina_v3');
+  const [embeddingType, setEmbeddingType] = useState<EmbeddingType>('jina_text');
   const [projectionType, setProjectionType] = useState<ProjectionType>('standard_2d');
   const [colorBy, setColorBy] = useState<ColorByOption>('artist');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('points');

@@ -3,7 +3,7 @@
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Loader2, Search, Palette, Layers, SlidersHorizontal, Circle, Image } from 'lucide-react';
+import { Loader2, Search, Palette, Layers, SlidersHorizontal, Circle, Image as ImageIcon } from 'lucide-react';
 import { ProjectionType, EmbeddingType, ColorByOption, DisplayMode } from '@/app/types';
 
 interface VisualizationControlsProps {
@@ -65,9 +65,9 @@ export function VisualizationControls({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="jina_v3">Text (Jina v3)</SelectItem>
-              <SelectItem value="siglip2">
-                Image (SigLIP2)
+              <SelectItem value="jina_text">Text (Jina v3)</SelectItem>
+              <SelectItem value="jina_clip">
+                Image (Jina CLIP)
               </SelectItem>
             </SelectContent>
           </Select>
@@ -107,7 +107,11 @@ export function VisualizationControls({
         {/* Display Mode */}
         <div className="flex items-center gap-1 sm:gap-2">
           <div className="h-4 w-4 text-muted-foreground hidden sm:block">
-            {displayMode === 'points' ? <Circle className="h-4 w-4" /> : <Image className="h-4 w-4" />}
+            {displayMode === 'points' ? (
+              <Circle className="h-4 w-4" />
+            ) : (
+              <ImageIcon className="h-4 w-4" />
+            )}
           </div>
           <Select value={displayMode} onValueChange={onDisplayModeChange}>
             <SelectTrigger className="w-[130px]">
@@ -122,7 +126,7 @@ export function VisualizationControls({
               </SelectItem>
               <SelectItem value="thumbnails">
                 <div className="flex items-center gap-2">
-                  <Image className="h-3 w-3" />
+                  <ImageIcon className="h-3 w-3" />
                   <span>Thumbnails</span>
                 </div>
               </SelectItem>

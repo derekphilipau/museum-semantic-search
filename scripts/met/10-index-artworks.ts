@@ -26,8 +26,8 @@ import { createReadStream } from 'fs';
 import * as readline from 'readline';
 import { MetParser } from '../lib/parsers/met-parser';
 import { ParsedArtwork } from '../lib/parsers/types';
-import { createElasticsearchClient, INDEX_NAME, INDEX_MAPPING } from '../lib/elasticsearch';
-import { ModelKey, EMBEDDING_MODELS } from '../../lib/embeddings/types';
+import { createElasticsearchClient, INDEX_NAME, buildIndexMapping } from '../lib/elasticsearch';
+import { ModelKey, EMBEDDING_MODELS } from '../../lib/embeddings';
 
 interface EmbeddingRecord {
   artwork_id: string;
@@ -105,6 +105,24 @@ async function loadEmbeddingsMap(filePath: string): Promise<Map<string, Embeddin
   return embeddings;
 }
 
+function inferEmbeddingDimension(map?: Map<string, EmbeddingRecord>): number | undefined {
+  if (!map || map.size === 0) {
+    return undefined;
+  }
+
+  for (const record of map.values()) {
+    if (record?.dimension && Number.isFinite(record.dimension)) {
+      return record.dimension;
+    }
+
+    if (record?.embedding && record.embedding.length > 0) {
+      return record.embedding.length;
+    }
+  }
+
+  return undefined;
+}
+
 // Load descriptions from JSONL file into a map
 async function loadDescriptionsMap(filePath: string): Promise<Map<string, DescriptionRecord>> {
   const descriptions = new Map<string, DescriptionRecord>();
@@ -139,7 +157,7 @@ async function loadProjections(): Promise<Map<string, ProjectionData>> {
   const projectionsMap = new Map<string, ProjectionData>();
   
   const projectionsDir = path.join(process.cwd(), 'data', 'met', 'projections');
-  const embeddingTypes = ['jina_v3', 'siglip2'];
+  const embeddingTypes = ['jina_text', 'jina_clip'];
   const projectionTypes = ['standard_2d', 'tight_2d', 'loose_2d', 'standard_3d'];
   
   for (const embeddingType of embeddingTypes) {
@@ -203,7 +221,11 @@ async function loadProjections(): Promise<Map<string, ProjectionData>> {
   return projectionsMap;
 }
 
-async function createIndex(esClient: any, forceRecreate: boolean = false) {
+async function createIndex(
+  esClient: any,
+  forceRecreate: boolean = false,
+  dims: { text?: number; clip?: number } = {}
+) {
   const exists = await esClient.indices.exists({ index: INDEX_NAME });
   
   if (exists) {
@@ -217,9 +239,13 @@ async function createIndex(esClient: any, forceRecreate: boolean = false) {
   }
   
   console.log(`Creating index "${INDEX_NAME}"...`);
+  const indexMapping = buildIndexMapping({
+    textDims: dims.text,
+    clipDims: dims.clip,
+  });
   await esClient.indices.create({
     index: INDEX_NAME,
-    ...INDEX_MAPPING
+    ...indexMapping
   });
   
   return true;
@@ -391,9 +417,45 @@ async function main() {
     console.log('  docker-compose up -d');
     process.exit(1);
   }
+
+  // Pre-load embeddings so we can detect vector dimensions before creating the index
+  console.log('\nLoading pre-computed embeddings (for mapping)...');
+  const embeddings: { [key in ModelKey]?: Map<string, EmbeddingRecord> } = {};
+
+  for (const modelKey of Object.keys(EMBEDDING_MODELS) as ModelKey[]) {
+    const embeddingPath = path.join(
+      process.cwd(),
+      'data',
+      'met',
+      'embeddings',
+      modelKey,
+      'embeddings.jsonl'
+    );
+    console.log(`  Loading ${modelKey} embeddings from ${embeddingPath}...`);
+    embeddings[modelKey] = await loadEmbeddingsMap(embeddingPath);
+    console.log(
+      `    Loaded ${embeddings[modelKey]?.size || 0} ${modelKey} embeddings`
+    );
+  }
+
+  const detectedTextDims = inferEmbeddingDimension(embeddings.jina_text);
+  const detectedClipDims = inferEmbeddingDimension(embeddings.jina_clip);
+  if (detectedTextDims) {
+    process.env.JINA_TEXT_EMBED_DIM = String(detectedTextDims);
+  }
+  if (detectedClipDims) {
+    process.env.JINA_CLIP_EMBED_DIM = String(detectedClipDims);
+  }
+  console.log('  Embedding dimensions detected:', {
+    jina_text: detectedTextDims ?? 'unknown',
+    jina_clip: detectedClipDims ?? 'unknown',
+  });
   
   // Create or check index
-  const indexCreated = await createIndex(esClient, forceRecreate);
+  const indexCreated = await createIndex(esClient, forceRecreate, {
+    text: detectedTextDims,
+    clip: detectedClipDims,
+  });
   if (!indexCreated && !forceRecreate) {
     console.log('\nExiting. Use --force to recreate the index.');
     process.exit(0);
@@ -409,24 +471,6 @@ async function main() {
   if (artworks.length === 0) {
     console.log('No artworks found. Make sure to run: npm run 1-fetch-met-images');
     process.exit(1);
-  }
-  
-  // Load embeddings for each model
-  console.log('\nLoading pre-computed embeddings...');
-  const embeddings: { [key in ModelKey]?: Map<string, EmbeddingRecord> } = {};
-  
-  for (const modelKey of Object.keys(EMBEDDING_MODELS) as ModelKey[]) {
-    const embeddingPath = path.join(
-      process.cwd(), 
-      'data',
-      'met',
-      'embeddings',
-      modelKey,
-      'embeddings.jsonl'
-    );
-    console.log(`\nLoading ${modelKey} embeddings...`);
-    embeddings[modelKey] = await loadEmbeddingsMap(embeddingPath);
-    console.log(`  Loaded ${embeddings[modelKey]?.size || 0} ${modelKey} embeddings`);
   }
   
   // Load descriptions - prioritize edited descriptions

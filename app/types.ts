@@ -121,7 +121,7 @@ export interface SimilarArtwork {
   similarity_type: string;       // style, subject, mood, technique, period, multiple
   confidence: number;            // 0-1 confidence score
   explanation: string;           // Human-readable explanation
-  source: string;                // metadata, jina_v3, siglip2
+  source: string;                // metadata, jina_text, jina_clip
 }
 
 // Flattened artwork structure for Elasticsearch
@@ -271,6 +271,6 @@ export interface ProjectionPoint {
 }
 
 export type ProjectionType = 'standard_2d' | 'tight_2d' | 'loose_2d' | 'standard_3d';
-export type EmbeddingType = 'jina_v3' | 'siglip2';
+export type EmbeddingType = 'jina_text' | 'jina_clip';
 export type ColorByOption = 'artist' | 'period' | 'tags' | 'department';
 export type DisplayMode = 'points' | 'thumbnails';
