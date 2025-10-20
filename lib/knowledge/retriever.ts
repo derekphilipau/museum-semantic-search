@@ -145,6 +145,10 @@ export async function retrieveKnowledgeSnippets(
   const client = getElasticsearchClient();
   const vector =
     options.vector ?? (await embedJinaText(options.query)).values;
+  const normalizedQuery = options.query.toLowerCase();
+  const keywordTokens = new Set(
+    normalizedQuery.match(/\b[a-z0-9]{3,}\b/g) ?? []
+  );
 
   const response = await client.search<RawSnippetSource>({
     index: KNOWLEDGE_INDEX,
@@ -155,6 +159,8 @@ export async function retrieveKnowledgeSnippets(
   const snippets = hits
     .map(mapHitToSnippet)
     .filter((snippet): snippet is KnowledgeSnippet => snippet !== null);
+
+  const scoringTokens = Array.from(keywordTokens);
 
   const merged = new Map<string, KnowledgeSnippet>();
   const addSnippets = (list: KnowledgeSnippet[]) => {
@@ -212,6 +218,30 @@ export async function retrieveKnowledgeSnippets(
     }
     if (snippet.capsuleFamily === 'artwork') {
       boost += 0.3;
+    }
+    if (snippets.length && snippet.text) {
+      // Promote snippets that include bolded labels (common in manual descriptions)
+      if (/\*\*[A-Z][^*]+\*\*/.test(snippet.text)) {
+        boost += 0.5;
+      }
+      // Encourage mention of companions/figures without naming specifics.
+      if (
+        /\b(companion|companions|disciple|disciples|follower|followers|student|students|figure|figures|attendant|attendants)\b/i.test(
+          snippet.text
+        )
+      ) {
+        boost += 0.5;
+      }
+    }
+    if (scoringTokens.length > 0 && snippet.text) {
+      const text = snippet.text.toLowerCase();
+      let keywordScore = 0;
+      scoringTokens.forEach((token) => {
+        if (text.includes(token)) {
+          keywordScore += token.length >= 6 ? 0.6 : 0.35;
+        }
+      });
+      boost += Math.min(keywordScore, 2);
     }
     return base + boost;
   };

@@ -34,7 +34,6 @@ interface PlanRetrievalInput {
 const DEFAULT_MAX_TASKS = 3;
 
 interface PlannerPromptOptions {
-  artifactId: string;
   userQuery: string;
   recentMessages: PlannerMessage[];
   capsule: KnowledgeCapsule | null;
@@ -42,7 +41,6 @@ interface PlannerPromptOptions {
 }
 
 function buildPlannerPrompt({
-  artifactId,
   userQuery,
   recentMessages,
   capsule,
@@ -69,7 +67,7 @@ function buildPlannerPrompt({
       (doc) => doc.source_title ?? doc.doc_id ?? '(untitled source)'
     ) ?? [];
 
-  const slowLookingElements = formatSlowLookingElementsForPlanner(artifactId);
+  const slowLookingElements = formatSlowLookingElementsForPlanner();
 
   const promptSections = [
     `USER QUERY:\n${userQuery}`,
@@ -85,7 +83,7 @@ function buildPlannerPrompt({
         : '(no additional documents recorded)'
     }`,
     `SLOW-LOOKING ELEMENTS:\n${slowLookingElements}`,
-    `OUTPUT INSTRUCTIONS:\n- Decide on a prompt strategy: OBSERVATION_FIRST (invite visual exploration), FACT_FIRST (pure factual answer), or DEFLECT (outside scope/unsafe).\n- target_elements may list up to 2 element IDs from the SLOW-LOOKING ELEMENTS section.\n- Propose up to ${maxTasks} focused Elasticsearch queries in "tasks".\n- Each task.query MUST be a short natural-language search phrase (no JSON, DSL, or Lucene syntax).\n- Stay strictly within the allowed topics/entities above.\n- Prefer concrete entity names over pronouns when possible.\n- Respond with JSON matching {"prompt_strategy":"...","target_elements":["..."],"tasks":[{"query":"...","rationale":"..."}]}.\n- Omit any task if you cannot stay within the allowed topics.\n- If the user request is completely unsupported, return {"prompt_strategy":"DEFLECT","target_elements":[],"tasks":[]}.`,
+    `OUTPUT INSTRUCTIONS:\n- Decide on a prompt strategy: OBSERVATION_FIRST (invite visual exploration), FACT_FIRST (pure factual answer), or DEFLECT (outside scope/unsafe).\n- target_elements may list up to 2 focus hints (single words) inspired by the SLOW-LOOKING ELEMENTS guidance.\n- Propose up to ${maxTasks} focused Elasticsearch queries in "tasks".\n- Each task.query MUST be a short natural-language search phrase (no JSON, DSL, or Lucene syntax).\n- Stay strictly within the allowed topics/entities above.\n- Prefer concrete entity names over pronouns when possible.\n- Respond with JSON matching {"prompt_strategy":"...","target_elements":["..."],"tasks":[{"query":"...","rationale":"..."}]}.\n- Omit any task if you cannot stay within the allowed topics.\n- If the user request is completely unsupported, return {"prompt_strategy":"DEFLECT","target_elements":[],"tasks":[]}.`,
   ];
 
   return promptSections.join('\n\n');
@@ -158,7 +156,7 @@ function parsePlannerResponse(
 }
 
 export async function planRetrievalTasks({
-  artifactId,
+  artifactId: _artifactId,
   apiKey,
   model,
   userQuery,
@@ -166,6 +164,7 @@ export async function planRetrievalTasks({
   capsule,
   maxTasks = DEFAULT_MAX_TASKS,
 }: PlanRetrievalInput): Promise<RetrievalPlan> {
+  void _artifactId;
   try {
     async function callPlanner(modelName: string) {
       return fetch('https://api.openai.com/v1/chat/completions', {
@@ -188,7 +187,6 @@ export async function planRetrievalTasks({
             {
               role: 'user',
               content: buildPlannerPrompt({
-                artifactId,
                 userQuery,
                 recentMessages,
                 capsule,

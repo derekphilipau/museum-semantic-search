@@ -9,7 +9,7 @@ import { SearchResponse, SearchHit, SearchResponseWithQuery, ESSearchQuery, ESHy
 // ============================================================================
 
 // Summary fields for artwork - essential data without full details
-const ARTWORK_SUMMARY_FIELDS = [
+export const ARTWORK_SUMMARY_FIELDS = [
   'id',
   'title',
   'artist',

@@ -38,9 +38,23 @@ export interface KnowledgeCapsule {
   artifact_id: string;
   title?: string;
   wikidata_id?: string;
+  object_id?: string | number;
   core_facts?: Record<string, unknown>;
   related_entities?: CapsuleRelatedEntity[];
   documents?: CapsuleDocument[];
+  visual_description?: {
+    alt_text?: string;
+    emoji_summary?: string;
+    long_description?: string;
+    chunks?: Array<{
+      chunk_id?: string;
+      text: string;
+      word_count?: number;
+      char_start?: number;
+      char_end?: number;
+      sentence_count?: number;
+    }>;
+  };
   snippet_stats?: CapsuleSnippetStats;
   build?: CapsuleBuildInfo;
 }

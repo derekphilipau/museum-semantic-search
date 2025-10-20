@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { KnowledgeSnippet } from '@/lib/knowledge';
+import type { ArtworkSearchResult } from '@/lib/search/artworks';
 import {
   SUPPORTED_ARTIFACT_ID,
   type ChatMessageInput,
@@ -9,6 +10,11 @@ import {
   normalizeTranscript,
   stripCitationsForSpeech,
 } from '@/lib/voice';
+
+interface ChatSourceLink {
+  title: string;
+  url: string;
+}
 
 interface ChatResponsePayload {
   message: {
@@ -22,6 +28,8 @@ interface ChatResponsePayload {
     source: 'planner' | 'fallback';
     rationale?: string;
   }[];
+  relatedArtworks?: ArtworkSearchResult[];
+  links?: ChatSourceLink[];
   error?: string;
 }
 
@@ -50,10 +58,12 @@ function parseMessagesField(value: FormDataEntryValue | null): ChatMessageInput[
 function buildChatRequestBody(options: {
   artifactId: string;
   messages: ChatMessageInput[];
+  slowLookingEnabled?: boolean;
 }) {
   return JSON.stringify({
     artifactId: options.artifactId,
     messages: options.messages,
+    slowLookingEnabled: options.slowLookingEnabled,
   });
 }
 
@@ -109,6 +119,11 @@ export async function POST(request: Request) {
     }
 
     const rawMessages = parseMessagesField(formData.get('messages'));
+    const slowLookingRaw = formData.get('slowLookingEnabled');
+    const slowLookingEnabled =
+      typeof slowLookingRaw === 'string'
+        ? slowLookingRaw !== 'false'
+        : true;
     const audioEntry = formData.get('audio');
     if (!audioEntry || !(audioEntry instanceof Blob)) {
       return NextResponse.json(
@@ -149,6 +164,7 @@ export async function POST(request: Request) {
     const chatBody = buildChatRequestBody({
       artifactId,
       messages,
+      slowLookingEnabled,
     });
 
     const chatResponse = await callChatRoute(request, chatBody);
@@ -186,6 +202,8 @@ export async function POST(request: Request) {
       message: chatResponse.message,
       snippets: chatResponse.snippets,
       retrievalLog: chatResponse.retrievalLog,
+      relatedArtworks: chatResponse.relatedArtworks ?? [],
+      links: chatResponse.links ?? [],
       audio: audioResult,
     });
   } catch (error) {

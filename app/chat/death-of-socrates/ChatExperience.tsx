@@ -8,7 +8,9 @@ import {
   useRef,
   useState,
 } from 'react';
+import Link from 'next/link';
 import {
+  ExternalLink,
   Loader2,
   Mic,
   SendHorizontal,
@@ -16,7 +18,6 @@ import {
   Square,
   Volume2,
   VolumeX,
-  X,
 } from 'lucide-react';
 import { KnowledgeCapsule, KnowledgeSnippet } from '@/lib/knowledge';
 import { Badge } from '@/components/ui/badge';
@@ -24,10 +25,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 interface ChatExperienceProps {
   artifactId: string;
   capsule: KnowledgeCapsule | null;
+}
+
+interface SourceLink {
+  title: string;
+  url: string;
 }
 
 type MessageRole = 'user' | 'assistant' | 'system';
@@ -44,6 +52,9 @@ interface ChatMessage {
   } | null;
   transcriptDurationMs?: number;
   pendingVoice?: boolean;
+  relatedArtworks?: RelatedArtwork[];
+  links?: SourceLink[];
+  retrievalSummary?: string;
 }
 
 interface ChatResponsePayload {
@@ -53,6 +64,8 @@ interface ChatResponsePayload {
   };
   snippets: KnowledgeSnippet[];
   retrievalLog?: RetrievalLogEntry[];
+  relatedArtworks?: RelatedArtwork[];
+  links?: SourceLink[];
   error?: string;
 }
 
@@ -78,6 +91,14 @@ interface RetrievalLogEntry {
   source: 'planner' | 'fallback';
   rationale?: string;
   topSnippets?: RetrievalLogSnippet[];
+}
+
+interface RelatedArtwork {
+  id: string;
+  title: string;
+  artist?: string;
+  imageUrl?: string;
+  thumbnailUrl?: string;
 }
 
 interface ContentSegment {
@@ -191,6 +212,7 @@ export default function ChatExperience({
   const audioElementsRef = useRef<Record<string, HTMLAudioElement>>({});
   const [isRecording, setIsRecording] = useState(false);
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
+  const [slowLookingEnabled, setSlowLookingEnabled] = useState(true);
 
   const snippets = useMemo(() => {
     if (snippetOrder.length === 0) {
@@ -384,11 +406,11 @@ export default function ChatExperience({
       setMessages((prev) => [...prev, placeholderUser, statusMessage]);
       setIsLoading(true);
       setError(null);
-
       const formData = new FormData();
       formData.append('artifactId', artifactId);
       formData.append('messages', JSON.stringify(requestMessages));
       formData.append('audio', audioBlob, 'voice-input.webm');
+      formData.append('slowLookingEnabled', slowLookingEnabled ? 'true' : 'false');
 
       try {
         const response = await fetch('/api/voice-chat', {
@@ -436,22 +458,17 @@ export default function ChatExperience({
                 base64: payload.audio.base64,
               }
             : null,
+          relatedArtworks: payload.relatedArtworks ?? [],
+          links: payload.links ?? [],
+          retrievalSummary: formatRetrievalSummary(payload.retrievalLog),
         };
 
         setMessages((prev) => {
-          const updated = prev.map((msg) => {
-            if (msg.id === voiceMessageId) {
-              return { ...msg, ...userMessage };
-            }
-            if (msg.id === statusMessageId) {
-              return {
-                ...msg,
-                content: formatRetrievalSummary(payload.retrievalLog),
-              };
-            }
-            return msg;
-          });
-          return [...updated, assistantMessage];
+          const updated = prev.map((msg) =>
+            msg.id === voiceMessageId ? { ...msg, ...userMessage } : msg
+          );
+          const filtered = updated.filter((msg) => msg.id !== statusMessageId);
+          return [...filtered, assistantMessage];
         });
 
         if (payload.snippets?.length) {
@@ -511,6 +528,7 @@ export default function ChatExperience({
       formatRetrievalSummary,
       messages,
       playAudio,
+      slowLookingEnabled,
       setSnippetMap,
       setSnippetOrder,
     ]
@@ -589,14 +607,7 @@ export default function ChatExperience({
       createdAt: Date.now(),
       origin: 'text',
     };
-    const searchMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'system',
-      content: 'Searching capsule…',
-      createdAt: Date.now(),
-    };
-
-    const nextMessages = [...messages, userMessage, searchMessage];
+    const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
     setComposer('');
     setIsLoading(true);
@@ -615,6 +626,7 @@ export default function ChatExperience({
         body: JSON.stringify({
           artifactId,
           messages: requestMessages,
+          slowLookingEnabled,
         }),
       });
 
@@ -630,19 +642,13 @@ export default function ChatExperience({
         content: payload.message.content,
         createdAt: Date.now(),
         audio: null,
+        relatedArtworks: payload.relatedArtworks ?? [],
+        links: payload.links ?? [],
+        retrievalSummary: formatRetrievalSummary(payload.retrievalLog),
       };
 
-      const retrievalSummary = formatRetrievalSummary(
-        payload.retrievalLog
-      );
-
       setMessages((prev) => {
-        const updated = prev.map((msg) =>
-          msg.id === searchMessage.id
-            ? { ...msg, content: retrievalSummary }
-            : msg
-        );
-        return [...updated, assistantMessage];
+        return [...prev, assistantMessage];
       });
 
       if (payload.snippets?.length) {
@@ -665,16 +671,7 @@ export default function ChatExperience({
       }
     } catch (chatError) {
       console.error(chatError);
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === searchMessage.id
-            ? {
-                ...msg,
-                content: 'Search failed. Please try again.',
-              }
-            : msg
-        )
-      );
+      setMessages((prev) => prev);
       setError(
         chatError instanceof Error
           ? chatError.message
@@ -704,14 +701,30 @@ export default function ChatExperience({
               Chat About the Painting
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Responses are grounded in cached Wikipedia snippets and must
+              Responses are grounded in cached article snippets and must
               include inline citations.
             </p>
           </div>
-          <Badge variant="secondary" className="flex items-center gap-1">
-            <Sparkles className="h-3 w-3" />
-            Capsule Mode
-          </Badge>
+          <div className="flex items-center gap-4">
+            <Badge variant="secondary" className="flex items-center gap-1">
+              <Sparkles className="h-3 w-3" />
+              Capsule Mode
+            </Badge>
+            <div className="flex items-center gap-2">
+              <Label
+                htmlFor="slow-looking-toggle"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                Slow Looking
+              </Label>
+              <Switch
+                id="slow-looking-toggle"
+                checked={slowLookingEnabled}
+                onCheckedChange={(checked) => setSlowLookingEnabled(Boolean(checked))}
+                aria-label="Toggle slow looking guidance"
+              />
+            </div>
+          </div>
         </CardHeader>
         <Separator />
         <CardContent className="flex flex-1 flex-col gap-4 p-0">
@@ -737,21 +750,8 @@ export default function ChatExperience({
                   ? formatDuration(message.transcriptDurationMs ?? null)
                   : null;
                 const isPlaying = playingMessageId === message.id;
-                let observationText: string | null = null;
-                let factualContent = message.content;
-
-                if (isAssistant) {
-                  const markerIndex = message.content.indexOf('\n\nObservation:');
-                  if (markerIndex >= 0) {
-                    observationText = message.content.slice(markerIndex + 2).trim();
-                    factualContent = message.content.slice(0, markerIndex);
-                  }
-                }
-
-                const segments = parseContentSegments(factualContent);
-                const observationQuestion = observationText
-                  ? observationText.replace(/^Observation:\s*/i, '').trim()
-                  : null;
+                const messageRelated = message.relatedArtworks ?? [];
+                const segments = parseContentSegments(message.content);
 
                 return (
                   <div
@@ -843,24 +843,83 @@ export default function ChatExperience({
                           );
                         })}
                       </div>
-                      {isAssistant && observationQuestion && (
-                        <div className="mt-3 flex flex-col gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-primary">
-                          <div className="flex items-start justify-between gap-4">
-                            <span className="italic leading-relaxed">{observationQuestion}</span>
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-1 rounded-full border border-transparent px-2 py-1 text-xs text-primary/80 transition hover:border-primary/50 hover:bg-primary/20"
-                              onClick={() => setComposer('Just the facts, please.')}
-                            >
-                              <X className="h-3 w-3" />
-                              Skip
-                            </button>
-                          </div>
-                          <span className="text-xs text-primary/90">
-                            Want only facts? Press Skip or just reply with your next question.
+                      {isAssistant && message.links && message.links.length > 0 && (
+                        <div className="mt-3 text-sm">
+                          <span className="font-semibold text-muted-foreground">
+                            Links:
                           </span>
+                          <ul className="mt-1 space-y-1">
+                            {message.links.map((link) => (
+                              <li key={`${message.id}-${link.url}`}>
+                                <a
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-primary hover:underline"
+                                >
+                                  {link.title}
+                                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       )}
+                      {isAssistant && message.retrievalSummary && (
+                        <details className="mt-3 rounded-md border border-dashed border-muted-foreground/40 bg-muted/20 p-3 text-xs text-muted-foreground">
+                          <summary className="cursor-pointer font-semibold text-foreground">
+                            Planner Details
+                          </summary>
+                          <p className="mt-2 whitespace-pre-wrap leading-relaxed">
+                            {message.retrievalSummary}
+                          </p>
+                        </details>
+                      )}
+                      {isAssistant && messageRelated.length > 0 && (
+                        <div className="mt-4 space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Related Artworks
+                          </p>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                              {messageRelated.map((artwork) => {
+                                const imageSrc = artwork.thumbnailUrl || artwork.imageUrl;
+                                return (
+                                  <Link
+                                    key={`${message.id}-${artwork.id}-${artwork.thumbnailUrl ?? ''}`}
+                                    href={`/artwork/${encodeURIComponent(artwork.id)}`}
+                                    className="group block overflow-hidden rounded-lg border bg-background transition hover:border-primary"
+                                  >
+                                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+                                      {imageSrc ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                          src={imageSrc}
+                                          alt={artwork.title}
+                                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                                          loading="lazy"
+                                        />
+                                      ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                                          No image available
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="space-y-1 p-3">
+                                      <p className="text-sm font-medium leading-snug text-foreground">
+                                        {artwork.title}
+                                      </p>
+                                      {artwork.artist && (
+                                        <p className="text-xs text-muted-foreground">
+                                          {artwork.artist}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                     </div>
                   </div>
                 );
@@ -870,7 +929,7 @@ export default function ChatExperience({
                 <div className="flex justify-start">
                   <div className="flex items-center gap-2 rounded-xl border border-dashed border-primary px-4 py-3 text-sm text-primary">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Thinking with capsule snippets&hellip;
+                    Thinking&hellip;
                   </div>
                 </div>
               )}
@@ -954,17 +1013,17 @@ export default function ChatExperience({
       </Card>
 
       {coreFactsSummary && (
-        <Card className="border border-primary/40 bg-primary/5">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold uppercase tracking-wide text-primary">
-              Capsule Facts Snapshot
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-primary">
-            {coreFactsSummary}
-          </CardContent>
-        </Card>
-      )}
+      <Card className="border border-primary/40 bg-primary/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold uppercase tracking-wide text-primary">
+            Capsule Facts Snapshot
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-primary">
+          {coreFactsSummary}
+        </CardContent>
+      </Card>
+    )}
 
       <Card>
         <CardHeader>
@@ -1007,8 +1066,24 @@ export default function ChatExperience({
                     {snippet.sectionHeading && (
                       <span>• {snippet.sectionHeading}</span>
                     )}
-                    {snippet.sourceType && (
-                      <span>• {snippet.sourceType}</span>
+                    {snippet.sourceType && <span>• {snippet.sourceType}</span>}
+                    {snippet.sourceUrl && (
+                      <span className="inline-flex items-center gap-1">
+                        <span>•</span>
+                        <a
+                          href={snippet.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          View source
+                          <ExternalLink
+                            className="h-3 w-3"
+                            aria-hidden="true"
+                          />
+                        </a>
+                      </span>
                     )}
                   </div>
                   <p className="mt-2 text-sm text-foreground">
