@@ -114,7 +114,7 @@ Excerpt from visual description of <a href="https://www.metmuseum.org/art/collec
 
 *"The mirror reflects **two lit candles**, their flames appearing as elongated, bright vertical streaks against the dark background within the frame. One candle is visible on a dark, turned wooden candlestick directly in front of the mirror, while the other is only seen as a reflection."*
 
-Here, the model seems confused by the mirror and incorrectly identifies two candles when there is only one.
+Here, the model seems confused by the mirror and incorrectly identifies two candles when there is only one.  Update: I've since learned that this painting has an alternate title, "Magdalene with Two Flames".
 
 </td>
 </tr>
@@ -376,6 +376,52 @@ See Example here: [Holy Family with Saint Anne, French Painter (17th century)](h
 ![Diagram of AI-Curated Similarity (LLM Reranking)](docs/images/AI_Similarity.jpg)
 
 For this example, relying only on metadata, the keyword search does a poor job of finding relevant similar artworks, pulling in various works by unknown "French Painter".  Text & image embeddings results are better, especially with theme and style.  The AI-curated results are perhaps best in my opinion, but I'm not an art historian and not familiar enough with the collection to make an educated judgment.
+
+## MCP Server (for AI Agents)
+
+This project includes an MCP (Model Context Protocol) server that allows AI assistants like Claude and ChatGPT to search the collection directly.
+
+**Live endpoint:** `https://museum-semantic-search.vercel.app/api/mcp`
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `search_artworks` | Text search with semantic/hybrid modes, filters, pagination |
+| `get_artwork` | Full artwork details by ID |
+| `find_similar` | Find similar artworks (precomputed or embedding-based) |
+| `search_by_image` | Visual similarity search with base64 image |
+| `get_filter_options` | Get available filter values (departments, cultures, tags) |
+
+### Add to Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "museum-search": {
+      "url": "https://museum-semantic-search.vercel.app/api/mcp"
+    }
+  }
+}
+```
+
+Restart Claude Desktop to connect.
+
+### Add to Claude Code
+
+```bash
+claude mcp add --transport http museum-search https://museum-semantic-search.vercel.app/api/mcp
+```
+
+### Add to ChatGPT (Custom GPT)
+
+When creating a Custom GPT, add an Action with:
+- **Schema**: Import from `https://museum-semantic-search.vercel.app/docs/openapi.yaml`
+- **Server URL**: `https://museum-semantic-search.vercel.app/api/mcp`
+
+See [docs/MCP_API.md](docs/MCP_API.md) for full API documentation.
 
 ## Technical Guide & Setup
 

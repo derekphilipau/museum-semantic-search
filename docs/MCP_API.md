@@ -528,3 +528,93 @@ curl -X POST https://your-domain.com/api/mcp/image-search \
 3. **Use `precomputed` similarity** when available (faster, higher quality)
 4. **Include `filters_applied` in responses** to users for transparency
 5. **Handle fallbacks** - semantic search falls back to keyword if embedding fails
+
+---
+
+## MCP Server
+
+This app includes a built-in MCP (Model Context Protocol) server that exposes the search API as tools for AI agents.
+
+### Endpoint
+
+```
+http://localhost:3000/api/mcp  (Streamable HTTP transport)
+```
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `search_artworks` | Text search with semantic/hybrid modes, filters, pagination |
+| `get_artwork` | Full artwork details by ID |
+| `find_similar` | Find similar artworks (precomputed or embedding-based) |
+| `search_by_image` | Visual similarity search with base64 image |
+| `get_filter_options` | Get available filter values (departments, tags, etc.) |
+
+### Testing with MCP Inspector
+
+1. Start the dev server:
+   ```bash
+   npm run dev
+   ```
+
+2. Launch the MCP Inspector:
+   ```bash
+   npx @modelcontextprotocol/inspector
+   ```
+
+3. Open the pre-filled URL shown in the terminal (includes auth token):
+   ```
+   http://localhost:6274/?MCP_PROXY_AUTH_TOKEN=<token>
+   ```
+
+4. In the Inspector:
+   - Set **Transport Type** to `Streamable HTTP`
+   - Set **URL** to `http://localhost:3000/api/mcp`
+   - Click **Connect**
+
+5. You should see the 5 tools listed. Try calling `search_artworks` with `{"query": "sunflowers"}`.
+
+### Testing with curl
+
+```bash
+# Initialize session
+curl -X POST http://localhost:3000/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'
+
+# List tools
+curl -X POST http://localhost:3000/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+
+# Search for artworks
+curl -X POST http://localhost:3000/api/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search_artworks","arguments":{"query":"impressionist landscapes","limit":5}}}'
+```
+
+### Connecting Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "museum-search": {
+      "url": "http://localhost:3000/api/mcp"
+    }
+  }
+}
+```
+
+Restart Claude Desktop to connect.
+
+### Connecting Claude Code
+
+```bash
+claude mcp add --transport http museum-search http://localhost:3000/api/mcp
+```
