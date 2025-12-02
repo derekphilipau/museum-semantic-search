@@ -1379,6 +1379,100 @@ export async function getAllTags(): Promise<{ tag: string; count: number }[]> {
   }
 }
 
+// Filter options type for UI dropdowns
+export interface FilterOptions {
+  departments: { value: string; count: number }[];
+  classifications: { value: string; count: number }[];
+  cultures: { value: string; count: number }[];
+  tags: { value: string; count: number }[];
+  dateRange: { min: number; max: number };
+}
+
+// Get all filter options in a single efficient query
+export async function getFilterOptions(): Promise<FilterOptions> {
+  try {
+    const client = getElasticsearchClient();
+
+    const response = await client.search({
+      index: INDEX_NAME,
+      size: 0,
+      aggs: {
+        departments: {
+          terms: {
+            field: 'department',
+            size: 100
+          }
+        },
+        classifications: {
+          terms: {
+            field: 'classification',
+            size: 100
+          }
+        },
+        cultures: {
+          terms: {
+            field: 'culture',
+            size: 200
+          }
+        },
+        tags: {
+          terms: {
+            field: 'tags',
+            size: 100  // Top 100 tags for UI
+          }
+        },
+        min_date: {
+          min: {
+            field: 'dateBegin'
+          }
+        },
+        max_date: {
+          max: {
+            field: 'dateEnd'
+          }
+        }
+      }
+    });
+
+    // Helper to extract buckets from aggregation
+    const extractBuckets = (aggName: string): { value: string; count: number }[] => {
+      const agg = response.aggregations?.[aggName];
+      const buckets = (agg && 'buckets' in agg)
+        ? (agg.buckets as Array<{ key: string; doc_count: number }>)
+        : [];
+      return buckets
+        .map(b => ({ value: b.key, count: b.doc_count }))
+        .sort((a, b) => b.count - a.count);
+    };
+
+    // Extract min/max dates
+    const minDateAgg = response.aggregations?.min_date;
+    const maxDateAgg = response.aggregations?.max_date;
+    const minDate = (minDateAgg && 'value' in minDateAgg) ? minDateAgg.value as number : -3000;
+    const maxDate = (maxDateAgg && 'value' in maxDateAgg) ? maxDateAgg.value as number : new Date().getFullYear();
+
+    return {
+      departments: extractBuckets('departments'),
+      classifications: extractBuckets('classifications'),
+      cultures: extractBuckets('cultures'),
+      tags: extractBuckets('tags'),
+      dateRange: {
+        min: Math.floor(minDate),
+        max: Math.ceil(maxDate)
+      }
+    };
+  } catch (error) {
+    console.error('Error fetching filter options:', error);
+    return {
+      departments: [],
+      classifications: [],
+      cultures: [],
+      tags: [],
+      dateRange: { min: -3000, max: new Date().getFullYear() }
+    };
+  }
+}
+
 // Helper function to format bytes
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 Bytes';

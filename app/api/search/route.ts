@@ -11,6 +11,7 @@ import {
   performHybridSearchWithEmbeddings,
   performEmojiSearch,
   getIndexStats,
+  SearchFilters,
 } from '@/lib/elasticsearch/client';
 import { SearchResponse, ESSearchQuery, ESHybridQuery } from '@/app/types';
 import { HybridMode } from '@/app/components/SearchForm';
@@ -30,6 +31,19 @@ interface SearchRequest {
     hybridBalance?: number;
     includeDescriptions?: boolean;
     emoji?: boolean;
+  };
+  filters?: {
+    artistName?: string;
+    yearStart?: number;
+    yearEnd?: number;
+    medium?: string;
+    classification?: string;
+    department?: string;
+    tags?: string[];
+    culture?: string;
+    country?: string;
+    onView?: boolean;
+    isPublicDomain?: boolean;
   };
   size?: number;
 }
@@ -70,7 +84,7 @@ function getCorsHeaders(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body: SearchRequest = await request.json();
-    const { query, options, size = 20 } = body;
+    const { query, options, filters: requestFilters, size = 20 } = body;
     const hybridBalance = options.hybridBalance ?? 0.5;
 
     // Validate request
@@ -87,6 +101,25 @@ export async function POST(request: NextRequest) {
         { status: 400, headers: getCorsHeaders(request) }
       );
     }
+
+    // Build SearchFilters from request (only include defined values)
+    const searchFilters: SearchFilters = {};
+    if (requestFilters) {
+      if (requestFilters.artistName) searchFilters.artistName = requestFilters.artistName;
+      if (requestFilters.yearStart !== undefined) searchFilters.yearStart = requestFilters.yearStart;
+      if (requestFilters.yearEnd !== undefined) searchFilters.yearEnd = requestFilters.yearEnd;
+      if (requestFilters.medium) searchFilters.medium = requestFilters.medium;
+      if (requestFilters.classification) searchFilters.classification = requestFilters.classification;
+      if (requestFilters.department) searchFilters.department = requestFilters.department;
+      if (requestFilters.tags && requestFilters.tags.length > 0) searchFilters.tags = requestFilters.tags;
+      if (requestFilters.culture) searchFilters.culture = requestFilters.culture;
+      if (requestFilters.country) searchFilters.country = requestFilters.country;
+      if (requestFilters.onView !== undefined) searchFilters.onView = requestFilters.onView;
+      if (requestFilters.isPublicDomain !== undefined) searchFilters.isPublicDomain = requestFilters.isPublicDomain;
+    }
+
+    // Check if any filters are active
+    const hasActiveFilters = Object.keys(searchFilters).length > 0;
 
     // Get selected models
     const modelSelections = options.models ?? {};
@@ -171,7 +204,7 @@ export async function POST(request: NextRequest) {
       } else {
         // Regular keyword search
         searchPromises.push(
-          performKeywordSearch(query, size, options.includeDescriptions)
+          performKeywordSearch(query, size, options.includeDescriptions, hasActiveFilters ? searchFilters : undefined)
             .then(results => ({ type: 'keyword', results }))
             .catch(error => {
               console.error('Keyword search failed:', error);
@@ -186,7 +219,7 @@ export async function POST(request: NextRequest) {
       const embedding = embeddings[model];
       if (embedding) {
         searchPromises.push(
-          performSemanticSearchWithEmbedding(embedding, model, size)
+          performSemanticSearchWithEmbedding(embedding, model, size, hasActiveFilters ? searchFilters : undefined)
             .then(results => ({ type: 'semantic', model, results }))
             .catch(error => {
               console.error(`Semantic search failed for ${model}:`, error);
@@ -271,10 +304,11 @@ export async function POST(request: NextRequest) {
           const hybridResults = await performHybridSearchWithEmbeddings(
             query,
             embeddings,
-            modelsToUse, 
-            size, 
+            modelsToUse,
+            size,
             options.includeDescriptions,
-            hybridBalance
+            hybridBalance,
+            hasActiveFilters ? searchFilters : undefined
           );
           
           response.hybrid = {
@@ -322,7 +356,9 @@ export async function POST(request: NextRequest) {
             query: query,
             embeddingsUsed: cacheHit ? 'cached' : 'generated'
           } : {})
-        }
+        },
+        // Include applied filters in metadata
+        ...(hasActiveFilters && { filtersApplied: searchFilters })
       }
     };
 

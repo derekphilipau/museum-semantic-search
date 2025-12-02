@@ -21,6 +21,7 @@ import {
 import ImageSearchUpload from './ImageSearchUpload';
 import SearchResultsWrapper from './SearchResultsWrapper';
 import EmojiPalette from './EmojiPalette';
+import FilterPanel, { SearchFilters } from './FilterPanel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export type HybridMode = 'text' | 'image' | 'both';
@@ -35,46 +36,60 @@ interface SearchFormProps {
     hybridBalance?: number;
     includeDescriptions?: boolean;
   };
+  initialFilters?: SearchFilters;
 }
 
 // Helper to build URL search params
 function buildSearchParams(
   query: string,
-  options: { keyword: boolean; models: Record<string, boolean>; hybrid: boolean; hybridMode?: HybridMode; hybridBalance?: number; includeDescriptions?: boolean }
+  options: { keyword: boolean; models: Record<string, boolean>; hybrid: boolean; hybridMode?: HybridMode; hybridBalance?: number; includeDescriptions?: boolean },
+  filters?: SearchFilters
 ): string {
   const params = new URLSearchParams();
-  
+
   if (query) {
     params.set('q', query);
   }
-  
+
   params.set('keyword', options.keyword.toString());
   params.set('hybrid', options.hybrid.toString());
-  
+
   // Add hybrid mode if hybrid is enabled
   if (options.hybrid && options.hybridMode) {
     params.set('hybridMode', options.hybridMode);
   }
-  
+
   // Add hybrid balance if hybrid is enabled and balance is specified
   if (options.hybrid && options.hybridBalance !== undefined) {
     params.set('hybridBalance', options.hybridBalance.toString());
   }
-  
+
   // Add includeDescriptions parameter - only set to false if explicitly disabled
   if (options.includeDescriptions === false) {
     params.set('includeDescriptions', 'false');
   }
-  
+
   // Always include models parameter
   const enabledModels = Object.entries(options.models)
     .filter(([, enabled]) => enabled)
     .map(([key]) => key);
-  
+
   // Always set models param, even if all are selected
   params.set('models', enabledModels.join(','));
-  
-  
+
+  // Add filter parameters
+  if (filters) {
+    if (filters.artistName) params.set('artistName', filters.artistName);
+    if (filters.yearStart !== undefined) params.set('yearStart', filters.yearStart.toString());
+    if (filters.yearEnd !== undefined) params.set('yearEnd', filters.yearEnd.toString());
+    if (filters.department) params.set('department', filters.department);
+    if (filters.classification) params.set('classification', filters.classification);
+    if (filters.culture) params.set('culture', filters.culture);
+    if (filters.tags && filters.tags.length > 0) params.set('tags', filters.tags.join(','));
+    if (filters.isPublicDomain) params.set('isPublicDomain', 'true');
+    if (filters.onView) params.set('onView', 'true');
+  }
+
   return params.toString();
 }
 
@@ -89,7 +104,7 @@ interface ImageSearchState {
   error: string | null;
 }
 
-export default function SearchForm({ initialQuery, initialOptions }: SearchFormProps) {
+export default function SearchForm({ initialQuery, initialOptions, initialFilters }: SearchFormProps) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
   const [searchMode, setSearchMode] = useState<'text' | 'image'>('text');
@@ -104,15 +119,35 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
     hybridMode: initialOptions.hybridMode || 'image',
     hybridBalance: initialOptions.hybridBalance ?? 0.5
   });
+  const [filters, setFilters] = useState<SearchFilters>(initialFilters || {});
+
+  // Navigate with current query and new filters
+  const navigateWithFilters = (newFilters: SearchFilters) => {
+    if (!query.trim()) return;
+    const hasFilters = Object.keys(newFilters).length > 0;
+    const params = buildSearchParams(query, searchOptions, hasFilters ? newFilters : undefined);
+    router.push(`/?${params}`);
+  };
+
+  // Handle filter changes - update state and trigger search
+  const handleFilterChange = (newFilters: SearchFilters) => {
+    setFilters(newFilters);
+    // Only auto-search if we have a query and filters are being removed (not added)
+    // This way clicking X on a badge triggers a new search
+    if (query.trim()) {
+      navigateWithFilters(newFilters);
+    }
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (searchMode === 'text') {
       if (!query.trim()) return;
-      
-      // Build params
-      const params = buildSearchParams(query, searchOptions);
+
+      // Build params including filters
+      const hasFilters = Object.keys(filters).length > 0;
+      const params = buildSearchParams(query, searchOptions, hasFilters ? filters : undefined);
       router.push(`/?${params}`);
     } else {
       // Image search
@@ -380,6 +415,14 @@ export default function SearchForm({ initialQuery, initialOptions }: SearchFormP
       </div>
       )}
       
+      {/* Filter Panel - only for text search */}
+      {searchMode === 'text' && (
+        <FilterPanel
+          filters={filters}
+          onChange={handleFilterChange}
+        />
+      )}
+
       {/* Emoji Palette */}
       <EmojiPalette />
     </form>

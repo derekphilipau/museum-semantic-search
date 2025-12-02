@@ -13,6 +13,7 @@ import {
   performHybridSearchWithEmbeddings,
   performEmojiSearch,
   getIndexStats,
+  SearchFilters,
 } from '@/lib/elasticsearch/client';
 import { SearchResponse, ESSearchQuery, ESHybridQuery } from '@/app/types';
 import SearchForm, { HybridMode } from './components/SearchForm';
@@ -32,24 +33,38 @@ async function parseSearchParams(searchParams: PageProps['searchParams']) {
   const hybridMode = (params.hybridMode as HybridMode) || 'image';
   const hybridBalance = params.hybridBalance ? parseFloat(params.hybridBalance as string) : 0.5;
   const includeDescriptions = params.includeDescriptions !== 'false';
-  
+
   // Parse models - if not specified, all models are enabled
   const modelsParam = params.models as string;
   const enabledModels = modelsParam ? modelsParam.split(',') : Object.keys(EMBEDDING_MODELS);
-  
+
   const models = Object.keys(EMBEDDING_MODELS).reduce((acc, key) => ({
     ...acc,
     [key]: enabledModels.includes(key)
   }), {} as Record<string, boolean>);
 
-  return { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions };
+  // Parse filter parameters
+  const filters: SearchFilters = {};
+  if (params.artistName) filters.artistName = params.artistName as string;
+  if (params.yearStart) filters.yearStart = parseInt(params.yearStart as string);
+  if (params.yearEnd) filters.yearEnd = parseInt(params.yearEnd as string);
+  if (params.department) filters.department = params.department as string;
+  if (params.classification) filters.classification = params.classification as string;
+  if (params.culture) filters.culture = params.culture as string;
+  if (params.tags) filters.tags = (params.tags as string).split(',');
+  if (params.isPublicDomain === 'true') filters.isPublicDomain = true;
+  if (params.onView === 'true') filters.onView = true;
+
+  const hasFilters = Object.keys(filters).length > 0;
+
+  return { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, filters: hasFilters ? filters : undefined };
 }
 
 
 // Server component that performs search
 async function SearchResults({ searchParams }: PageProps) {
-  const { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions } = await parseSearchParams(searchParams);
-  
+  const { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, filters } = await parseSearchParams(searchParams);
+
   if (!query) {
     return null;
   }
@@ -118,7 +133,7 @@ async function SearchResults({ searchParams }: PageProps) {
     } else {
       // Regular keyword search
       searchPromises.push(
-        performKeywordSearch(query, 20, includeDescriptions)
+        performKeywordSearch(query, 20, includeDescriptions, filters)
           .then(results => ({ type: 'keyword', results }))
       );
     }
@@ -129,7 +144,7 @@ async function SearchResults({ searchParams }: PageProps) {
     const embedding = embeddings[model];
     if (embedding) {
       searchPromises.push(
-        performSemanticSearchWithEmbedding(embedding, model, 20)
+        performSemanticSearchWithEmbedding(embedding, model, 20, filters)
           .then(results => ({ type: 'semantic', model, results }))
       );
     }
@@ -174,7 +189,8 @@ async function SearchResults({ searchParams }: PageProps) {
           modelsToUse,
           20,
           includeDescriptions,
-          hybridBalance
+          hybridBalance,
+          filters
         ).then((results) => ({
           type: 'hybrid',
           model: Array.isArray(modelsToUse) ? 'multi' : modelsToUse,
@@ -265,9 +281,9 @@ async function SearchResults({ searchParams }: PageProps) {
 }
 
 export default async function Home({ searchParams }: PageProps) {
-  const { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions } = await parseSearchParams(searchParams);
+  const { query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, filters } = await parseSearchParams(searchParams);
   const resolvedParams = await searchParams;
-  
+
   // If no query is provided, redirect to default search
   if (!query) {
     redirect(
@@ -279,10 +295,11 @@ export default async function Home({ searchParams }: PageProps) {
     <div className="min-h-[calc(100vh-3.5rem)]">
       <div className="container mx-auto px-4 py-6">
         <div className="space-y-3">
-        <SearchForm 
-          key={JSON.stringify({ query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions })} // Reset form when any URL param changes
+        <SearchForm
+          key={JSON.stringify({ query, keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions, filters })} // Reset form when any URL param changes
           initialQuery={query}
           initialOptions={{ keyword, models, hybrid, hybridMode, hybridBalance, includeDescriptions }}
+          initialFilters={filters}
         />
 
         <Suspense 
