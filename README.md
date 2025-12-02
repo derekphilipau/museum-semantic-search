@@ -377,26 +377,55 @@ See Example here: [Holy Family with Saint Anne, French Painter (17th century)](h
 
 For this example, relying only on metadata, the keyword search does a poor job of finding relevant similar artworks, pulling in various works by unknown "French Painter".  Text & image embeddings results are better, especially with theme and style.  The AI-curated results are perhaps best in my opinion, but I'm not an art historian and not familiar enough with the collection to make an educated judgment.
 
-## MCP Server (for AI Agents)
+## AI Agent Integration
 
-This project includes an MCP (Model Context Protocol) server that allows AI assistants like Claude and ChatGPT to search the collection directly.
+This project provides two ways for AI assistants to search the collection:
 
-**Live endpoint:** `https://museum-semantic-search.vercel.app/api/mcp`
+| Approach | Setup | Best For |
+|----------|-------|----------|
+| **Claude Skill** | Zero setup - just clone | Claude Code users who want instant access |
+| **MCP Server** | One-time registration | Claude Desktop, Claude Code, or ChatGPT with structured tools |
 
-### Available Tools
+**Live API endpoint:** `https://museum-semantic-search.vercel.app/api/mcp`
 
-| Tool | Description |
-|------|-------------|
-| `search_artworks` | Text search with semantic/hybrid modes, filters, pagination |
-| `get_artwork` | Full artwork details by ID |
-| `find_similar` | Find similar artworks (precomputed or embedding-based) |
-| `search_by_image` | Visual similarity search with base64 image |
-| `get_filter_options` | Get available filter values (departments, cultures, tags) |
+### Available Endpoints / Tools
 
-### Add to Claude Desktop
+| Endpoint | MCP Tool | Description |
+|----------|----------|-------------|
+| `POST /search` | `search_artworks` | Text search with semantic/hybrid modes, filters, pagination |
+| `GET /artwork/{id}` | `get_artwork` | Full artwork details by ID |
+| `GET /similar/{id}` | `find_similar` | Find similar artworks (precomputed or embedding-based) |
+| `POST /image-search` | `search_by_image` | Visual similarity search with base64 image |
+| `GET /filters` | `get_filter_options` | Get available filter values (departments, cultures, tags) |
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+### Option 1: Claude Skill
 
+The skill teaches Claude to call the REST API directly - no MCP registration needed.
+
+**Claude Code** - Auto-discovers `SKILL.md` when you run from the repo:
+```bash
+git clone https://github.com/derekphilipau/museum-semantic-search
+cd museum-semantic-search
+claude  # Can search the collection immediately
+```
+
+**Claude Desktop** - Download and upload the packaged skill:
+1. Download [skill/museum-search.zip](skill/museum-search.zip)
+2. Go to Settings → Skills → Upload Skill
+3. Upload the zip file
+
+Claude will use the API endpoints based on the skill's instructions.
+
+### Option 2: MCP Server (Structured Tools)
+
+For a more integrated experience with typed tool inputs/outputs:
+
+**Claude Code:**
+```bash
+claude mcp add --transport http museum-search https://museum-semantic-search.vercel.app/api/mcp
+```
+
+**Claude Desktop** - Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
@@ -407,17 +436,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop to connect.
-
-### Add to Claude Code
-
-```bash
-claude mcp add --transport http museum-search https://museum-semantic-search.vercel.app/api/mcp
-```
-
-### Add to ChatGPT (Custom GPT)
-
-When creating a Custom GPT, add an Action with:
+**ChatGPT (Custom GPT)** - Add an Action with:
 - **Schema**: Import from `https://museum-semantic-search.vercel.app/docs/openapi.yaml`
 - **Server URL**: `https://museum-semantic-search.vercel.app/api/mcp`
 

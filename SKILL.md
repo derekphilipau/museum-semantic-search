@@ -1,0 +1,1 @@
+skill/museum-search/SKILL.md
