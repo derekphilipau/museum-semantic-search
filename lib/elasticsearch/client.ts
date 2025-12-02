@@ -3,6 +3,10 @@ import { Client } from '@elastic/elasticsearch';
 import type { SearchResponse as ESResponse } from '@elastic/elasticsearch/lib/api/types';
 import { ModelKey } from '@/lib/embeddings';
 import { SearchResponse, SearchHit, SearchResponseWithQuery, ESSearchQuery, ESHybridQuery, Artwork, SimilarArtwork } from '@/app/types';
+import { SearchFilters, buildFilterClauses, hasFilters } from './filters';
+
+// Re-export SearchFilters for convenience
+export type { SearchFilters } from './filters';
 
 // ============================================================================
 // Constants
@@ -211,15 +215,19 @@ export const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || 'artworks_semantic'
 export async function performKeywordSearch(
   query: string,
   size: number = 20,
-  includeDescriptions: boolean = false
+  includeDescriptions: boolean = false,
+  filters?: SearchFilters
 ): Promise<SearchResponseWithQuery> {
   try {
     const client = getElasticsearchClient();
-    
-    const searchFields = includeDescriptions 
+
+    const searchFields = includeDescriptions
       ? [...SEARCH_FIELDS.BASE, ...SEARCH_FIELDS.DESCRIPTIONS]
       : SEARCH_FIELDS.BASE;
-    
+
+    // Build filter clauses if filters are provided
+    const filterClauses = hasFilters(filters) ? buildFilterClauses(filters!) : [];
+
     const searchBody: ESSearchQuery = {
       size,
       query: {
@@ -231,7 +239,8 @@ export async function performKeywordSearch(
               type: 'best_fields' as const,
               fuzziness: 'AUTO'
             }
-          }]
+          }],
+          ...(filterClauses.length > 0 && { filter: filterClauses })
         }
       }
     };
@@ -369,10 +378,17 @@ export async function performTagSearch(
 export async function performSemanticSearchWithEmbedding(
   embedding: number[],
   model: ModelKey,
-  size: number = 20
+  size: number = 20,
+  filters?: SearchFilters
 ): Promise<SearchResponseWithQuery> {
   try {
     const client = getElasticsearchClient();
+
+    // Build filter for kNN pre-filtering
+    const filterClauses = hasFilters(filters) ? buildFilterClauses(filters!) : [];
+    const knnFilter = filterClauses.length > 0
+      ? { bool: { must: filterClauses } }
+      : undefined;
 
     const searchBody: ESSearchQuery = {
       size,
@@ -380,7 +396,8 @@ export async function performSemanticSearchWithEmbedding(
         field: `embeddings.${model}`,
         query_vector: embedding,
         k: size,
-        num_candidates: size * SEARCH_CONSTANTS.MULTIPLIERS.CANDIDATES
+        num_candidates: size * SEARCH_CONSTANTS.MULTIPLIERS.CANDIDATES,
+        ...(knnFilter && { filter: knnFilter })
       }
     };
 
@@ -396,7 +413,8 @@ export async function performSemanticSearchWithEmbedding(
         field: searchBody.knn.field,
         k: searchBody.knn.k,
         num_candidates: searchBody.knn.num_candidates,
-        query_vector: '[embedding vector]' // Don't include full vector in UI
+        query_vector: '[embedding vector]', // Don't include full vector in UI
+        ...(knnFilter && { filter: knnFilter })
       } : undefined
     };
 
@@ -418,11 +436,12 @@ async function performSingleEmbeddingHybridSearchWithEmbedding(
   model: ModelKey,
   size: number = 20,
   includeDescriptions: boolean = false,
-  balance: number = 0.5
+  balance: number = 0.5,
+  filters?: SearchFilters
 ): Promise<SearchResponseWithQuery> {
   // If balance is 1 (100% semantic), just do a pure KNN search
   if (balance >= 0.99) {
-    const result = await performSemanticSearchWithEmbedding(embedding, model, size);
+    const result = await performSemanticSearchWithEmbedding(embedding, model, size, filters);
     // Convert ESSearchQuery to ESHybridQuery if esQuery exists
     if ('esQuery' in result && result.esQuery) {
       const hybridQuery: ESHybridQuery = {
@@ -431,19 +450,19 @@ async function performSingleEmbeddingHybridSearchWithEmbedding(
         balance,
         model,
         k: 60,
-        weights: { 
-          keyword: { raw: 0, normalized: 0 }, 
-          semantic: { raw: 1, normalized: 1 } 
+        weights: {
+          keyword: { raw: 0, normalized: 0 },
+          semantic: { raw: 1, normalized: 1 }
         }
       };
       return { ...result, esQuery: hybridQuery };
     }
     return result as SearchResponse & { esQuery?: ESHybridQuery };
   }
-  
+
   // If balance is 0 (100% keyword), just do keyword search
   if (balance <= 0.01) {
-    const result = await performKeywordSearch(query, size, includeDescriptions);
+    const result = await performKeywordSearch(query, size, includeDescriptions, filters);
     // Convert ESSearchQuery to ESHybridQuery if esQuery exists
     if ('esQuery' in result && result.esQuery) {
       const hybridQuery: ESHybridQuery = {
@@ -452,26 +471,26 @@ async function performSingleEmbeddingHybridSearchWithEmbedding(
         balance,
         model,
         k: 60,
-        weights: { 
-          keyword: { raw: 1, normalized: 1 }, 
-          semantic: { raw: 0, normalized: 0 } 
+        weights: {
+          keyword: { raw: 1, normalized: 1 },
+          semantic: { raw: 0, normalized: 0 }
         }
       };
       return { ...result, esQuery: hybridQuery };
     }
     return result as SearchResponse & { esQuery?: ESHybridQuery };
   }
-  
+
   // For balanced search, use manual RRF like the multi-embedding version
   // Run parallel searches: keyword + semantic
   const searchPromises: Promise<SearchResponse & { esQuery?: ESSearchQuery | ESHybridQuery }>[] = [];
-  
+
   // Keyword search
   const searchSize = size * SEARCH_CONSTANTS.MULTIPLIERS.RESULTS;
-  searchPromises.push(performKeywordSearch(query, searchSize, includeDescriptions));
-  
+  searchPromises.push(performKeywordSearch(query, searchSize, includeDescriptions, filters));
+
   // Semantic search
-  searchPromises.push(performSemanticSearchWithEmbedding(embedding, model, searchSize));
+  searchPromises.push(performSemanticSearchWithEmbedding(embedding, model, searchSize, filters));
   
   const results = await Promise.all(searchPromises);
   const keywordResults = results[0];
@@ -562,21 +581,22 @@ async function performMultipleEmbeddingHybridSearchWithEmbeddings(
   models: ModelKey[],
   size: number = 20,
   includeDescriptions: boolean = false,
-  balance: number = 0.5
+  balance: number = 0.5,
+  filters?: SearchFilters
 ): Promise<SearchResponseWithQuery> {
   // Run parallel searches: one keyword + one knn per model
   const searchPromises: Promise<SearchResponse & { esQuery?: ESSearchQuery | ESHybridQuery }>[] = [];
-  
+
   // Keyword search
   const searchSize = size * SEARCH_CONSTANTS.MULTIPLIERS.RESULTS;
-  searchPromises.push(performKeywordSearch(query, searchSize, includeDescriptions));
-  
+  searchPromises.push(performKeywordSearch(query, searchSize, includeDescriptions, filters));
+
   // Semantic searches using pre-computed embeddings
   for (const model of models) {
     const vector = embeddings[model];
     if (vector) {
       searchPromises.push(
-        performSemanticSearchWithEmbedding(vector, model, searchSize)
+        performSemanticSearchWithEmbedding(vector, model, searchSize, filters)
       );
     }
   }
@@ -677,42 +697,45 @@ export async function performHybridSearchWithEmbeddings(
   models: ModelKey | ModelKey[],
   size: number = 20,
   includeDescriptions: boolean = false,
-  balance: number = 0.5
+  balance: number = 0.5,
+  filters?: SearchFilters
 ): Promise<SearchResponseWithQuery> {
   try {
     const modelsArray = Array.isArray(models) ? models : [models];
-    
+
     if (modelsArray.length === 1) {
       const model = modelsArray[0];
       const embedding = embeddings[model];
-      
+
       if (!embedding) {
         throw new Error(`No embedding found for model ${model}`);
       }
-      
+
       return await performSingleEmbeddingHybridSearchWithEmbedding(
         query,
         embedding,
         model,
         size,
         includeDescriptions,
-        balance
+        balance,
+        filters
       );
     } else {
       // Filter to only models we have embeddings for
       const availableModels = modelsArray.filter((m) => embeddings[m]);
-      
+
       if (availableModels.length === 0) {
         throw new Error('No embeddings available for requested models');
       }
-      
+
       return await performMultipleEmbeddingHybridSearchWithEmbeddings(
         query,
         embeddings,
         availableModels,
         size,
         includeDescriptions,
-        balance
+        balance,
+        filters
       );
     }
   } catch (error) {
