@@ -38,6 +38,9 @@ interface MCPSearchRequest {
   /** Number of results to return (default: 10, max: 50) */
   limit?: number;
 
+  /** Offset for pagination - skip first N results (default: 0, max: 200) */
+  offset?: number;
+
   /** Include visual description in results (default: false) */
   includeDescription?: boolean;
 
@@ -69,6 +72,9 @@ interface MCPSearchResponse {
     mode: string;
     total: number;
     returned: number;
+    offset: number;
+    limit: number;
+    has_more: boolean;
     filters_applied: Record<string, string | number | boolean | string[]>;
     processing_time_ms: number;
   };
@@ -99,6 +105,7 @@ export async function POST(request: NextRequest) {
       filters = {},
       mode = 'hybrid',
       limit = 10,
+      offset = 0,
       includeDescription = false,
       includeImage = true,
     } = body;
@@ -111,8 +118,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Clamp limit to valid range
+    // Clamp limit and offset to valid ranges
     const size = Math.min(Math.max(1, limit), 50);
+    const startOffset = Math.min(Math.max(0, offset), 200);
+
+    // We need to fetch offset + size results to support pagination
+    // Then slice to return only the requested page
+    const fetchSize = Math.min(startOffset + size, 250); // Cap total fetch at 250
 
     // Convert MCP filters to internal SearchFilters
     const searchFilters: SearchFilters = {};
@@ -141,8 +153,9 @@ export async function POST(request: NextRequest) {
     let modeUsed = mode;
 
     // Execute search based on mode
+    // Fetch enough results to support pagination (offset + limit)
     if (mode === 'keyword') {
-      searchResults = await performKeywordSearch(query, size, true, searchFilters);
+      searchResults = await performKeywordSearch(query, fetchSize, true, searchFilters);
     } else {
       // For semantic/hybrid/auto, we need embeddings
       let embedding: number[] | undefined;
@@ -167,7 +180,7 @@ export async function POST(request: NextRequest) {
         searchResults = await performSemanticSearchWithEmbedding(
           embedding,
           'jina_text',
-          size,
+          fetchSize,
           searchFilters
         );
       } else if (embedding) {
@@ -176,7 +189,7 @@ export async function POST(request: NextRequest) {
           query,
           { jina_text: embedding },
           'jina_text',
-          size,
+          fetchSize,
           true, // includeDescriptions for better keyword matching
           0.5,  // balanced hybrid
           searchFilters
@@ -184,10 +197,14 @@ export async function POST(request: NextRequest) {
         modeUsed = 'hybrid';
       } else {
         // Fallback to keyword if embedding failed
-        searchResults = await performKeywordSearch(query, size, true, searchFilters);
+        searchResults = await performKeywordSearch(query, fetchSize, true, searchFilters);
         modeUsed = 'keyword';
       }
     }
+
+    // Apply pagination: slice results based on offset
+    const paginatedHits = searchResults.hits.slice(startOffset, startOffset + size);
+    const hasMore = searchResults.total > startOffset + size;
 
     // Build response
     const response: MCPSearchResponse = {
@@ -195,11 +212,14 @@ export async function POST(request: NextRequest) {
         query,
         mode: modeUsed,
         total: searchResults.total,
-        returned: searchResults.hits.length,
+        returned: paginatedHits.length,
+        offset: startOffset,
+        limit: size,
+        has_more: hasMore,
         filters_applied: filtersApplied,
         processing_time_ms: Date.now() - startTime,
       },
-      results: searchResults.hits.map((hit) => {
+      results: paginatedHits.map((hit) => {
         const source = hit._source;
 
         // Handle image field (can be string or object)

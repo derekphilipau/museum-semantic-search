@@ -265,4 +265,84 @@ describe('MCP Search API', () => {
     // Second result has string image
     expect(data.results[1].image_url).toBe('https://example.com/image2.jpg');
   });
+
+  it('should include pagination metadata in response', async () => {
+    vi.mocked(esClient.performKeywordSearch).mockResolvedValue(mockSearchResults);
+
+    const request = new NextRequest('http://localhost:3000/api/mcp/search', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'test',
+        mode: 'keyword',
+        limit: 10,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.meta.offset).toBe(0);
+    expect(data.meta.limit).toBe(10);
+    expect(data.meta.has_more).toBe(false); // total is 2, less than offset + limit
+  });
+
+  it('should respect offset parameter for pagination', async () => {
+    // Create mock with more results to test pagination
+    const manyResults = {
+      took: 10,
+      total: 50,
+      hits: Array.from({ length: 20 }, (_, i) => ({
+        _id: `met_${i}`,
+        _score: 0.95 - i * 0.01,
+        _source: {
+          title: `Artwork ${i}`,
+          artist: 'Test Artist',
+          date: '1900',
+          medium: 'Oil on canvas',
+          image: `https://example.com/image${i}.jpg`,
+        },
+      })),
+    };
+    vi.mocked(esClient.performKeywordSearch).mockResolvedValue(manyResults);
+
+    const request = new NextRequest('http://localhost:3000/api/mcp/search', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'test',
+        mode: 'keyword',
+        limit: 5,
+        offset: 10,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.meta.offset).toBe(10);
+    expect(data.meta.limit).toBe(5);
+    expect(data.meta.returned).toBe(5);
+    expect(data.meta.has_more).toBe(true); // total is 50, offset 10 + limit 5 = 15 < 50
+    expect(data.results[0].id).toBe('met_10'); // First result should be at index 10
+  });
+
+  it('should clamp offset to max 200', async () => {
+    vi.mocked(esClient.performKeywordSearch).mockResolvedValue(mockSearchResults);
+
+    const request = new NextRequest('http://localhost:3000/api/mcp/search', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'test',
+        mode: 'keyword',
+        offset: 500,
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.meta.offset).toBe(200);
+  });
 });

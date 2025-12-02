@@ -1,0 +1,662 @@
+openapi: 3.1.0
+info:
+  title: Museum Semantic Search MCP API
+  description: |
+    Agent-friendly API for searching and retrieving artwork data from the Met Museum collection.
+    Supports text search, image search, and various similarity methods.
+  version: 1.0.0
+  contact:
+    name: Museum Semantic Search
+servers:
+  - url: /api/mcp
+    description: MCP API endpoints
+
+paths:
+  /search:
+    post:
+      summary: Search artworks
+      description: Search the collection using text queries with optional filters
+      operationId: searchArtworks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        '200':
+          description: Successful search
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /artwork/{id}:
+    get:
+      summary: Get artwork details
+      description: Get complete details for a specific artwork
+      operationId: getArtwork
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Artwork ID (e.g., met_436524)
+      responses:
+        '200':
+          description: Artwork details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtworkDetails'
+        '404':
+          description: Artwork not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /filters:
+    get:
+      summary: Get filter options
+      description: Get available filter values and schema information
+      operationId: getFilters
+      responses:
+        '200':
+          description: Filter options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilterOptions'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /similar/{id}:
+    get:
+      summary: Find similar artworks (GET)
+      description: Find artworks similar to a given artwork using query parameters
+      operationId: getSimilarArtworks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Source artwork ID
+        - name: method
+          in: query
+          schema:
+            type: string
+            enum: [precomputed, embedding, metadata, combined]
+            default: precomputed
+          description: Similarity method
+        - name: model
+          in: query
+          schema:
+            type: string
+            enum: [jina_text, jina_clip]
+            default: jina_clip
+          description: Embedding model (for embedding method)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+          description: Number of results
+        - name: includeImage
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: Include image URLs
+      responses:
+        '200':
+          description: Similar artworks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimilarResponse'
+        '404':
+          description: Artwork not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Find similar artworks (POST)
+      description: Find artworks similar to a given artwork using JSON body
+      operationId: postSimilarArtworks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Source artwork ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimilarRequest'
+      responses:
+        '200':
+          description: Similar artworks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimilarResponse'
+        '404':
+          description: Artwork not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /image-search:
+    post:
+      summary: Search by image
+      description: Search for visually similar artworks by uploading an image
+      operationId: imageSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImageSearchRequest'
+      responses:
+        '200':
+          description: Image search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageSearchResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    SearchFilters:
+      type: object
+      properties:
+        artistName:
+          type: string
+          description: Artist name (fuzzy matched)
+        yearStart:
+          type: integer
+          description: Start year for date range
+        yearEnd:
+          type: integer
+          description: End year for date range
+        medium:
+          type: string
+          description: Materials/technique (fuzzy matched)
+        classification:
+          type: string
+          description: Artwork type (exact match)
+        department:
+          type: string
+          description: Museum department (exact match)
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags/keywords (exact match)
+        culture:
+          type: string
+          description: Cultural origin (exact match)
+        country:
+          type: string
+          description: Country of origin (exact match)
+        onView:
+          type: boolean
+          description: Currently on display
+        isPublicDomain:
+          type: boolean
+          description: Public domain status
+
+    SearchRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: Search query text
+        filters:
+          $ref: '#/components/schemas/SearchFilters'
+        mode:
+          type: string
+          enum: [keyword, semantic, hybrid, auto]
+          default: hybrid
+          description: Search mode
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+          description: Number of results per page
+        offset:
+          type: integer
+          minimum: 0
+          maximum: 200
+          default: 0
+          description: Number of results to skip for pagination
+        includeDescription:
+          type: boolean
+          default: false
+          description: Include AI-generated descriptions
+        includeImage:
+          type: boolean
+          default: true
+          description: Include image URLs
+
+    SearchResult:
+      type: object
+      properties:
+        id:
+          type: string
+        score:
+          type: number
+        title:
+          type: string
+        artist:
+          type: string
+        date:
+          type: string
+        medium:
+          type: string
+        classification:
+          type: string
+        department:
+          type: string
+        image_url:
+          type: string
+        thumbnail_url:
+          type: string
+        description:
+          type: string
+        alt_text:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        culture:
+          type: string
+        source_url:
+          type: string
+
+    SearchResponse:
+      type: object
+      properties:
+        meta:
+          type: object
+          properties:
+            query:
+              type: string
+            mode:
+              type: string
+            total:
+              type: integer
+            returned:
+              type: integer
+            offset:
+              type: integer
+            limit:
+              type: integer
+            has_more:
+              type: boolean
+            filters_applied:
+              type: object
+            processing_time_ms:
+              type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+
+    ArtworkDetails:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        titles:
+          type: array
+          items:
+            type: string
+        artist:
+          type: string
+        artists:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              role:
+                type: string
+              bio:
+                type: string
+              nationality:
+                type: string
+              birth_year:
+                type: integer
+              death_year:
+                type: integer
+        date:
+          type: string
+        date_start:
+          type: integer
+        date_end:
+          type: integer
+        medium:
+          type: string
+        dimensions:
+          type: string
+        classification:
+          type: string
+        department:
+          type: string
+        object_name:
+          type: string
+        culture:
+          type: string
+        period:
+          type: string
+        dynasty:
+          type: string
+        country:
+          type: string
+        region:
+          type: string
+        collection:
+          type: string
+        collection_id:
+          type: string
+        credit_line:
+          type: string
+        accession_year:
+          type: integer
+        is_public_domain:
+          type: boolean
+        is_highlight:
+          type: boolean
+        on_view:
+          type: boolean
+        gallery_number:
+          type: string
+        image:
+          type: object
+          properties:
+            url:
+              type: string
+            thumbnail_url:
+              type: string
+            width:
+              type: integer
+            height:
+              type: integer
+        description:
+          type: object
+          properties:
+            alt_text:
+              type: string
+            long_description:
+              type: string
+            emoji_summary:
+              type: string
+        tags:
+          type: array
+          items:
+            type: string
+        similar_artworks:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              similarity_type:
+                type: string
+              confidence:
+                type: number
+              explanation:
+                type: string
+        source_url:
+          type: string
+
+    FilterOptions:
+      type: object
+      properties:
+        departments:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+              count:
+                type: integer
+        classifications:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+              count:
+                type: integer
+        cultures:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+              count:
+                type: integer
+        tags:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+              count:
+                type: integer
+        date_range:
+          type: object
+          properties:
+            min:
+              type: integer
+            max:
+              type: integer
+        schema:
+          type: object
+          description: Schema information for each filter field
+
+    SimilarRequest:
+      type: object
+      properties:
+        method:
+          type: string
+          enum: [precomputed, embedding, metadata, combined]
+          default: precomputed
+        model:
+          type: string
+          enum: [jina_text, jina_clip]
+          default: jina_clip
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+        includeImage:
+          type: boolean
+          default: true
+
+    SimilarResult:
+      type: object
+      properties:
+        id:
+          type: string
+        score:
+          type: number
+        title:
+          type: string
+        artist:
+          type: string
+        date:
+          type: string
+        medium:
+          type: string
+        classification:
+          type: string
+        image_url:
+          type: string
+        thumbnail_url:
+          type: string
+        similarity_type:
+          type: string
+        similarity_explanation:
+          type: string
+        sources:
+          type: array
+          items:
+            type: string
+
+    SimilarResponse:
+      type: object
+      properties:
+        meta:
+          type: object
+          properties:
+            source_artwork:
+              type: object
+              properties:
+                id:
+                  type: string
+                title:
+                  type: string
+                artist:
+                  type: string
+            method:
+              type: string
+            model:
+              type: string
+            total:
+              type: integer
+            returned:
+              type: integer
+            processing_time_ms:
+              type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SimilarResult'
+
+    ImageSearchRequest:
+      type: object
+      required:
+        - image
+      properties:
+        image:
+          type: string
+          description: Base64-encoded image (with or without data URL prefix)
+        mimeType:
+          type: string
+          default: image/jpeg
+          description: MIME type (auto-detected from data URL)
+        filters:
+          $ref: '#/components/schemas/SearchFilters'
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+        includeImage:
+          type: boolean
+          default: true
+
+    ImageSearchResponse:
+      type: object
+      properties:
+        meta:
+          type: object
+          properties:
+            method:
+              type: string
+            model:
+              type: string
+            total:
+              type: integer
+            returned:
+              type: integer
+            filters_applied:
+              type: object
+            processing_time_ms:
+              type: integer
+            embedding_time_ms:
+              type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message

@@ -1,6 +1,6 @@
 # Installation Guide
 
-This prototype was developed quickly and is not production-ready.
+This prototype was developed quickly, is largely vibe-coded, and is not production-ready.
 
 ***Note: This project was recently switched to use Jina text (v3) and CLIP v2 embeddings, and uses Jina API rather than a custom Modal service. The demo website may have different results than the screenshots in this document.***
 
