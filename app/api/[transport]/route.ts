@@ -18,7 +18,7 @@ import { ArtworkImage, Artist } from '@/app/types';
 // ============================================================================
 
 const FiltersSchema = z.object({
-  artistName: z.string().optional().describe('Artist name (fuzzy matched)'),
+  artistName: z.string().optional().describe('Artist name (fuzzy matched). Use "First Last" format, e.g., "Vincent van Gogh", "Rembrandt van Rijn"'),
   yearStart: z.number().int().optional().describe('Start year for date range'),
   yearEnd: z.number().int().optional().describe('End year for date range'),
   medium: z.string().optional().describe('Materials/technique (fuzzy matched)'),
@@ -66,6 +66,7 @@ interface SearchHit {
     visual_description?: {
       long_description?: string;
       alt_text?: string;
+      emoji_summary?: string;
     };
     tags?: string[];
     culture?: string;
@@ -73,11 +74,29 @@ interface SearchHit {
   };
 }
 
-function formatSearchResults(hits: SearchHit[], includeImage = true) {
+type DescriptionLevel = 'none' | 'alt' | 'full'; // 'emoji' also available but commented out
+
+function formatSearchResults(hits: SearchHit[], includeImage = true, descriptionLevel: DescriptionLevel = 'none') {
   return hits.map((hit) => {
     const source = hit._source;
     const imageData: ArtworkImage | undefined =
       typeof source.image === 'string' ? { url: source.image } : source.image;
+
+    let description: { alt_text?: string; long_description?: string } | undefined;
+    if (descriptionLevel !== 'none' && source.visual_description) {
+      const vd = source.visual_description;
+      // if (descriptionLevel === 'emoji') {
+      //   description = vd.emoji_summary ? { emoji_summary: vd.emoji_summary } : undefined;
+      // } else
+      if (descriptionLevel === 'alt') {
+        description = vd.alt_text ? { alt_text: vd.alt_text } : undefined;
+      } else if (descriptionLevel === 'full') {
+        description = {
+          alt_text: vd.alt_text,
+          long_description: vd.long_description,
+        };
+      }
+    }
 
     return {
       id: hit._id,
@@ -92,6 +111,7 @@ function formatSearchResults(hits: SearchHit[], includeImage = true) {
       tags: source.tags,
       culture: source.culture,
       source_url: source.sourceUrl,
+      description,
     };
   });
 }
@@ -114,6 +134,16 @@ SEARCH MODES:
 - "semantic": Best for conceptual queries like "lonely figure in nature" or "vibrant celebration".
 - "keyword": Best for exact matches like artist names or specific titles.
 
+VISUAL DESCRIPTIONS:
+Each artwork has an AI-generated visual description. Use "descriptionLevel" to include these in results:
+- "none" (default): No descriptions (smallest response)
+- "alt": Short alt-text description (~1 sentence)
+- "full": Complete description with alt-text and detailed long description
+
+RECOMMENDATION: For semantic/conceptual searches, consider using "alt" or "full" to understand
+what each artwork depicts without needing to call get_artwork for each result. This is especially
+useful when you don't already know the artworks and can't rely on titles alone.
+
 TIPS:
 - Call get_filter_options first to see valid department/classification/culture values
 - Use filters to narrow results (e.g., artistName: "Van Gogh", yearStart: 1880, yearEnd: 1890)
@@ -122,11 +152,13 @@ TIPS:
         query: z.string().min(1).describe('Search query text (e.g., "sunflowers", "portraits of women", "impressionist landscapes")'),
         filters: FiltersSchema,
         mode: z.enum(['keyword', 'semantic', 'hybrid']).default('hybrid').describe('Search mode: keyword (exact text), semantic (conceptual), or hybrid (both)'),
+        // descriptionLevel enum also supports 'emoji' for compact emoji summaries (commented out)
+        descriptionLevel: z.enum(['none', 'alt', 'full']).default('none').describe('Level of visual description to include: none, alt (short ~1 sentence), or full (detailed)'),
         limit: z.number().int().min(1).max(50).default(10).describe('Number of results to return'),
         offset: z.number().int().min(0).max(200).default(0).describe('Offset for pagination'),
         includeImage: z.boolean().default(true).describe('Include image URLs in results'),
       },
-      async ({ query, filters, mode, limit, offset, includeImage }) => {
+      async ({ query, filters, mode, descriptionLevel, limit, offset, includeImage }) => {
         const searchFilters = convertFilters(filters);
         const fetchSize = Math.min(offset + limit, 250);
 
@@ -172,7 +204,7 @@ TIPS:
 
         const paginatedHits = searchResults.hits.slice(offset, offset + limit);
         const hasMore = searchResults.total > offset + limit;
-        const results = formatSearchResults(paginatedHits, includeImage);
+        const results = formatSearchResults(paginatedHits, includeImage, descriptionLevel);
 
         return {
           content: [
