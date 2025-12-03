@@ -51,7 +51,7 @@
     "lodash": "^4.17.21",
     "lucide-react": "^0.542.0",
     "mcp-handler": "^1.0.4",
-    "next": "15.5.2",
+    "next": "^15.5.7",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-dropzone": "^14.3.8",
