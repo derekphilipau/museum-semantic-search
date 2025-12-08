@@ -123,6 +123,11 @@ export function transformSearchHit(
       result.image_url = imageData.url;
       if (imageData.thumbnailUrl) result.thumbnail_url = imageData.thumbnailUrl;
     }
+
+    // Include alt_text in standard (concise AI description)
+    if (source.visual_description?.alt_text) {
+      result.alt_text = source.visual_description.alt_text;
+    }
   }
 
   // Full: add all available fields

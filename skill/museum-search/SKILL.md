@@ -44,7 +44,8 @@ curl -X POST https://museum-semantic-search.vercel.app/api/mcp/search \
 ```json
 {
   "query": "string (required)",
-  "mode": "semantic | hybrid | keyword",
+  "mode": "hybrid | semantic | keyword",
+  "detail": "minimal | standard | full",
   "filters": {
     "artistName": "string (fuzzy matched)",
     "yearStart": 1800,
@@ -59,23 +60,26 @@ curl -X POST https://museum-semantic-search.vercel.app/api/mcp/search \
     "isPublicDomain": true
   },
   "limit": 10,
-  "offset": 0,
-  "includeImage": true,
-  "includeDescription": false
+  "offset": 0
 }
 ```
 
 **Mode selection:**
-- **"semantic"** (recommended): For descriptive queries like "lonely figure in nature", "woman looking in mirror", "stormy seascape"
-- **"hybrid"**: When query includes terms likely in titles/metadata like "Madonna and child", "self portrait"
+- **"hybrid"** (default, recommended): Combines keyword + semantic search. Best for most queries.
+- **"semantic"**: For purely conceptual/descriptive queries like "lonely figure in nature", "woman looking in mirror", "stormy seascape"
 - **"keyword"**: For exact matches like artist names or specific titles
+
+**Detail levels:**
+- **"minimal"**: Just id, score, title, artist, date (fastest)
+- **"standard"** (default): + medium, classification, department, tags, culture, image_url, source_url, alt_text (concise AI description)
+- **"full"**: + long_description (detailed AI description), similar_artworks, dimensions, etc. Use when you need to verify semantic content.
 
 **Response:**
 ```json
 {
   "meta": {
     "query": "person with a dog",
-    "mode": "semantic",
+    "mode": "hybrid",
     "total": 150,
     "returned": 10,
     "offset": 0,
@@ -88,17 +92,18 @@ curl -X POST https://museum-semantic-search.vercel.app/api/mcp/search \
     {
       "id": "met_436524",
       "score": 0.85,
-      "title": "...",
-      "artist": "...",
-      "date": "...",
-      "medium": "...",
+      "title": "A Boy with a Flying Squirrel",
+      "artist": "John Singleton Copley",
+      "date": "1765",
+      "medium": "Oil on canvas",
       "classification": "Paintings",
-      "department": "European Paintings",
-      "image_url": "...",
-      "thumbnail_url": "...",
-      "tags": ["Dogs", "Portraits"],
-      "culture": "French",
-      "source_url": "https://www.metmuseum.org/art/collection/search/436524"
+      "department": "American Wing",
+      "image_url": "https://images.metmuseum.org/...",
+      "thumbnail_url": "https://images.metmuseum.org/.../small/...",
+      "tags": ["Boys", "Portraits", "Squirrels"],
+      "culture": "American",
+      "source_url": "https://www.metmuseum.org/art/collection/search/436524",
+      "alt_text": "Portrait of a young boy in blue satin holding a gold chain attached to a pet flying squirrel on a polished table"
     }
   ]
 }
@@ -148,10 +153,9 @@ curl "https://museum-semantic-search.vercel.app/api/mcp/similar/met_436524?metho
 ```
 
 **Query parameters:**
-- `method`: "precomputed" (default), "embedding", "metadata", or "combined"
+- `method`: "precomputed" (default) or "embedding"
 - `model`: "jina_clip" (visual) or "jina_text" (conceptual) - only for embedding method
 - `limit`: 1-50 (default 10)
-- `includeImage`: true/false (default true)
 
 **Response:**
 ```json
@@ -201,7 +205,7 @@ curl -X POST https://museum-semantic-search.vercel.app/api/mcp/image-search \
   "mimeType": "image/jpeg",
   "filters": { },
   "limit": 10,
-  "includeImage": true
+  "detail": "standard"
 }
 ```
 
@@ -209,24 +213,50 @@ curl -X POST https://museum-semantic-search.vercel.app/api/mcp/image-search \
 
 ### GET /filters - Get Filter Options
 
-Get available filter values for the collection.
+Get available filter values for the collection. Supports search mode to find specific filter values.
 
 ```bash
+# Get all top filter values
 curl https://museum-semantic-search.vercel.app/api/mcp/filters
+
+# Search for specific filter values (case-insensitive)
+curl "https://museum-semantic-search.vercel.app/api/mcp/filters?search=japan"
+curl "https://museum-semantic-search.vercel.app/api/mcp/filters?search=oil&field=mediums"
 ```
 
-**Response:**
+**Query parameters (for search mode):**
+- `search`: Case-insensitive search string (e.g., "japan", "portrait", "oil")
+- `field`: Limit to specific field: `departments`, `classifications`, `cultures`, `mediums`, `tags`, `countries`, `periods`
+- `limit`: Max results per field (1-100, default 20)
+
+**Response (default mode):**
 ```json
 {
   "departments": [{ "value": "European Paintings", "count": 1500 }, ...],
   "classifications": [{ "value": "Paintings", "count": 2300 }, ...],
   "cultures": [{ "value": "French", "count": 450 }, ...],
+  "mediums": [{ "value": "Oil on canvas", "count": 1800 }, ...],
   "tags": [{ "value": "Portraits", "count": 800 }, ...],
   "date_range": { "min": 1250, "max": 1950 },
   "schema": {
     "artistName": { "type": "string", "description": "...", "examples": [...] },
+    "medium": { "type": "string", "description": "...", "examples": [...] },
     "yearStart": { "type": "number", "description": "...", "min": 1250, "max": 1950 },
     ...
+  }
+}
+```
+
+**Response (search mode):**
+```json
+{
+  "search_query": "japan",
+  "field_filter": "all",
+  "results": {
+    "cultures": [
+      { "value": "Japan", "count": 45 },
+      { "value": "probably Japan", "count": 12 }
+    ]
   }
 }
 ```
@@ -234,13 +264,13 @@ curl https://museum-semantic-search.vercel.app/api/mcp/filters
 ## Workflow
 
 ### Step 1: Discover the Collection
-Call `GET /filters` first to see available departments, cultures, tags, and date ranges.
+Call `GET /filters` first to see available departments, cultures, mediums, tags, and date ranges. Use search mode to find specific filter values.
 
 ### Step 2: Search
-Use `POST /search` with appropriate mode based on query type.
+Use `POST /search` - hybrid mode (default) works well for most queries.
 
 ### Step 3: Get Details
-Call `GET /artwork/{id}` on interesting results for full metadata and AI descriptions.
+Call `GET /artwork/{id}` on interesting results, or use `detail: "full"` in search to get complete details inline.
 
 ### Step 4: Explore
 Use `GET /similar/{id}` to discover related works.
@@ -249,12 +279,12 @@ Use `GET /similar/{id}` to discover related works.
 
 | Query | Recommended Mode | Why |
 |-------|------------------|-----|
-| "person with a dog" | semantic | Descriptive, not in titles |
-| "woman looking in mirror" | semantic | Conceptual description |
-| "stormy seascape" | semantic | Mood/atmosphere based |
+| "person with a dog" | hybrid (default) | Works well for most queries |
+| "woman looking in mirror" | semantic | Purely conceptual description |
+| "stormy seascape" | hybrid | Mood-based but may match titles |
 | "Madonna and child" | hybrid | Common in artwork titles |
-| "Rembrandt" | keyword | Exact artist name |
-| "European Paintings before 1800" | keyword + filters | Use yearEnd filter |
+| "Rembrandt self portrait" | hybrid | Artist name + description |
+| "paintings from 1880s" | hybrid + filters | Use yearStart/yearEnd filters |
 
 ## Tips
 

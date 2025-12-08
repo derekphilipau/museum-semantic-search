@@ -44,7 +44,7 @@ export interface MCPSimilarArtwork {
  * Unified artwork result type for all MCP endpoints.
  * Fields are progressively included based on detail level:
  * - minimal: id, score, title, artist, date
- * - standard: + medium, classification, department, tags, culture, image_url, thumbnail_url, source_url
+ * - standard: + medium, classification, department, tags, culture, image_url, thumbnail_url, source_url, alt_text
  * - full: + all remaining fields
  */
 export interface MCPArtworkResult {
@@ -64,6 +64,7 @@ export interface MCPArtworkResult {
   tags?: string[];
   culture?: string;
   source_url?: string;
+  alt_text?: string; // Concise AI-generated description
 
   // Full detail level
   titles?: string[];

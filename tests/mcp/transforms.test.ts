@@ -248,6 +248,7 @@ describe('MCP Transforms', () => {
         expect(result.image_url).toBeUndefined();
         expect(result.tags).toBeUndefined();
         expect(result.classification).toBeUndefined();
+        expect(result.alt_text).toBeUndefined();
 
         // Should NOT have full fields
         expect(result.artists).toBeUndefined();
@@ -273,6 +274,7 @@ describe('MCP Transforms', () => {
         expect(result.image_url).toBe('https://example.com/image.jpg');
         expect(result.thumbnail_url).toBe('https://example.com/thumb.jpg');
         expect(result.source_url).toBe('https://metmuseum.org/art/123');
+        expect(result.alt_text).toBe('A swirling night sky');
 
         // Should NOT have full fields
         expect(result.artists).toBeUndefined();
@@ -285,6 +287,7 @@ describe('MCP Transforms', () => {
         const result = transformSearchHit(hit); // no detail specified
 
         expect(result.medium).toBe('Oil on canvas');
+        expect(result.alt_text).toBe('A swirling night sky');
         expect(result.artists).toBeUndefined();
       });
     });

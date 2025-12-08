@@ -58,8 +58,8 @@ Search the collection using text queries with optional filters.
 | Level | Fields Included | When to Use |
 |-------|-----------------|-------------|
 | `minimal` | id, score, title, artist, date | Fast scanning, listing IDs |
-| `standard` | + medium, classification, department, tags, culture, image_url, thumbnail_url, source_url | General browsing, showing results to users |
-| `full` | + titles, artists array, date_start, date_end, dimensions, object_name, period, dynasty, country, region, collection, collection_id, credit_line, accession_year, is_public_domain, is_highlight, on_view, gallery_number, full image object, description (with alt_text, long_description, emoji_summary), similar_artworks | Semantic evaluation (e.g., verifying "three women and horses" using long_description), or when complete details needed inline |
+| `standard` | + medium, classification, department, tags, culture, image_url, thumbnail_url, source_url, alt_text | General browsing, showing results to users |
+| `full` | + titles, artists array, date_start, date_end, dimensions, object_name, period, dynasty, country, region, collection, collection_id, credit_line, accession_year, is_public_domain, is_highlight, on_view, gallery_number, full image object, description (with long_description, emoji_summary), similar_artworks | Semantic evaluation (e.g., verifying "three women and horses" using long_description), or when complete details needed inline |
 
 ### Response
 
