@@ -8,6 +8,7 @@ import {
 } from '@/lib/elasticsearch/client';
 import { ModelKey } from '@/lib/embeddings';
 import { ArtworkImage, SearchHit } from '@/app/types';
+import { CORS_HEADERS } from '@/lib/mcp';
 
 // ============================================================================
 // MCP Similar Artworks Request/Response Types
@@ -59,16 +60,6 @@ interface MCPSimilarResponse {
   };
   results: MCPSimilarResult[];
 }
-
-// ============================================================================
-// CORS Headers
-// ============================================================================
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
 
 // ============================================================================
 // Helper Functions

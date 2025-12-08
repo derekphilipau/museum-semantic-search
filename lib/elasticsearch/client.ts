@@ -12,19 +12,39 @@ export type { SearchFilters } from './filters';
 // Constants
 // ============================================================================
 
-// Summary fields for artwork - essential data without full details
+// Summary fields for artwork - essential data without full details (for 'minimal' and 'standard' detail levels)
 const ARTWORK_SUMMARY_FIELDS = [
   'id',
   'title',
+  'titles',
   'artist',
+  'artists',
   'date',
+  'dateBegin',
+  'dateEnd',
   'medium',
+  'dimensions',
   'classification',
   'department',
+  'objectName',
   'collection',
+  'collectionId',
+  'creditLine',
+  'accessionYear',
+  'culture',
+  'period',
+  'dynasty',
+  'country',
+  'region',
+  'isPublicDomain',
+  'isHighlight',
+  'onView',
+  'galleryNumber',
   'image',
-  'visual_description.emoji_summary',
-  'visual_description.alt_text'
+  'tags',
+  'sourceUrl',
+  'visual_description',
+  'similar_artworks'
 ];
 
 const SEARCH_CONSTANTS = {
@@ -1384,6 +1404,7 @@ export interface FilterOptions {
   departments: { value: string; count: number }[];
   classifications: { value: string; count: number }[];
   cultures: { value: string; count: number }[];
+  mediums: { value: string; count: number }[];
   tags: { value: string; count: number }[];
   dateRange: { min: number; max: number };
 }
@@ -1412,6 +1433,12 @@ export async function getFilterOptions(): Promise<FilterOptions> {
         cultures: {
           terms: {
             field: 'culture',
+            size: 200
+          }
+        },
+        mediums: {
+          terms: {
+            field: 'medium.keyword',
             size: 200
           }
         },
@@ -1455,6 +1482,7 @@ export async function getFilterOptions(): Promise<FilterOptions> {
       departments: extractBuckets('departments'),
       classifications: extractBuckets('classifications'),
       cultures: extractBuckets('cultures'),
+      mediums: extractBuckets('mediums'),
       tags: extractBuckets('tags'),
       dateRange: {
         min: Math.floor(minDate),
@@ -1467,9 +1495,92 @@ export async function getFilterOptions(): Promise<FilterOptions> {
       departments: [],
       classifications: [],
       cultures: [],
+      mediums: [],
       tags: [],
       dateRange: { min: -3000, max: new Date().getFullYear() }
     };
+  }
+}
+
+// Valid filter field names for searching
+type FilterField = 'departments' | 'classifications' | 'cultures' | 'mediums' | 'tags' | 'countries' | 'periods';
+
+const FILTER_FIELD_MAPPING: Record<FilterField, string> = {
+  departments: 'department',
+  classifications: 'classification',
+  cultures: 'culture',
+  mediums: 'medium.keyword',
+  tags: 'tags',
+  countries: 'country',
+  periods: 'period',
+};
+
+/**
+ * Search for filter values matching a query string.
+ * Useful for typeahead/autocomplete or finding specific filter values.
+ *
+ * @param query - Case-insensitive search string (e.g., "japan", "portrait")
+ * @param field - Optional: limit search to specific field(s)
+ * @param limit - Max results per field (default 20)
+ */
+export async function searchFilterOptions(
+  query: string,
+  field?: FilterField | FilterField[],
+  limit: number = 20
+): Promise<Partial<Record<FilterField, { value: string; count: number }[]>>> {
+  try {
+    const client = getElasticsearchClient();
+    const lowerQuery = query.toLowerCase();
+
+    // Determine which fields to search
+    const fieldsToSearch: FilterField[] = field
+      ? (Array.isArray(field) ? field : [field])
+      : ['departments', 'classifications', 'cultures', 'mediums', 'tags', 'countries', 'periods'];
+
+    // Build aggregations with include pattern for case-insensitive matching
+    // Using a large size and filtering client-side for flexibility
+    const aggs: Record<string, { terms: { field: string; size: number } }> = {};
+
+    for (const f of fieldsToSearch) {
+      const esField = FILTER_FIELD_MAPPING[f];
+      aggs[f] = {
+        terms: {
+          field: esField,
+          size: 1000 // Fetch many to filter client-side
+        }
+      };
+    }
+
+    const response = await client.search({
+      index: INDEX_NAME,
+      size: 0,
+      aggs
+    });
+
+    // Extract and filter buckets
+    const results: Partial<Record<FilterField, { value: string; count: number }[]>> = {};
+
+    for (const f of fieldsToSearch) {
+      const agg = response.aggregations?.[f];
+      const buckets = (agg && 'buckets' in agg)
+        ? (agg.buckets as Array<{ key: string; doc_count: number }>)
+        : [];
+
+      // Filter buckets by query (case-insensitive contains)
+      const filtered = buckets
+        .filter(b => b.key.toLowerCase().includes(lowerQuery))
+        .slice(0, limit)
+        .map(b => ({ value: b.key, count: b.doc_count }));
+
+      if (filtered.length > 0) {
+        results[f] = filtered;
+      }
+    }
+
+    return results;
+  } catch (error) {
+    console.error('Error searching filter options:', error);
+    return {};
   }
 }
 

@@ -1,53 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { embedJinaClipImage } from '@/lib/embeddings';
-import { performSemanticSearchWithEmbedding, SearchFilters } from '@/lib/elasticsearch/client';
-import { ArtworkImage } from '@/app/types';
+import { performSemanticSearchWithEmbedding } from '@/lib/elasticsearch/client';
+import {
+  DetailLevel,
+  MCPFilters,
+  MCPArtworkResult,
+  MCPSearchHit,
+  transformSearchHits,
+  convertFilters,
+  buildFiltersApplied,
+  CORS_HEADERS_POST,
+} from '@/lib/mcp';
 
 // ============================================================================
 // MCP Image Search Request/Response Types
 // ============================================================================
 
 interface MCPImageSearchRequest {
-  /** Base64-encoded image data (with or without data URL prefix) */
   image: string;
-
-  /** Optional MIME type (auto-detected from data URL if not provided) */
   mimeType?: string;
-
-  /** Optional structured filters */
-  filters?: {
-    artistName?: string;
-    yearStart?: number;
-    yearEnd?: number;
-    classification?: string;
-    department?: string;
-    tags?: string[];
-    culture?: string;
-    onView?: boolean;
-    isPublicDomain?: boolean;
-  };
-
-  /** Number of results to return (default: 10, max: 50) */
+  filters?: MCPFilters;
   limit?: number;
-
-  /** Include image URLs in results (default: true) */
-  includeImage?: boolean;
-}
-
-interface MCPImageSearchResult {
-  id: string;
-  score: number;
-  title: string;
-  artist: string;
-  date: string;
-  medium: string;
-  classification?: string;
-  department?: string;
-  image_url?: string;
-  thumbnail_url?: string;
-  tags?: string[];
-  culture?: string;
-  source_url?: string;
+  detail?: DetailLevel;
 }
 
 interface MCPImageSearchResponse {
@@ -60,18 +34,8 @@ interface MCPImageSearchResponse {
     processing_time_ms: number;
     embedding_time_ms: number;
   };
-  results: MCPImageSearchResult[];
+  results: MCPArtworkResult[];
 }
-
-// ============================================================================
-// CORS Headers
-// ============================================================================
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
 
 // ============================================================================
 // Main Handler
@@ -87,14 +51,14 @@ export async function POST(request: NextRequest) {
       mimeType: providedMimeType,
       filters = {},
       limit = 10,
-      includeImage = true,
+      detail = 'standard',
     } = body;
 
     // Validate image
     if (!image || typeof image !== 'string') {
       return NextResponse.json(
         { error: 'image is required and must be a base64-encoded string' },
-        { status: 400, headers: CORS_HEADERS }
+        { status: 400, headers: CORS_HEADERS_POST }
       );
     }
 
@@ -106,13 +70,11 @@ export async function POST(request: NextRequest) {
     let mimeType: string;
 
     if (image.startsWith('data:')) {
-      // Data URL format: data:image/jpeg;base64,/9j/4AAQ...
       const [prefix, payload] = image.split(',');
       const mimeMatch = prefix?.match(/^data:(.*?);base64$/);
       mimeType = mimeMatch?.[1] || providedMimeType || 'image/jpeg';
       base64Data = payload || '';
     } else {
-      // Raw base64
       base64Data = image;
       mimeType = providedMimeType || 'image/jpeg';
     }
@@ -120,29 +82,13 @@ export async function POST(request: NextRequest) {
     if (!base64Data) {
       return NextResponse.json(
         { error: 'Invalid image data' },
-        { status: 400, headers: CORS_HEADERS }
+        { status: 400, headers: CORS_HEADERS_POST }
       );
     }
 
-    // Build search filters
-    const searchFilters: SearchFilters = {};
-    if (filters.artistName) searchFilters.artistName = filters.artistName;
-    if (filters.yearStart !== undefined) searchFilters.yearStart = filters.yearStart;
-    if (filters.yearEnd !== undefined) searchFilters.yearEnd = filters.yearEnd;
-    if (filters.classification) searchFilters.classification = filters.classification;
-    if (filters.department) searchFilters.department = filters.department;
-    if (filters.tags && filters.tags.length > 0) searchFilters.tags = filters.tags;
-    if (filters.culture) searchFilters.culture = filters.culture;
-    if (filters.onView !== undefined) searchFilters.onView = filters.onView;
-    if (filters.isPublicDomain !== undefined) searchFilters.isPublicDomain = filters.isPublicDomain;
-
-    // Build filters_applied for response
-    const filtersApplied: Record<string, string | number | boolean | string[]> = {};
-    Object.entries(searchFilters).forEach(([key, value]) => {
-      if (value !== undefined) {
-        filtersApplied[key] = value as string | number | boolean | string[];
-      }
-    });
+    // Convert filters
+    const searchFilters = convertFilters(filters);
+    const filtersApplied = buildFiltersApplied(searchFilters);
 
     // Generate image embedding
     const embedStart = Date.now();
@@ -158,61 +104,29 @@ export async function POST(request: NextRequest) {
       hasFilters ? searchFilters : undefined
     );
 
-    // Build response
+    // Transform results using shared function
+    const results = transformSearchHits(searchResults.hits as MCPSearchHit[], detail);
+
     const response: MCPImageSearchResponse = {
       meta: {
         method: 'image_embedding',
         model: 'jina_clip',
         total: searchResults.total,
-        returned: searchResults.hits.length,
+        returned: results.length,
         filters_applied: filtersApplied,
         processing_time_ms: Date.now() - startTime,
         embedding_time_ms: embeddingTime,
       },
-      results: searchResults.hits.map(hit => {
-        const source = hit._source;
-        const imageData: ArtworkImage | undefined =
-          typeof source.image === 'string'
-            ? { url: source.image }
-            : source.image;
-
-        const result: MCPImageSearchResult = {
-          id: hit._id,
-          score: hit._score,
-          title: source.title,
-          artist: source.artist,
-          date: source.date,
-          medium: source.medium,
-        };
-
-        if (source.classification) result.classification = source.classification;
-        if (source.department) result.department = source.department;
-
-        if (includeImage && imageData?.url) {
-          result.image_url = imageData.url;
-          if (imageData.thumbnailUrl) result.thumbnail_url = imageData.thumbnailUrl;
-        }
-
-        if (source.tags && source.tags.length > 0) {
-          result.tags = source.tags;
-        }
-
-        if (source.culture) result.culture = source.culture;
-        if (source.sourceUrl) result.source_url = source.sourceUrl;
-
-        return result;
-      }),
+      results,
     };
 
-    return NextResponse.json(response, { headers: CORS_HEADERS });
+    return NextResponse.json(response, { headers: CORS_HEADERS_POST });
   } catch (error: unknown) {
     console.error('MCP Image Search Error:', error);
-
     const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
-
     return NextResponse.json(
       { error: errorMessage },
-      { status: 500, headers: CORS_HEADERS }
+      { status: 500, headers: CORS_HEADERS_POST }
     );
   }
 }
@@ -224,6 +138,6 @@ export async function POST(request: NextRequest) {
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
-    headers: CORS_HEADERS,
+    headers: CORS_HEADERS_POST,
   });
 }

@@ -8,10 +8,16 @@ import {
   getArtworkById,
   findSimilarArtworks,
   getFilterOptions,
-  SearchFilters,
+  searchFilterOptions,
 } from '@/lib/elasticsearch/client';
 import { getCachedEmbeddings, setCachedEmbeddings } from '@/lib/embeddings/cache';
-import { ArtworkImage, Artist } from '@/app/types';
+import {
+  DetailLevel,
+  MCPSearchHit,
+  transformSearchHits,
+  transformArtwork,
+  convertFilters,
+} from '@/lib/mcp';
 
 // ============================================================================
 // Shared Schemas
@@ -31,90 +37,8 @@ const FiltersSchema = z.object({
   isPublicDomain: z.boolean().optional().describe('Public domain status'),
 }).optional();
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-function convertFilters(filters?: z.infer<typeof FiltersSchema>): SearchFilters {
-  if (!filters) return {};
-  const searchFilters: SearchFilters = {};
-  if (filters.artistName) searchFilters.artistName = filters.artistName;
-  if (filters.yearStart !== undefined) searchFilters.yearStart = filters.yearStart;
-  if (filters.yearEnd !== undefined) searchFilters.yearEnd = filters.yearEnd;
-  if (filters.medium) searchFilters.medium = filters.medium;
-  if (filters.classification) searchFilters.classification = filters.classification;
-  if (filters.department) searchFilters.department = filters.department;
-  if (filters.tags && filters.tags.length > 0) searchFilters.tags = filters.tags;
-  if (filters.culture) searchFilters.culture = filters.culture;
-  if (filters.country) searchFilters.country = filters.country;
-  if (filters.onView !== undefined) searchFilters.onView = filters.onView;
-  if (filters.isPublicDomain !== undefined) searchFilters.isPublicDomain = filters.isPublicDomain;
-  return searchFilters;
-}
-
-interface SearchHit {
-  _id: string;
-  _score: number;
-  _source: {
-    title: string;
-    artist: string;
-    date: string;
-    medium: string;
-    classification?: string;
-    department?: string;
-    image?: string | ArtworkImage;
-    visual_description?: {
-      long_description?: string;
-      alt_text?: string;
-      emoji_summary?: string;
-    };
-    tags?: string[];
-    culture?: string;
-    sourceUrl?: string;
-  };
-}
-
-type DescriptionLevel = 'none' | 'alt' | 'full'; // 'emoji' also available but commented out
-
-function formatSearchResults(hits: SearchHit[], includeImage = true, descriptionLevel: DescriptionLevel = 'none') {
-  return hits.map((hit) => {
-    const source = hit._source;
-    const imageData: ArtworkImage | undefined =
-      typeof source.image === 'string' ? { url: source.image } : source.image;
-
-    let description: { alt_text?: string; long_description?: string } | undefined;
-    if (descriptionLevel !== 'none' && source.visual_description) {
-      const vd = source.visual_description;
-      // if (descriptionLevel === 'emoji') {
-      //   description = vd.emoji_summary ? { emoji_summary: vd.emoji_summary } : undefined;
-      // } else
-      if (descriptionLevel === 'alt') {
-        description = vd.alt_text ? { alt_text: vd.alt_text } : undefined;
-      } else if (descriptionLevel === 'full') {
-        description = {
-          alt_text: vd.alt_text,
-          long_description: vd.long_description,
-        };
-      }
-    }
-
-    return {
-      id: hit._id,
-      score: hit._score,
-      title: source.title,
-      artist: source.artist,
-      date: source.date,
-      medium: source.medium,
-      classification: source.classification,
-      department: source.department,
-      image_url: includeImage ? imageData?.url : undefined,
-      tags: source.tags,
-      culture: source.culture,
-      source_url: source.sourceUrl,
-      description,
-    };
-  });
-}
+const DetailSchema = z.enum(['minimal', 'standard', 'full']).default('standard')
+  .describe('Detail level: minimal (id/title/artist/date), standard (+ images/tags/classification), full (all fields including description)');
 
 // ============================================================================
 // MCP Handler
@@ -134,15 +58,17 @@ SEARCH MODES:
 - "semantic": Best for conceptual queries like "lonely figure in nature" or "vibrant celebration".
 - "keyword": Best for exact matches like artist names or specific titles.
 
-VISUAL DESCRIPTIONS:
-Each artwork has an AI-generated visual description. Use "descriptionLevel" to include these in results:
-- "none" (default): No descriptions (smallest response)
-- "alt": Short alt-text description (~1 sentence)
-- "full": Complete description with alt-text and detailed long description
+DETAIL LEVELS:
+Control how much information is returned per artwork:
+- "minimal": Just id, score, title, artist, date (fastest, smallest response)
+- "standard" (default): + medium, classification, department, tags, culture, images, source_url
+- "full": + dimensions, artists array, date range, AI visual description, similar_artworks, etc.
 
-RECOMMENDATION: For semantic/conceptual searches, consider using "alt" or "full" to understand
-what each artwork depicts without needing to call get_artwork for each result. This is especially
-useful when you don't already know the artworks and can't rely on titles alone.
+WHEN TO USE EACH LEVEL:
+- "standard": General browsing, showing results to users
+- "full": When you need to evaluate results semantically (e.g., "find paintings with three women
+  and horses" - use the long_description to verify matches), or when you need complete details
+  without a separate get_artwork call
 
 TIPS:
 - Call get_filter_options first to see valid department/classification/culture values
@@ -152,13 +78,11 @@ TIPS:
         query: z.string().min(1).describe('Search query text (e.g., "sunflowers", "portraits of women", "impressionist landscapes")'),
         filters: FiltersSchema,
         mode: z.enum(['keyword', 'semantic', 'hybrid']).default('hybrid').describe('Search mode: keyword (exact text), semantic (conceptual), or hybrid (both)'),
-        // descriptionLevel enum also supports 'emoji' for compact emoji summaries (commented out)
-        descriptionLevel: z.enum(['none', 'alt', 'full']).default('none').describe('Level of visual description to include: none, alt (short ~1 sentence), or full (detailed)'),
+        detail: DetailSchema,
         limit: z.number().int().min(1).max(50).default(10).describe('Number of results to return'),
         offset: z.number().int().min(0).max(200).default(0).describe('Offset for pagination'),
-        includeImage: z.boolean().default(true).describe('Include image URLs in results'),
       },
-      async ({ query, filters, mode, descriptionLevel, limit, offset, includeImage }) => {
+      async ({ query, filters, mode, detail, limit, offset }) => {
         const searchFilters = convertFilters(filters);
         const fetchSize = Math.min(offset + limit, 250);
 
@@ -202,9 +126,9 @@ TIPS:
           }
         }
 
-        const paginatedHits = searchResults.hits.slice(offset, offset + limit);
+        const paginatedHits = searchResults.hits.slice(offset, offset + limit) as MCPSearchHit[];
         const hasMore = searchResults.total > offset + limit;
-        const results = formatSearchResults(paginatedHits, includeImage, descriptionLevel);
+        const results = transformSearchHits(paginatedHits, detail as DetailLevel);
 
         return {
           content: [
@@ -236,9 +160,11 @@ TIPS:
       `Get complete details for a specific artwork by ID.
 
 Returns: title, artist info, dates, medium, dimensions, department, classification, culture,
-AI-generated description, tags, similar artworks, and image URLs.
+AI-generated visual description (alt_text, long_description, emoji_summary), tags,
+similar artworks, and image URLs.
 
-Use this after search_artworks to get full details on interesting results.`,
+Use this to get full details on a specific artwork. Alternatively, use search_artworks with
+detail="full" to get complete details inline with search results.`,
       {
         id: z.string().min(1).describe('Artwork ID (e.g., "met_436524")'),
       },
@@ -252,59 +178,7 @@ Use this after search_artworks to get full details on interesting results.`,
           };
         }
 
-        const imageData: ArtworkImage | undefined =
-          typeof artwork.image === 'string' ? { url: artwork.image } : artwork.image;
-
-        const result = {
-          id,
-          title: artwork.title,
-          titles: artwork.titles,
-          artist: artwork.artist,
-          artists: artwork.artists?.map((a: Artist) => ({
-            id: a.constituentId,
-            name: a.displayName,
-            role: a.role,
-            bio: a.displayBio,
-            nationality: a.nationality,
-            birth_year: a.beginDate,
-            death_year: a.endDate,
-          })),
-          date: artwork.date,
-          date_start: artwork.dateBegin,
-          date_end: artwork.dateEnd,
-          medium: artwork.medium,
-          dimensions: artwork.dimensions,
-          classification: artwork.classification,
-          department: artwork.department,
-          object_name: artwork.objectName,
-          culture: artwork.culture,
-          period: artwork.period,
-          dynasty: artwork.dynasty,
-          country: artwork.country,
-          region: artwork.region,
-          collection: artwork.collection,
-          collection_id: artwork.collectionId,
-          credit_line: artwork.creditLine,
-          accession_year: artwork.accessionYear,
-          is_public_domain: artwork.isPublicDomain,
-          is_highlight: artwork.isHighlight,
-          on_view: artwork.onView,
-          gallery_number: artwork.galleryNumber,
-          image: imageData ? {
-            url: imageData.url,
-            thumbnail_url: imageData.thumbnailUrl,
-            width: imageData.width,
-            height: imageData.height,
-          } : undefined,
-          description: artwork.visual_description ? {
-            alt_text: artwork.visual_description.alt_text,
-            long_description: artwork.visual_description.long_description,
-            emoji_summary: artwork.visual_description.emoji_summary,
-          } : undefined,
-          tags: artwork.tags,
-          similar_artworks: artwork.similar_artworks,
-          source_url: artwork.sourceUrl,
-        };
+        const result = transformArtwork(artwork, id);
 
         return {
           content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -358,7 +232,6 @@ Use this to explore related artworks after finding an interesting piece.`,
             similarity_explanation: sim.explanation,
           }));
         } else {
-          // Use embedding search via findSimilarArtworks
           methodUsed = 'embedding';
           const similar = await findSimilarArtworks(id, model, limit);
           results = similar.hits.map((hit) => ({
@@ -405,9 +278,10 @@ Supports JPEG, PNG, and other common image formats.`,
       {
         image: z.string().min(1).describe('Base64-encoded image (with or without data URL prefix like "data:image/jpeg;base64,...")'),
         filters: FiltersSchema,
+        detail: DetailSchema,
         limit: z.number().int().min(1).max(50).default(10).describe('Number of results to return'),
       },
-      async ({ image, filters, limit }) => {
+      async ({ image, filters, detail, limit }) => {
         const searchFilters = convertFilters(filters);
 
         // Extract base64 data (remove data URL prefix if present)
@@ -428,7 +302,7 @@ Supports JPEG, PNG, and other common image formats.`,
             Object.keys(searchFilters).length > 0 ? searchFilters : undefined
           );
 
-          const results = formatSearchResults(searchResults.hits, true);
+          const results = transformSearchHits(searchResults.hits as MCPSearchHit[], detail as DetailLevel);
 
           return {
             content: [
@@ -463,22 +337,54 @@ Supports JPEG, PNG, and other common image formats.`,
       'get_filter_options',
       `Get available filter values for the Met Museum Open Access Paintings collection.
 
-Returns:
+Returns (when no search query provided):
 - departments: Museum departments (e.g., "European Paintings", "American Paintings")
 - classifications: Artwork types (mostly "Paintings" in this collection)
 - cultures: Cultural origins (e.g., "French", "Dutch", "American")
+- mediums: Materials/techniques (e.g., "Oil on canvas", "Watercolor", "Oil on copper")
 - tags: Subject tags (e.g., "Portraits", "Landscapes", "Women")
 - date_range: Min/max years in the collection
 
-IMPORTANT: Call this first to discover valid filter values before using search_artworks with filters.`,
-      {},
-      async () => {
+SEARCH MODE: Provide a "search" query to find specific filter values (case-insensitive).
+Example: search="japan" returns cultures like "Japan", "probably Japan", "China or Japan", etc.
+Example: search="oil" returns mediums like "Oil on canvas", "Oil on wood", "Oil on copper", etc.
+Optionally specify "field" to search only specific field(s).
+
+IMPORTANT: Call this to discover valid filter values before using search_artworks with filters.`,
+      {
+        search: z.string().optional().describe('Case-insensitive search string to find matching filter values (e.g., "japan", "portrait", "oil")'),
+        field: z.enum(['departments', 'classifications', 'cultures', 'mediums', 'tags', 'countries', 'periods'])
+          .optional()
+          .describe('Limit search to a specific field. If omitted, searches all fields.'),
+        limit: z.number().int().min(1).max(100).default(20).describe('Max results per field when searching (default 20)'),
+      },
+      async ({ search, field, limit }) => {
+        if (search) {
+          // Search mode: find filter values matching the query
+          const results = await searchFilterOptions(search, field, limit);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  search_query: search,
+                  field_filter: field || 'all',
+                  results,
+                }, null, 2),
+              },
+            ],
+          };
+        }
+
+        // Default mode: return all top filter values
         const options = await getFilterOptions();
 
         const result = {
           departments: options.departments,
           classifications: options.classifications,
           cultures: options.cultures,
+          mediums: options.mediums,
           tags: options.tags,
           date_range: {
             min: options.dateRange.min,

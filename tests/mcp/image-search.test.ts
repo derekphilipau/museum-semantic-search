@@ -246,7 +246,7 @@ describe('MCP Image Search API', () => {
     expect(data.results[0].thumbnail_url).toBe('https://example.com/starry-thumb.jpg');
   });
 
-  it('should exclude images when includeImage is false', async () => {
+  it('should return minimal fields when detail is minimal', async () => {
     vi.mocked(embeddings.embedJinaClipImage).mockResolvedValue(mockEmbedding);
     vi.mocked(esClient.performSemanticSearchWithEmbedding).mockResolvedValue(mockSearchResults);
 
@@ -254,15 +254,23 @@ describe('MCP Image Search API', () => {
       method: 'POST',
       body: JSON.stringify({
         image: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
-        includeImage: false,
+        detail: 'minimal',
       }),
     });
 
     const response = await POST(request);
     const data = await response.json();
 
+    // Minimal should only have id, score, title, artist, date
+    expect(data.results[0].id).toBe('met_123');
+    expect(data.results[0].title).toBe('Starry Night');
+    expect(data.results[0].artist).toBe('Vincent van Gogh');
+    expect(data.results[0].date).toBe('1889');
+    // Should NOT have standard fields
     expect(data.results[0].image_url).toBeUndefined();
     expect(data.results[0].thumbnail_url).toBeUndefined();
+    expect(data.results[0].medium).toBeUndefined();
+    expect(data.results[0].tags).toBeUndefined();
   });
 
   it('should handle string image field', async () => {

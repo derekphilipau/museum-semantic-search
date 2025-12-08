@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getFilterOptions } from '@/lib/elasticsearch/client';
+import { NextRequest, NextResponse } from 'next/server';
+import { getFilterOptions, searchFilterOptions } from '@/lib/elasticsearch/client';
 
 // ============================================================================
 // MCP Filters Response Types
@@ -9,6 +9,7 @@ interface MCPFiltersResponse {
   departments: Array<{ value: string; count: number }>;
   classifications: Array<{ value: string; count: number }>;
   cultures: Array<{ value: string; count: number }>;
+  mediums: Array<{ value: string; count: number }>;
   tags: Array<{ value: string; count: number }>;
   date_range: {
     min: number;
@@ -48,6 +49,11 @@ interface MCPFiltersResponse {
       description: 'Cultural origin (exact match)';
       enum: string[];
     };
+    medium: {
+      type: 'string';
+      description: 'Materials/technique (fuzzy matched)';
+      examples: string[];
+    };
     tags: {
       type: 'array';
       description: 'Tags/keywords (exact match, can specify multiple)';
@@ -78,11 +84,45 @@ const CORS_HEADERS = {
 // Main Handler
 // ============================================================================
 
+// Valid field names for searching
+type FilterField = 'departments' | 'classifications' | 'cultures' | 'mediums' | 'tags' | 'countries' | 'periods';
+
+const VALID_FIELDS: FilterField[] = ['departments', 'classifications', 'cultures', 'mediums', 'tags', 'countries', 'periods'];
+
 // Cache filter options for 1 hour (they don't change often)
 export const revalidate = 3600;
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search');
+    const field = searchParams.get('field') as FilterField | null;
+    const limitParam = searchParams.get('limit');
+    const limit = limitParam ? Math.min(Math.max(1, parseInt(limitParam, 10)), 100) : 20;
+
+    // Validate field if provided
+    if (field && !VALID_FIELDS.includes(field)) {
+      return NextResponse.json(
+        { error: `Invalid field. Must be one of: ${VALID_FIELDS.join(', ')}` },
+        { status: 400, headers: CORS_HEADERS }
+      );
+    }
+
+    // Search mode: find filter values matching the query
+    if (search) {
+      const results = await searchFilterOptions(search, field || undefined, limit);
+
+      return NextResponse.json(
+        {
+          search_query: search,
+          field_filter: field || 'all',
+          results,
+        },
+        { headers: CORS_HEADERS }
+      );
+    }
+
+    // Default mode: return all top filter values
     const filterOptions = await getFilterOptions();
 
     // Build response with schema information for agents
@@ -90,6 +130,7 @@ export async function GET() {
       departments: filterOptions.departments.filter(d => d.value),
       classifications: filterOptions.classifications.filter(c => c.value),
       cultures: filterOptions.cultures.filter(c => c.value),
+      mediums: filterOptions.mediums.filter(m => m.value),
       tags: filterOptions.tags.filter(t => t.value),
       date_range: {
         min: filterOptions.dateRange.min,
@@ -127,6 +168,11 @@ export async function GET() {
           type: 'string',
           description: 'Cultural origin (exact match)',
           enum: filterOptions.cultures.filter(c => c.value).slice(0, 50).map(c => c.value),
+        },
+        medium: {
+          type: 'string',
+          description: 'Materials/technique (fuzzy matched)',
+          examples: filterOptions.mediums.filter(m => m.value).slice(0, 10).map(m => m.value),
         },
         tags: {
           type: 'array',

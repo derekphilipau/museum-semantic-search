@@ -38,8 +38,7 @@ Search the collection using text queries with optional filters.
   },
   "mode": "hybrid",
   "limit": 10,
-  "includeDescription": false,
-  "includeImage": true
+  "detail": "standard"
 }
 ```
 
@@ -52,8 +51,15 @@ Search the collection using text queries with optional filters.
 | `mode` | string | No | `"hybrid"` | Search mode: `"keyword"`, `"semantic"`, `"hybrid"`, or `"auto"` |
 | `limit` | number | No | `10` | Number of results per page (1-50) |
 | `offset` | number | No | `0` | Number of results to skip for pagination (0-200) |
-| `includeDescription` | boolean | No | `false` | Include AI-generated visual descriptions |
-| `includeImage` | boolean | No | `true` | Include image URLs in results |
+| `detail` | string | No | `"standard"` | Detail level: `"minimal"`, `"standard"`, or `"full"` (see Detail Levels) |
+
+### Detail Levels
+
+| Level | Fields Included | When to Use |
+|-------|-----------------|-------------|
+| `minimal` | id, score, title, artist, date | Fast scanning, listing IDs |
+| `standard` | + medium, classification, department, tags, culture, image_url, thumbnail_url, source_url | General browsing, showing results to users |
+| `full` | + titles, artists array, date_start, date_end, dimensions, object_name, period, dynasty, country, region, collection, collection_id, credit_line, accession_year, is_public_domain, is_highlight, on_view, gallery_number, full image object, description (with alt_text, long_description, emoji_summary), similar_artworks | Semantic evaluation (e.g., verifying "three women and horses" using long_description), or when complete details needed inline |
 
 ### Response
 
@@ -196,13 +202,15 @@ GET /api/mcp/artwork/met_436524
 
 Get available filter values and schema information. Useful for building filter UIs or understanding valid filter values.
 
-### Request
+### Default Mode (No Search)
+
+Returns the top filter values from each category with counts.
 
 ```
 GET /api/mcp/filters
 ```
 
-### Response
+#### Response
 
 ```json
 {
@@ -217,6 +225,10 @@ GET /api/mcp/filters
   "cultures": [
     { "value": "French", "count": 150 },
     { "value": "Dutch", "count": 100 }
+  ],
+  "mediums": [
+    { "value": "Oil on canvas", "count": 1500 },
+    { "value": "Watercolor", "count": 200 }
   ],
   "tags": [
     { "value": "Portraits", "count": 250 },
@@ -259,6 +271,11 @@ GET /api/mcp/filters
       "description": "Cultural origin (exact match)",
       "enum": ["French", "Dutch", "..."]
     },
+    "medium": {
+      "type": "string",
+      "description": "Materials/technique (fuzzy matched)",
+      "examples": ["Oil on canvas", "Watercolor", "Oil on wood", "..."]
+    },
     "tags": {
       "type": "array",
       "description": "Tags/keywords (exact match, can specify multiple)",
@@ -274,6 +291,57 @@ GET /api/mcp/filters
     }
   }
 }
+```
+
+### Search Mode
+
+Search for specific filter values using case-insensitive matching. Useful when you need to find the exact value to use in a filter (e.g., finding "Japan" vs "probably Japan" vs "China or Japan").
+
+```
+GET /api/mcp/filters?search=japan
+GET /api/mcp/filters?search=portrait&field=tags
+GET /api/mcp/filters?search=french&field=cultures&limit=50
+```
+
+#### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `search` | string | Yes (for search mode) | - | Case-insensitive search string |
+| `field` | string | No | all | Limit search to specific field: `departments`, `classifications`, `cultures`, `mediums`, `tags`, `countries`, `periods` |
+| `limit` | number | No | `20` | Max results per field (1-100) |
+
+#### Response (Search Mode)
+
+```json
+{
+  "search_query": "japan",
+  "field_filter": "all",
+  "results": {
+    "cultures": [
+      { "value": "Japan", "count": 45 },
+      { "value": "probably Japan", "count": 12 },
+      { "value": "China or Japan", "count": 8 },
+      { "value": "Japan (?)", "count": 3 }
+    ],
+    "countries": [
+      { "value": "Japan", "count": 45 }
+    ]
+  }
+}
+```
+
+#### Examples
+
+```bash
+# Find all filter values containing "portrait"
+curl "http://localhost:3000/api/mcp/filters?search=portrait"
+
+# Search only tags field
+curl "http://localhost:3000/api/mcp/filters?search=portrait&field=tags"
+
+# Find Japanese-related cultures with higher limit
+curl "http://localhost:3000/api/mcp/filters?search=japan&field=cultures&limit=50"
 ```
 
 ---
@@ -369,7 +437,7 @@ Search for visually similar artworks by uploading an image.
     "yearEnd": 1900
   },
   "limit": 10,
-  "includeImage": true
+  "detail": "standard"
 }
 ```
 
@@ -381,7 +449,7 @@ Search for visually similar artworks by uploading an image.
 | `mimeType` | string | No | `"image/jpeg"` | MIME type (auto-detected from data URL) |
 | `filters` | object | No | `{}` | Structured filters to narrow results |
 | `limit` | number | No | `10` | Number of results (1-50) |
-| `includeImage` | boolean | No | `true` | Include image URLs |
+| `detail` | string | No | `"standard"` | Detail level: `"minimal"`, `"standard"`, or `"full"` |
 
 ### Response
 
@@ -549,7 +617,7 @@ http://localhost:3000/api/mcp  (Streamable HTTP transport)
 | `get_artwork` | Full artwork details by ID |
 | `find_similar` | Find similar artworks (precomputed or embedding-based) |
 | `search_by_image` | Visual similarity search with base64 image |
-| `get_filter_options` | Get available filter values (departments, tags, etc.) |
+| `get_filter_options` | Get available filter values; supports search param to find specific values (e.g., "japan" → "Japan", "probably Japan") |
 
 ### Testing with MCP Inspector
 
