@@ -1,5 +1,40 @@
 import { EmbeddingBatchResult, EmbeddingVector } from './types';
 
+// Retry helper for transient network errors (DNS EBUSY, connection reset, etc.)
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      lastError = error as Error;
+      const errorCode = (error as NodeJS.ErrnoException).code;
+
+      // Only retry on transient DNS/network errors
+      const isRetryable =
+        errorCode === 'EBUSY' ||
+        errorCode === 'ENOTFOUND' ||
+        errorCode === 'ETIMEDOUT' ||
+        errorCode === 'ECONNRESET' ||
+        errorCode === 'ECONNREFUSED';
+
+      if (!isRetryable || attempt === maxRetries - 1) {
+        throw error;
+      }
+
+      // Exponential backoff: 100ms, 200ms, 400ms
+      const delay = 100 * Math.pow(2, attempt);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+
+  throw lastError;
+}
 
 const JINA_API_URL =
   process.env.JINA_API_URL?.trim() || 'https://api.jina.ai/v1/embeddings';
@@ -39,7 +74,7 @@ export async function embedJinaClipImage(
     ? base64
     : `data:${mimeType};base64,${base64}`;
 
-  const response = await fetch(JINA_API_URL, {
+  const response = await fetchWithRetry(JINA_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -94,7 +129,7 @@ export async function embedJinaClipText(
 ): Promise<EmbeddingVector> {
   const apiKey = getJinaApiKey();
 
-  const response = await fetch(JINA_API_URL, {
+  const response = await fetchWithRetry(JINA_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -152,7 +187,7 @@ export async function embedJinaTextBatch(
 
   const apiKey = getJinaApiKey();
 
-  const response = await fetch(JINA_API_URL, {
+  const response = await fetchWithRetry(JINA_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

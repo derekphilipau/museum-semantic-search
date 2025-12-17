@@ -192,17 +192,23 @@ function getScoreThreshold(model: ModelKey | 'keyword' | 'metadata' | 'similarit
   return thresholds[model] || 0;
 }
 
+// Singleton client instance - reuse to avoid DNS resolution storms in serverless
+let cachedClient: Client | null = null;
+
 export function getElasticsearchClient(): Client {
+  // Return cached client if available
+  if (cachedClient) {
+    return cachedClient;
+  }
+
   const esUrl = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
   const apiKey = process.env.ELASTICSEARCH_API_KEY;
   const cloudId = process.env.ELASTICSEARCH_CLOUD_ID;
-    
+
   // Check if we're using Elastic Cloud
-  let newClient: Client;
-  
   if (cloudId && apiKey) {
     // Elastic Cloud configuration
-    newClient = new Client({
+    cachedClient = new Client({
       cloud: {
         id: cloudId
       },
@@ -212,7 +218,7 @@ export function getElasticsearchClient(): Client {
     });
   } else if (apiKey && (esUrl.includes('elastic.co') || esUrl.includes('elastic-cloud.com'))) {
     // Elastic Cloud with URL (alternative setup)
-    newClient = new Client({
+    cachedClient = new Client({
       node: esUrl,
       auth: {
         apiKey: apiKey
@@ -220,12 +226,12 @@ export function getElasticsearchClient(): Client {
     });
   } else {
     // Local Elasticsearch (no auth required)
-    newClient = new Client({
+    cachedClient = new Client({
       node: esUrl
     });
   }
-  
-  return newClient;
+
+  return cachedClient;
 }
 
 export const INDEX_NAME = process.env.ELASTICSEARCH_INDEX || 'artworks_semantic';
